@@ -1,6 +1,6 @@
 # 🛒 Dispensa Manager — Home Assistant Add-on
 
-[![Version](https://img.shields.io/badge/version-1.0.1-green)](https://github.com/elbarto8383/Dispensa-Manager/releases)
+[![Version](https://img.shields.io/badge/version-1.0.2-green)](https://github.com/elbarto8383/Dispensa-Manager/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HA](https://img.shields.io/badge/Home%20Assistant-Add--on-blue)](https://www.home-assistant.io/)
 
@@ -14,6 +14,7 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 📦 **Scanner barcode** — scansiona i prodotti con la fotocamera (ZXing)
 - 🗄️ **Posizione automatica** — Frigo 🧊 / Dispensa 🗄️ / Freezer ❄️ suggeriti dalla categoria
 - 📅 **Scadenza suggerita** — calcolata automaticamente dalla categoria del prodotto
+- 🔍 **OCR scadenza** — scansiona la data di scadenza con la fotocamera (Tesseract.js), supporta DD/MM/YYYY, MM/YYYY e mesi in italiano
 - 📊 **Valori nutrizionali** — da Open Food Facts (energia, grassi, carboidrati, ecc.)
 - 🏷️ **Nutri-Score** — visualizzato nel dettaglio prodotto
 - 🗃️ **Cache locale** — i prodotti non trovati online vengono salvati per le scansioni future
@@ -315,7 +316,30 @@ Dispensa-Manager/
 
 ---
 
+## 🔍 OCR Scadenza
+
+Dalla schermata di conferma prodotto, accanto al campo data di scadenza è presente il pulsante 📷:
+
+1. Clicca 📷 — si apre la fotocamera con una cornice verde
+2. Inquadra la data di scadenza stampata sulla confezione
+3. Clicca **📸 Scatta** — Tesseract.js analizza il testo
+4. Se riconosce la data la compila automaticamente nel campo
+
+**Formati riconosciuti:**
+- `DD/MM/YYYY`, `DD-MM-YYYY`, `DD.MM.YYYY`
+- `MM/YYYY` → imposta automaticamente l'ultimo giorno del mese (es. `07/2026` → `31/07/2026`)
+- Mesi in italiano: `GEN 2026`, `GENNAIO 2026`, ecc.
+
+> **Nota:** La prima volta Tesseract.js scarica il modello OCR (~5MB). Le volte successive è immediato. Funziona meglio su testi stampati chiari e con buona illuminazione.
+
+---
+
 ## 📋 Changelog
+
+### v1.0.2
+- 🔍 OCR scadenza automatica con fotocamera (Tesseract.js)
+- 📅 Supporto formato MM/YYYY → ultimo giorno del mese automatico
+- 🗓️ Riconoscimento mesi in italiano (GEN, FEB, MAR, ecc.)
 
 ### v1.0.1
 - 📊 Statistiche consumi (acquisti, consumi, top prodotti, per posizione)

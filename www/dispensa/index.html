@@ -165,6 +165,10 @@
       <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
       <span>Spesa</span>
     </div>
+    <div class="tab" onclick="showTab('statistiche')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Statistiche</span>
+    </div>
     <div class="tab" onclick="showTab('impostazioni')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span>Impostazioni</span>
@@ -220,7 +224,36 @@
       </div>
       <div class="field">
         <label>Data di scadenza</label>
-        <input type="date" id="conf-scadenza">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="date" id="conf-scadenza" style="flex:1;">
+          <button onclick="avviaOCRScadenza()" style="padding:10px 14px;border-radius:12px;border:0.5px solid var(--border);background:var(--bg);font-size:20px;cursor:pointer;flex-shrink:0;" title="Scansiona scadenza">📷</button>
+        </div>
+      </div>
+
+      <!-- Modal OCR -->
+      <div id="ocr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000;flex-direction:column;align-items:center;justify-content:center;">
+        <div style="width:90%;max-width:400px;background:#000;border-radius:20px;overflow:hidden;position:relative;">
+          <video id="ocr-video" autoplay muted playsinline style="width:100%;display:block;"></video>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+            <div style="width:80%;height:60px;border:2px solid var(--green);border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,0.4);"></div>
+          </div>
+          <canvas id="ocr-canvas" style="display:none;"></canvas>
+        </div>
+        <div id="ocr-status" style="color:white;margin-top:16px;font-size:14px;text-align:center;padding:0 20px;">Inquadra la data di scadenza nella cornice verde</div>
+        <div id="ocr-testo-letto" style="color:rgba(255,255,255,0.5);margin-top:6px;font-size:11px;text-align:center;padding:0 20px;"></div>
+        <!-- Campo inserimento manuale -->
+        <div id="ocr-manuale" style="display:none;margin-top:12px;width:90%;max-width:400px;">
+          <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:6px;text-align:center;">Inserisci la data manualmente:</div>
+          <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:8px;text-align:center;">es. 09/09/27 · 09/2027 · 2027/09 · 090927 · SET 2027</div>
+          <div style="display:flex;gap:8px;">
+            <input id="ocr-input-manuale" type="text" placeholder="es. 09/09/27" style="flex:1;padding:12px;border-radius:12px;border:none;font-size:16px;background:rgba(255,255,255,0.15);color:white;">
+            <button onclick="confermaManualeOCR()" style="padding:12px 16px;border-radius:12px;background:var(--green);color:white;font-size:15px;font-weight:600;border:none;cursor:pointer;">✓</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:16px;">
+          <button onclick="scattaFotoOCR()" style="padding:14px 28px;border-radius:14px;background:var(--green);color:white;font-size:16px;font-weight:600;border:none;cursor:pointer;">📸 Scatta</button>
+          <button onclick="chiudiOCR()" style="padding:14px 28px;border-radius:14px;background:rgba(255,255,255,0.2);color:white;font-size:16px;border:none;cursor:pointer;">✕ Annulla</button>
+        </div>
       </div>
       <div class="field">
         <label>Posizione</label>
@@ -274,6 +307,46 @@
       <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
       <span>Spesa</span>
     </div>
+    <div class="tab" onclick="showTab('statistiche')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Statistiche</span>
+    </div>
+    <div class="tab" onclick="showTab('impostazioni')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span>Impostazioni</span>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Statistiche -->
+<div class="screen" id="screen-statistiche">
+  <div class="topbar">
+    <div class="topbar-title">📊 Statistiche</div>
+  </div>
+  <div class="content" id="stat-content">
+    <div class="empty"><div class="spinner"></div></div>
+  </div>
+  <div class="tab-bar">
+    <div class="tab" onclick="showTab('inventario')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Dispensa</span>
+    </div>
+    <div class="tab" onclick="showTab('scan')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
+      <span>Scansiona</span>
+    </div>
+    <div class="tab" onclick="showTab('spesa')">
+      <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span>Spesa</span>
+    </div>
+    <div class="tab active" onclick="showTab('statistiche')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Statistiche</span>
+    </div>
+    <div class="tab" onclick="showTab('statistiche')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Statistiche</span>
+    </div>
     <div class="tab" onclick="showTab('impostazioni')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span>Impostazioni</span>
@@ -302,7 +375,7 @@
         <input type="number" id="set-giorni" value="3" min="1" max="30">
       </div>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.0.1</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.0.2</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -327,8 +400,9 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
-const API_BASE = () => localStorage.getItem('dispensa_url') || 'http://homeassistant.local:5000';
+const API_BASE = () => localStorage.getItem('dispensa_url') || 'http://192.168.1.83:5000';
 
 let codeReader = null;
 let prodottoCorrente = {};
@@ -340,6 +414,7 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
   if (id === 'screen-inventario') caricaInventario();
   if (id === 'screen-spesa') caricaListaSpesa();
+  if (id === 'screen-statistiche') caricaStatistiche();
   if (id === 'screen-scan') avviaScanner();
   else fermaScanner();
 }
@@ -348,6 +423,7 @@ function showTab(tab) {
   if (tab === 'inventario') showScreen('screen-inventario');
   else if (tab === 'scan') showScreen('screen-scan');
   else if (tab === 'spesa') showScreen('screen-spesa');
+  else if (tab === 'statistiche') showScreen('screen-statistiche');
   else if (tab === 'impostazioni') showScreen('screen-impostazioni');
 }
 
@@ -683,6 +759,292 @@ function aggiungiSpesaManuale() {
     caricaListaSpesa();
   });
 }
+
+async function caricaStatistiche() {
+  try {
+    const r = await fetch(`${API_BASE()}/api/statistiche`);
+    const s = await r.json();
+    const posIcon = {'Frigo':'🧊','Freezer':'❄️','Dispensa':'🗄️'};
+    let html = `
+      <div class="metric-row" style="grid-template-columns:repeat(2,1fr);">
+        <div class="metric"><div class="metric-val">${s.totali.acquisti}</div><div class="metric-label">Acquisti totali</div></div>
+        <div class="metric"><div class="metric-val">${s.totali.consumi}</div><div class="metric-label">Consumi totali</div></div>
+        <div class="metric"><div class="metric-val">${s.totali.acquisti_mese}</div><div class="metric-label">Acquisti questo mese</div></div>
+        <div class="metric"><div class="metric-val">${s.totali.eliminati}</div><div class="metric-label">Eliminati</div></div>
+      </div>`;
+
+    if (s.per_posizione.length) {
+      html += `<div class="card card-body" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📍 Prodotti per posizione</div>`;
+      s.per_posizione.forEach(p => {
+        html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:14px;">
+          <span>${posIcon[p.posizione]||'📦'} ${p.posizione || 'Non specificata'}</span>
+          <strong>${p.n}</strong></div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (s.top_acquistati.length) {
+      html += `<div class="card card-body" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🏆 Più acquistati</div>`;
+      s.top_acquistati.forEach((p,i) => {
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);">
+          <span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span>
+          <div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div>
+          <span style="font-size:13px;color:var(--green);font-weight:600;">×${p.totale}</span></div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (s.top_consumati.length) {
+      html += `<div class="card card-body" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🔥 Più consumati</div>`;
+      s.top_consumati.forEach((p,i) => {
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);">
+          <span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span>
+          <div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div>
+          <span style="font-size:13px;color:var(--amber);font-weight:600;">×${p.totale}</span></div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (!s.top_acquistati.length && !s.top_consumati.length) {
+      html += `<div class="empty"><div class="empty-icon">📊</div><div>Nessun dato ancora.<br>Le statistiche si accumulano con l'uso!</div></div>`;
+    }
+
+    document.getElementById('stat-content').innerHTML = html;
+  } catch(e) {
+    document.getElementById('stat-content').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
+  }
+}
+
+// ===== OCR SCADENZA =====
+let ocrStream = null;
+
+function avviaOCRScadenza() {
+  const modal = document.getElementById('ocr-modal');
+  modal.style.display = 'flex';
+  document.getElementById('ocr-status').textContent = 'Avvio fotocamera...';
+  document.getElementById('ocr-manuale').style.display = 'none';
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+  }).then(stream => {
+    ocrStream = stream;
+    const video = document.getElementById('ocr-video');
+    video.srcObject = stream;
+    document.getElementById('ocr-status').textContent = 'Inquadra la data di scadenza nella cornice verde';
+  }).catch(err => {
+    document.getElementById('ocr-status').textContent = 'Errore fotocamera: ' + err.message;
+  });
+}
+
+function chiudiOCR() {
+  if (ocrStream) { ocrStream.getTracks().forEach(t => t.stop()); ocrStream = null; }
+  document.getElementById('ocr-modal').style.display = 'none';
+}
+
+function preprocessCanvas(canvas) {
+  // Pre-elaborazione: scala 2x + contrasto alto + bianco/nero
+  const w = canvas.width, h = canvas.height;
+  const scaled = document.createElement('canvas');
+  scaled.width = w * 2; scaled.height = h * 2;
+  const sCtx = scaled.getContext('2d');
+  sCtx.imageSmoothingEnabled = false;
+  sCtx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
+
+  const imgData = sCtx.getImageData(0, 0, scaled.width, scaled.height);
+  const data = imgData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    // Luminanza
+    const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+    // Contrasto alto + soglia
+    const val = lum > 128 ? 255 : 0;
+    data[i] = data[i+1] = data[i+2] = val;
+  }
+  sCtx.putImageData(imgData, 0, 0);
+  return scaled;
+}
+
+async function scattaFotoOCR() {
+  const video = document.getElementById('ocr-video');
+  const canvas = document.getElementById('ocr-canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  document.getElementById('ocr-status').textContent = '🔍 Elaborazione immagine...';
+
+  try {
+    // Prova prima con immagine pre-elaborata, poi con originale
+    const processed = preprocessCanvas(canvas);
+    let text = '';
+
+    const r1 = await Tesseract.recognize(processed, 'ita+eng', { logger: () => {},
+      tessedit_char_whitelist: '0123456789/-.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz '
+    });
+    text = r1.data.text;
+
+    let data = estraiDataScadenza(text);
+
+    // Se non trova con elaborata, prova con originale
+    if (!data) {
+      const r2 = await Tesseract.recognize(canvas, 'ita+eng', { logger: () => {} });
+      text = r2.data.text;
+      data = estraiDataScadenza(text);
+    }
+
+    if (data) {
+      document.getElementById('conf-scadenza').value = data;
+      chiudiOCR();
+      toast('✅ Scadenza rilevata: ' + formatDataIT(data));
+    } else {
+      const testoLetto = text.replace(/\n/g, ' ').trim().substring(0, 100);
+      document.getElementById('ocr-status').textContent = '⚠️ Data non rilevata automaticamente.';
+      // Mostra campo inserimento manuale
+      document.getElementById('ocr-testo-letto').textContent = testoLetto ? `Testo letto: "${testoLetto}"` : '';
+      document.getElementById('ocr-manuale').style.display = 'block';
+    }
+  } catch(e) {
+    document.getElementById('ocr-status').textContent = '⚠️ Errore OCR. Inserisci manualmente.';
+    document.getElementById('ocr-manuale').style.display = 'block';
+  }
+}
+
+function confermaManualeOCR() {
+  const input = document.getElementById('ocr-input-manuale').value.trim();
+  const data = estraiDataScadenza(input) || estraiDataLibera(input);
+  if (data) {
+    document.getElementById('conf-scadenza').value = data;
+    chiudiOCR();
+    toast('✅ Scadenza impostata: ' + formatDataIT(data));
+  } else {
+    document.getElementById('ocr-status').textContent = '⚠️ Formato non riconosciuto. Prova: GG/MM/AAAA o MM/AAAA o AAAA/MM';
+  }
+}
+
+function estraiDataLibera(input) {
+  // Permette inserimento libero dall'utente con qualsiasi separatore
+  const t = input.trim().replace(/\s+/g, ' ');
+  return estraiDataScadenza(t);
+}
+
+function estraiDataScadenza(testo) {
+  if (!testo) return null;
+
+  // Pulizia testo — correggi caratteri OCR comuni
+  let t = testo.toUpperCase()
+    .replace(/[Oo]/g, '0')
+    .replace(/[Il\|]/g, '1')
+    .replace(/[Ss]/g, '5')
+    .replace(/[Bb]/g, '8')
+    .replace(/\r/g, ' ')
+    .replace(/\n/g, ' ');
+
+  // Rimuovi prefissi comuni
+  t = t.replace(/\b(EXP|SCAD|TMC|BB|USE BY|BEST BY|CONSUMARE ENTRO|CONS\.?\s*ENT\.?|LOT|LOTTO|L\.?)\s*/g, ' ');
+
+  // ── PATTERN 1: DDMMYY tutto attaccato (6 cifre es. 090927)
+  let m = t.match(/\b(\d{2})(\d{2})(\d{2})\b/);
+  if (m) {
+    const [, g, ms, aa] = m;
+    const a = '20' + aa;
+    const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g));
+    if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
+  }
+
+  // ── PATTERN 2: DDMMYYYY tutto attaccato (8 cifre es. 09092027)
+  m = t.match(/\b(\d{2})(\d{2})(\d{4})\b/);
+  if (m) {
+    const [, g, ms, a] = m;
+    const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g));
+    if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
+  }
+
+  // ── PATTERN 3: YYYYMMDD tutto attaccato (es. 20270909)
+  m = t.match(/\b(202\d)(\d{2})(\d{2})\b/);
+  if (m) {
+    const [, a, ms, g] = m;
+    const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g));
+    if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
+  }
+
+  // ── PATTERN 4: DD/MM/YYYY o DD-MM-YYYY o DD.MM.YYYY o DD MM YYYY
+  m = t.match(/\b(\d{1,2})[\s\/\-\.](\d{1,2})[\s\/\-\.](\d{2,4})\b/);
+  if (m) {
+    let [, g, ms, a] = m;
+    if (a.length === 2) a = '20' + a;
+    const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g));
+    if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
+  }
+
+  // ── PATTERN 5: YYYY/MM o YYYY-MM o YYYY MM (anno mese invertito)
+  m = t.match(/\b(202\d)[\s\/\-\.](\d{1,2})\b/);
+  if (m) {
+    const [, a, ms] = m;
+    const ultimoGiorno = new Date(parseInt(a), parseInt(ms), 0).getDate();
+    const d = new Date(parseInt(a), parseInt(ms)-1, ultimoGiorno);
+    if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
+  }
+
+  // ── PATTERN 6: MM/YYYY o MM-YYYY o MM.YYYY o MM YYYY (solo mese anno)
+  m = t.match(/\b(\d{1,2})[\s\/\-\.](202\d)\b/);
+  if (m) {
+    const [, ms, a] = m;
+    const ultimoGiorno = new Date(parseInt(a), parseInt(ms), 0).getDate();
+    const d = new Date(parseInt(a), parseInt(ms)-1, ultimoGiorno);
+    if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
+  }
+
+  // ── PATTERN 7: Solo anno+mese attaccati YYYYMM (es. 202709)
+  m = t.match(/\b(202\d)(0[1-9]|1[0-2])\b/);
+  if (m) {
+    const [, a, ms] = m;
+    const ultimoGiorno = new Date(parseInt(a), parseInt(ms), 0).getDate();
+    const d = new Date(parseInt(a), parseInt(ms)-1, ultimoGiorno);
+    if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
+  }
+
+  // ── PATTERN 8: mese testuale IT es. "GEN 2026", "09 GENNAIO 2026"
+  const mesiIT = {
+    GEN:1, FEB:2, MAR:3, APR:4, MAG:5, GIU:6, LUG:7, AGO:8, SET:9, OTT:10, NOV:11, DIC:12,
+    GENNAIO:1, FEBBRAIO:2, MARZO:3, APRILE:4, MAGGIO:5, GIUGNO:6,
+    LUGLIO:7, AGOSTO:8, SETTEMBRE:9, OTTOBRE:10, NOVEMBRE:11, DICEMBRE:12,
+    JAN:1, FEB2:2, MAR2:3, APR2:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV2:11, DEC:12
+  };
+  for (const [nome, num] of Object.entries(mesiIT)) {
+    const re = new RegExp(`\\b(\\d{1,2})?\\s*${nome}\\s*(\\d{4}|\\d{2})\\b`);
+    m = t.match(re);
+    if (m) {
+      let a = m[2]; if (a.length === 2) a = '20' + a;
+      const g = m[1] ? parseInt(m[1]) : new Date(parseInt(a), num, 0).getDate();
+      const d = new Date(parseInt(a), num-1, g);
+      if (isDataValida(d, g, num)) return formatISO(d);
+    }
+  }
+
+  return null;
+}
+
+function isDataValida(data, giorno, mese) {
+  if (isNaN(data.getTime())) return false;
+  if (giorno < 1 || giorno > 31) return false;
+  if (mese < 1 || mese > 12) return false;
+  const anno = data.getFullYear();
+  if (anno < 2024 || anno > 2040) return false;
+  return true;
+}
+
+function formatISO(data) {
+  const y = data.getFullYear();
+  const m = String(data.getMonth()+1).padStart(2,'0');
+  const d = String(data.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatDataIT(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+// ===== FINE OCR =====
 
 function salvaImpostazioni() {
   const url = document.getElementById('set-url').value.trim();
