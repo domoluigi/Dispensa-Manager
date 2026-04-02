@@ -1,6 +1,10 @@
 # 🛒 Dispensa Manager — Home Assistant Add-on
 
-Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scanner di barcode per gestire la dispensa di casa. Integra notifiche Telegram, lista della spesa automatica, valori nutrizionali e statistiche sui consumi.
+[![Version](https://img.shields.io/badge/version-1.0.1-green)](https://github.com/elbarto8383/Dispensa-Manager/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![HA](https://img.shields.io/badge/Home%20Assistant-Add--on-blue)](https://www.home-assistant.io/)
+
+Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scanner di barcode per gestire la dispensa di casa. Integra notifiche Telegram, lista della spesa automatica, valori nutrizionali, statistiche sui consumi e integrazione con Alexa.
 
 ---
 
@@ -16,10 +20,11 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 🔍 **Multi-database** — Open Food Facts + Open Products Facts + Open Beauty Facts
 - 🏠 **Sensori Home Assistant** — 3 sensori aggiornati in tempo reale
 - 📲 **Notifiche Telegram** — su scadenza, esaurimento scorte, aggiornamenti
-- 🛒 **Lista della spesa** — automatica quando un prodotto si esaurisce
+- 🛒 **Lista della spesa** — automatica quando un prodotto si esaurisce, con invio Telegram
 - 📈 **Statistiche consumi** — prodotti più acquistati, consumati, per posizione
 - 🔔 **Alexa** — annunci vocali tramite Alexa Media Player
 - ⏰ **Automazioni HA** — report mattutino, sync all'avvio
+- 🔗 **API REST completa** — per integrazioni personalizzate
 
 ---
 
@@ -34,13 +39,19 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 
 ## 🚀 Installazione
 
-### 1. Copia l'add-on
+### 1. Aggiungi il repository custom
 
-Copia la cartella `dispensa_manager/` in `/addons/dispensa_manager/` sul tuo Home Assistant.
+Vai in HA → **Impostazioni** → **Add-on** → **Add-on Store** → ⋮ → **Repository** → incolla:
+
+```
+https://github.com/elbarto8383/Dispensa-Manager
+```
+
+Clicca **Aggiungi** → **Chiudi**.
 
 ### 2. Installa l'add-on
 
-Vai in **Impostazioni** → **Add-on** → **Add-on Store** → ⋮ → **Controlla aggiornamenti** → cerca **Dispensa Manager** → **Installa**.
+Cerca **Dispensa Manager** nell'Add-on Store → **Installa**.
 
 ### 3. Copia la PWA
 
@@ -57,6 +68,8 @@ giorni_alert_scadenza: 3                  # giorni prima della scadenza per l'al
 soglia_scorte_minime: 1                   # quantità minima prima di aggiungere alla lista spesa
 ```
 
+> **Nota:** `telegram_chat_id` supporta più ID separati da virgola es. `123456,789012`
+
 ### 5. Avvia l'add-on
 
 Clicca **Avvia** e verifica i log.
@@ -72,6 +85,20 @@ Su iPhone puoi installarla come app: **Condividi** → **Aggiungi a schermata Ho
 
 ---
 
+## 📱 PWA — Schermate
+
+La PWA è composta da 5 sezioni accessibili dalla barra in basso:
+
+| Schermata | Descrizione |
+|-----------|-------------|
+| 🏠 **Dispensa** | Lista prodotti con metriche (totale, in scadenza, esauriti) |
+| 📷 **Scansiona** | Scanner barcode con ricerca automatica su Open Food Facts |
+| 🛒 **Spesa** | Lista della spesa con spunta e invio Telegram |
+| 📊 **Statistiche** | Consumi, acquisti, top prodotti, prodotti per posizione |
+| ⚙️ **Impostazioni** | URL backend e configurazione alert scadenza |
+
+---
+
 ## 🏠 Integrazione Home Assistant
 
 ### Sensori creati automaticamente
@@ -81,6 +108,21 @@ Su iPhone puoi installarla come app: **Condividi** → **Aggiungi a schermata Ho
 | `sensor.dispensa_totale_prodotti` | Numero totale di prodotti |
 | `sensor.dispensa_in_scadenza` | Prodotti in scadenza entro N giorni |
 | `sensor.dispensa_esauriti` | Prodotti con quantità zero |
+
+### configuration.yaml
+
+```yaml
+rest_command:
+  report_dispensa:
+    url: http://localhost:5000/api/report
+    method: GET
+  sync_dispensa:
+    url: http://localhost:5000/api/sync-ha
+    method: GET
+  lista_spesa_telegram:
+    url: http://localhost:5000/api/lista-spesa/invia-telegram
+    method: GET
+```
 
 ### Card dashboard
 
@@ -106,29 +148,27 @@ entities:
       perform_action: rest_command.lista_spesa_telegram
 ```
 
-### configuration.yaml
+### Card iframe PWA nella dashboard
 
 ```yaml
-rest_command:
-  report_dispensa:
-    url: http://localhost:5000/api/report
-    method: GET
-  sync_dispensa:
-    url: http://localhost:5000/api/sync-ha
-    method: GET
-  lista_spesa_telegram:
-    url: http://localhost:5000/api/lista-spesa/invia-telegram
-    method: GET
+type: iframe
+url: http://IP_HOME_ASSISTANT:8123/local/dispensa/index.html
+aspect_ratio: 75%
+title: 📦 Lista Prodotti Dispensa
 ```
 
-### Automazioni consigliate
+---
 
-**Sync all'avvio di HA:**
+## ⚙️ Automazioni consigliate
+
+**Sync sensori all'avvio di HA:**
 ```yaml
 alias: 🔄 Sync Dispensa all'avvio
+description: Aggiorna i sensori della dispensa quando HA si avvia
 trigger:
   - platform: homeassistant
     event: start
+condition: []
 action:
   - delay:
       seconds: 30
@@ -136,12 +176,14 @@ action:
 mode: single
 ```
 
-**Report mattutino:**
+**Report mattutino su Telegram:**
 ```yaml
 alias: 🌅 Report dispensa mattutino
+description: Ogni mattina alle 8 invia il report dispensa su Telegram
 trigger:
   - platform: time
     at: "08:00:00"
+condition: []
 action:
   - action: rest_command.report_dispensa
 mode: single
@@ -162,11 +204,57 @@ action:
     data:
       message: >
         Attenzione! Hai {{ states('sensor.dispensa_in_scadenza') }} prodotti
-        in scadenza in dispensa.
+        in scadenza in dispensa. Controlla l'app Dispensa per i dettagli.
       data:
         type: announce
 mode: single
 ```
+
+**Alexa — avvisa prodotti esauriti:**
+```yaml
+alias: 🔔 Alexa avvisa prodotti esauriti
+trigger:
+  - platform: numeric_state
+    entity_id: sensor.dispensa_esauriti
+    above: 0
+condition: []
+action:
+  - action: notify.alexa_media_NOME_DISPOSITIVO
+    data:
+      message: >
+        Attenzione! Hai {{ states('sensor.dispensa_esauriti') }} prodotti
+        esauriti in dispensa. Ricordati di aggiungerli alla lista della spesa!
+      data:
+        type: announce
+mode: single
+```
+
+---
+
+## 🛒 Lista della Spesa
+
+La lista della spesa è gestita automaticamente:
+
+- Quando un prodotto scende a **quantità 0** viene aggiunto automaticamente alla lista
+- Puoi aggiungere prodotti **manualmente** dalla schermata Spesa nella PWA
+- **Spunta** gli articoli mentre sei al supermercato
+- **Invia su Telegram** la lista prima di uscire
+- **Rimuovi completati** per pulire la lista
+
+---
+
+## 📈 Statistiche
+
+La schermata Statistiche mostra:
+
+- **Acquisti totali** — numero di prodotti acquistati nel tempo
+- **Consumi totali** — numero di prodotti consumati
+- **Acquisti questo mese** — acquisti nel mese corrente
+- **Prodotti per posizione** — quanti prodotti in Frigo, Dispensa, Freezer
+- **Top 5 più acquistati** — prodotti acquistati più frequentemente
+- **Top 5 più consumati** — prodotti consumati più frequentemente
+
+> Le statistiche si accumulano automaticamente ad ogni aggiunta, consumo o eliminazione prodotto.
 
 ---
 
@@ -183,6 +271,9 @@ mode: single
 | DELETE | `/api/barcode-cache/<ean>` | Rimuove dalla cache |
 | GET | `/api/lista-spesa` | Lista della spesa |
 | POST | `/api/lista-spesa` | Aggiunge alla lista spesa |
+| PUT | `/api/lista-spesa/<id>` | Aggiorna elemento lista spesa |
+| DELETE | `/api/lista-spesa/<id>` | Elimina elemento lista spesa |
+| DELETE | `/api/lista-spesa/svuota-completati` | Rimuove completati |
 | GET | `/api/lista-spesa/invia-telegram` | Invia lista su Telegram |
 | GET | `/api/statistiche` | Statistiche consumi |
 | GET | `/api/report` | Report completo su Telegram |
@@ -192,25 +283,58 @@ mode: single
 
 ---
 
-## 📱 Screenshot
+## 🗄️ Database
 
-*Coming soon*
+L'add-on utilizza SQLite con le seguenti tabelle:
+
+| Tabella | Descrizione |
+|---------|-------------|
+| `prodotti` | Inventario prodotti con EAN, nutriments, posizione, scadenza |
+| `barcode_cache` | Cache locale per prodotti non trovati online |
+| `lista_spesa` | Lista della spesa con stato completato |
+| `storico_movimenti` | Log acquisti, consumi ed eliminazioni per le statistiche |
 
 ---
 
 ## 🔧 Struttura del progetto
 
 ```
-dispensa_manager/
+Dispensa-Manager/
 ├── dispensa_manager/       # Add-on HAOS
 │   ├── Dockerfile
 │   ├── config.yaml
 │   ├── app.py              # Backend Flask
 │   └── requirements.txt
-└── www/
-    └── dispensa/
-        └── index.html      # PWA frontend
+├── www/
+│   └── dispensa/
+│       └── index.html      # PWA frontend
+├── repository.json         # Custom store HA
+├── .gitignore
+└── README.md
 ```
+
+---
+
+## 📋 Changelog
+
+### v1.0.1
+- 📊 Statistiche consumi (acquisti, consumi, top prodotti, per posizione)
+- 🛒 Lista della spesa automatica con invio Telegram
+- 🍽️ Valori nutrizionali e Nutri-Score da Open Food Facts
+- 🗃️ Cache barcode locale per prodotti non trovati online
+- 🔔 Integrazione Alexa Media Player per annunci vocali
+- 📍 Posizione automatica (Frigo/Dispensa/Freezer) dalla categoria
+- 📅 Scadenza suggerita automaticamente dalla categoria
+- 🔍 Multi-database (Food + Products + Beauty Facts)
+- 🏷️ Supporto più chat ID Telegram separati da virgola
+- 🗑️ Endpoint pulizia cache barcode
+
+### v1.0.0
+- 🎉 Release iniziale
+- Scanner barcode con ZXing
+- Integrazione Open Food Facts
+- Sensori Home Assistant
+- Notifiche Telegram base
 
 ---
 
