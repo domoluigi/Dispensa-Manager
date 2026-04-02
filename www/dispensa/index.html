@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dispensa">
+<meta name="theme-color" content="#1D9E75">
+<title>Dispensa</title>
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #1D9E75; --green-d: #0F6E56; --green-l: #E1F5EE;
+    --amber: #BA7517; --amber-l: #FAEEDA;
+    --red: #A32D2D; --red-l: #FCEBEB;
+    --bg: #F7F6F2; --surface: #fff;
+    --text: #1a1a18; --muted: #6b6b63; --hint: #9e9e94;
+    --border: rgba(0,0,0,0.10);
+    --safe-top: env(safe-area-inset-top, 20px);
+    --safe-bot: env(safe-area-inset-bottom, 20px);
+  }
+  body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; overflow-x: hidden; }
+
+  .screen { display: none; flex-direction: column; min-height: 100dvh; }
+  .screen.active { display: flex; }
+
+  .topbar {
+    background: var(--surface); border-bottom: 0.5px solid var(--border);
+    padding: calc(var(--safe-top) + 8px) 16px 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .topbar-title { font-size: 17px; font-weight: 600; flex: 1; }
+  .topbar-back { font-size: 15px; color: var(--green); cursor: pointer; padding: 4px; }
+  .topbar-action { font-size: 15px; color: var(--green); cursor: pointer; padding: 4px; font-weight: 500; }
+
+  .content { flex: 1; overflow-y: auto; padding: 16px; padding-bottom: calc(var(--safe-bot) + 80px); }
+
+  .tab-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(255,255,255,0.92); border-top: 0.5px solid var(--border);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    display: flex; padding-bottom: var(--safe-bot);
+  }
+  .tab { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 10px 4px 6px; cursor: pointer; gap: 3px; }
+  .tab svg { width: 24px; height: 24px; stroke: var(--hint); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.15s; }
+  .tab span { font-size: 10px; color: var(--hint); transition: color 0.15s; }
+  .tab.active svg { stroke: var(--green); }
+  .tab.active span { color: var(--green); }
+
+  .card { background: var(--surface); border-radius: 16px; border: 0.5px solid var(--border); overflow: hidden; margin-bottom: 12px; }
+  .card-body { padding: 16px; }
+
+  .btn { display: block; width: 100%; padding: 14px; border-radius: 14px; font-size: 16px; font-weight: 600; text-align: center; cursor: pointer; border: none; font-family: inherit; transition: opacity 0.15s, transform 0.1s; }
+  .btn:active { transform: scale(0.97); opacity: 0.85; }
+  .btn-primary { background: var(--green); color: white; }
+  .btn-secondary { background: var(--bg); color: var(--text); border: 0.5px solid var(--border); }
+  .btn-danger { background: var(--red-l); color: var(--red); }
+
+  .field { margin-bottom: 16px; }
+  .field label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
+  .field input, .field select {
+    width: 100%; padding: 12px 14px; border-radius: 12px;
+    border: 0.5px solid var(--border); background: var(--bg);
+    font-size: 16px; color: var(--text); font-family: inherit;
+    -webkit-appearance: none; appearance: none;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--green); background: var(--surface); }
+
+  .qty-row { display: flex; align-items: center; gap: 12px; }
+  .qty-btn { width: 40px; height: 40px; border-radius: 50%; border: 0.5px solid var(--border); background: var(--bg); font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; color: var(--text); transition: background 0.1s; }
+  .qty-btn:active { background: var(--green-l); }
+  .qty-val { flex: 1; text-align: center; font-size: 22px; font-weight: 600; }
+
+  /* Scanner */
+  #video-container { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 3/4; }
+  #video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .scan-frame { width: 65%; aspect-ratio: 1; position: relative; }
+  .scan-frame::before, .scan-frame::after,
+  .scan-frame > span::before, .scan-frame > span::after {
+    content: ''; position: absolute; width: 24px; height: 24px; border-color: var(--green); border-style: solid;
+  }
+  .scan-frame::before { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+  .scan-frame::after { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+  .scan-frame > span::before { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+  .scan-frame > span::after { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+  .scan-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--green); animation: scanline 2s ease-in-out infinite; top: 20%; opacity: 0.8; }
+  @keyframes scanline { 0%,100% { top: 20%; } 50% { top: 75%; } }
+
+  /* Prodotto card in lista */
+  .prod-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); cursor: pointer; }
+  .prod-item:last-child { border-bottom: none; }
+  .prod-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .prod-info { flex: 1; min-width: 0; }
+  .prod-nome { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prod-meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .prod-qty { font-size: 14px; font-weight: 600; color: var(--muted); }
+
+  .dot-ok { background: var(--green); }
+  .dot-warn { background: #EF9F27; }
+  .dot-exp { background: var(--red); }
+  .dot-out { background: #ccc; }
+
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; margin-top: 4px; }
+  .badge-warn { background: var(--amber-l); color: var(--amber); }
+  .badge-exp { background: var(--red-l); color: var(--red); }
+  .badge-ok { background: var(--green-l); color: var(--green-d); }
+
+  .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+  .metric { background: var(--surface); border-radius: 12px; padding: 12px; text-align: center; border: 0.5px solid var(--border); }
+  .metric-val { font-size: 24px; font-weight: 700; }
+  .metric-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .found-badge { background: var(--green-l); border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .found-badge-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .found-badge-text { font-size: 12px; color: var(--green-d); font-weight: 500; }
+
+  .product-img { width: 64px; height: 64px; border-radius: 10px; object-fit: contain; background: var(--bg); border: 0.5px solid var(--border); flex-shrink: 0; }
+
+  .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast { position: fixed; bottom: calc(var(--safe-bot) + 70px); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; z-index: 999; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Lista spesa */
+  .spesa-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); }
+  .spesa-item:last-child { border-bottom: none; }
+  .spesa-check { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.15s; }
+  .spesa-check.done { background: var(--green); border-color: var(--green); }
+  .spesa-check.done::after { content: '✓'; color: white; font-size: 13px; font-weight: 700; }
+  .spesa-nome { flex: 1; font-size: 15px; font-weight: 500; }
+  .spesa-nome.done { text-decoration: line-through; color: var(--hint); }
+  .spesa-del { font-size: 18px; color: var(--hint); cursor: pointer; padding: 4px; }
+</style>
+</head>
+<body>
+
+<!-- SCREEN: Inventario -->
+<div class="screen active" id="screen-inventario">
+  <div class="topbar">
+    <div class="topbar-title">Dispensa</div>
+    <div class="topbar-action" onclick="showScreen('screen-scan')">+ Aggiungi</div>
+  </div>
+  <div class="content">
+    <div class="metric-row" id="metrics"></div>
+    <div class="card" id="lista-container">
+      <div id="lista-prodotti"><div class="empty"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <div class="tab active" onclick="showTab('inventario')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Dispensa</span>
+    </div>
+    <div class="tab" onclick="showTab('scan')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
+      <span>Scansiona</span>
+    </div>
+    <div class="tab" onclick="showTab('spesa')">
+      <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span>Spesa</span>
+    </div>
+    <div class="tab" onclick="showTab('impostazioni')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span>Impostazioni</span>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Scanner -->
+<div class="screen" id="screen-scan">
+  <div class="topbar">
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">✕</div>
+    <div class="topbar-title">Scansiona</div>
+  </div>
+  <div class="content">
+    <div id="video-container">
+      <video id="video" autoplay muted playsinline></video>
+      <div class="scan-overlay"><div class="scan-frame"><span></span><div class="scan-line"></div></div></div>
+    </div>
+    <div style="margin-top: 16px; text-align: center; font-size: 14px; color: var(--muted);" id="scan-status">Inquadra il barcode del prodotto</div>
+    <div style="margin-top: 20px;">
+      <button class="btn btn-secondary" onclick="inserisciManuale()">Inserisci manualmente</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Conferma prodotto -->
+<div class="screen" id="screen-conferma">
+  <div class="topbar">
+    <div class="topbar-back" onclick="showScreen('screen-scan')">‹ Indietro</div>
+    <div class="topbar-title">Conferma prodotto</div>
+  </div>
+  <div class="content">
+    <div id="found-badge-container"></div>
+    <div class="card card-body">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+        <img id="conf-img" class="product-img" src="" alt="" onerror="this.style.display='none'">
+        <div>
+          <div style="font-size: 18px; font-weight: 600;" id="conf-nome"></div>
+          <div style="font-size: 13px; color: var(--muted);" id="conf-marca"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Nome prodotto</label>
+        <input type="text" id="conf-nome-edit">
+      </div>
+      <div class="field">
+        <label>Quantità</label>
+        <div class="qty-row">
+          <div class="qty-btn" onclick="cambiaQty(-1)">−</div>
+          <div class="qty-val" id="conf-qty">1</div>
+          <div class="qty-btn" onclick="cambiaQty(1)">+</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Data di scadenza</label>
+        <input type="date" id="conf-scadenza">
+      </div>
+      <div class="field">
+        <label>Posizione</label>
+        <select id="conf-posizione">
+          <option value="Dispensa">🗄️ Dispensa</option>
+          <option value="Frigo">🧊 Frigo</option>
+          <option value="Freezer">❄️ Freezer</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Note (opzionale)</label>
+        <input type="text" id="conf-note" placeholder="es. aperto, in frigo...">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="salvaInDispensa()" style="margin-top: 8px;">Salva in dispensa</button>
+  </div>
+</div>
+
+<!-- SCREEN: Dettaglio prodotto -->
+<div class="screen" id="screen-dettaglio">
+  <div class="topbar">
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">‹</div>
+    <div class="topbar-title" id="det-title">Prodotto</div>
+  </div>
+  <div class="content" id="det-content"></div>
+</div>
+
+<!-- SCREEN: Lista Spesa -->
+<div class="screen" id="screen-spesa">
+  <div class="topbar">
+    <div class="topbar-title">🛒 Lista della Spesa</div>
+    <div class="topbar-action" onclick="aggiungiSpesaManuale()">+ Aggiungi</div>
+  </div>
+  <div class="content">
+    <div class="card" id="spesa-container">
+      <div id="lista-spesa"><div class="empty"><div class="spinner"></div></div></div>
+    </div>
+    <button class="btn btn-primary" onclick="inviaListaSpesaTelegram()" style="margin-bottom:10px;">📤 Invia su Telegram</button>
+    <button class="btn btn-secondary" onclick="svuotaCompletati()">🗑️ Rimuovi completati</button>
+  </div>
+  <div class="tab-bar">
+    <div class="tab" onclick="showTab('inventario')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Dispensa</span>
+    </div>
+    <div class="tab" onclick="showTab('scan')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
+      <span>Scansiona</span>
+    </div>
+    <div class="tab active" onclick="showTab('spesa')">
+      <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span>Spesa</span>
+    </div>
+    <div class="tab" onclick="showTab('impostazioni')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span>Impostazioni</span>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Impostazioni -->
+<div class="screen" id="screen-impostazioni">
+  <div class="topbar">
+    <div class="topbar-title">Impostazioni</div>
+  </div>
+  <div class="content">
+    <div class="card card-body">
+      <div style="font-size: 13px; font-weight: 500; margin-bottom: 12px; color: var(--muted);">Connessione backend</div>
+      <div class="field">
+        <label>URL backend (es. http://192.168.1.10:5000)</label>
+        <input type="url" id="set-url" placeholder="http://192.168.x.x:5000">
+      </div>
+      <button class="btn btn-primary" onclick="salvaImpostazioni()">Salva</button>
+    </div>
+    <div class="card card-body" style="margin-top: 12px;">
+      <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--muted);">Alert scadenza</div>
+      <div class="field">
+        <label>Giorni prima della scadenza per notifica</label>
+        <input type="number" id="set-giorni" value="3" min="1" max="30">
+      </div>
+    </div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.0</div>
+  </div>
+  <div class="tab-bar">
+    <div class="tab" onclick="showTab('inventario')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Dispensa</span>
+    </div>
+    <div class="tab" onclick="showTab('scan')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
+      <span>Scansiona</span>
+    </div>
+    <div class="tab" onclick="showTab('spesa')">
+      <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span>Spesa</span>
+    </div>
+    <div class="tab active" onclick="showTab('impostazioni')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span>Impostazioni</span>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script>
+const API_BASE = () => localStorage.getItem('dispensa_url') || 'http://192.168.1.83:5000';
+
+let codeReader = null;
+let prodottoCorrente = {};
+let qtyCorrente = 1;
+let prodottiCache = [];
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'screen-inventario') caricaInventario();
+  if (id === 'screen-spesa') caricaListaSpesa();
+  if (id === 'screen-scan') avviaScanner();
+  else fermaScanner();
+}
+
+function showTab(tab) {
+  if (tab === 'inventario') showScreen('screen-inventario');
+  else if (tab === 'scan') showScreen('screen-scan');
+  else if (tab === 'spesa') showScreen('screen-spesa');
+  else if (tab === 'impostazioni') showScreen('screen-impostazioni');
+}
+
+function toast(msg, durata = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), durata);
+}
+
+async function caricaInventario() {
+  try {
+    const r = await fetch(`${API_BASE()}/api/prodotti`);
+    prodottiCache = await r.json();
+    renderInventario(prodottiCache);
+  } catch(e) {
+    document.getElementById('lista-prodotti').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.<br>Controlla le impostazioni.</div></div>`;
+  }
+}
+
+function renderInventario(prodotti) {
+  const oggi = new Date(); oggi.setHours(0,0,0,0);
+  let totale = prodotti.length;
+  let inScadenza = 0; let esauriti = 0;
+
+  let html = '';
+  if (prodotti.length === 0) {
+    html = `<div class="empty"><div class="empty-icon">🛒</div><div>Nessun prodotto in dispensa.<br>Scansiona il primo!</div></div>`;
+  } else {
+    prodotti.forEach(p => {
+      let dotClass = 'dot-ok', metaText = '', badgeHtml = '';
+      if (p.quantita <= 0) { dotClass = 'dot-out'; esauriti++; }
+      if (p.scadenza) {
+        const scad = new Date(p.scadenza);
+        const giorni = Math.round((scad - oggi) / 86400000);
+        if (giorni < 0) { dotClass = 'dot-exp'; metaText = 'Scaduto'; badgeHtml = `<span class="badge badge-exp">Scaduto</span>`; }
+        else if (giorni === 0) { dotClass = 'dot-warn'; metaText = 'Scade oggi'; badgeHtml = `<span class="badge badge-warn">Scade oggi</span>`; inScadenza++; }
+        else if (giorni <= 3) { dotClass = 'dot-warn'; metaText = `Scade tra ${giorni}g`; badgeHtml = `<span class="badge badge-warn">In scadenza</span>`; inScadenza++; }
+        else { metaText = `Scade ${scad.toLocaleDateString('it-IT', {day:'numeric', month:'short'})}`; }
+      }
+      html += `<div class="prod-item" onclick="apriDettaglio(${p.id})">
+        <div class="prod-dot ${dotClass}"></div>
+        <div class="prod-info">
+          <div class="prod-nome">${p.nome}</div>
+          <div class="prod-meta">${p.marca ? p.marca + ' · ' : ''}${p.posizione ? p.posizione + (metaText ? ' · ' : '') : ''}${metaText}</div>
+          ${badgeHtml}
+        </div>
+        <div class="prod-qty">×${p.quantita}</div>
+      </div>`;
+    });
+  }
+
+  document.getElementById('lista-prodotti').innerHTML = html;
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric"><div class="metric-val">${totale}</div><div class="metric-label">Totale</div></div>
+    <div class="metric"><div class="metric-val" style="color:#EF9F27">${inScadenza}</div><div class="metric-label">In scadenza</div></div>
+    <div class="metric"><div class="metric-val" style="color:#E24B4A">${esauriti}</div><div class="metric-label">Esauriti</div></div>
+  `;
+}
+
+function apriDettaglio(id) {
+  const p = prodottiCache.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('det-title').textContent = p.nome;
+  const scadFormatted = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'long',year:'numeric'}) : 'Non specificata';
+  document.getElementById('det-content').innerHTML = `
+    <div class="card card-body">
+      <div style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">${p.nome}</div>
+      <div style="font-size: 14px; color: var(--muted); margin-bottom: 20px;">${p.marca || ''} ${p.categoria ? '· ' + p.categoria : ''}</div>
+      <table style="width:100%;font-size:14px;border-collapse:collapse;">
+        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'}</td></tr>
+        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Quantità</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.quantita}</td></tr>
+        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Scadenza</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${scadFormatted}</td></tr>
+        <tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">${p.ean}</td></tr>
+      </table>
+    </div>
+    ${p.nutriments ? (() => {
+      const n = typeof p.nutriments === 'string' ? JSON.parse(p.nutriments) : p.nutriments;
+      const righe = [
+        ['Energia', n.energia_kcal, 'kcal'],
+        ['Grassi', n.grassi, 'g'],
+        ['di cui saturi', n.grassi_saturi, 'g'],
+        ['Carboidrati', n.carboidrati, 'g'],
+        ['di cui zuccheri', n.zuccheri, 'g'],
+        ['Fibre', n.fibre, 'g'],
+        ['Proteine', n.proteine, 'g'],
+        ['Sale', n.sale, 'g'],
+      ].filter(r => r[1] != null);
+      if (!righe.length) return '';
+      const nsColor = {'A':'#1D9E75','B':'#8BC34A','C':'#FFC107','D':'#FF9800','E':'#F44336'};
+      return `<div class="card card-body" style="margin-top:8px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📊 Valori nutrizionali per 100g</div>
+        <table style="width:100%;font-size:13px;border-collapse:collapse;">
+          ${righe.map((r,i) => `<tr><td style="color:var(--muted);padding:6px 0;${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}${r[0].startsWith('di')?'padding-left:12px;':''}">${r[0]}</td><td style="text-align:right;font-weight:${r[0].startsWith('di')?'400':'600'};${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}">${Number(r[1]).toFixed(1)} ${r[2]}</td></tr>`).join('')}
+        </table>
+        ${p.nutriscore ? `<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:${nsColor[p.nutriscore]||'var(--text)'}">● ${p.nutriscore}</strong></div>` : ''}
+      </div>`;
+    })() : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+      <button class="btn btn-secondary" onclick="consumaProdotto(${p.id},${p.quantita})">− Consuma</button>
+      <button class="btn btn-secondary" onclick="aggiungiQty(${p.id},${p.quantita})">+ Aggiungi</button>
+    </div>
+    <button class="btn btn-danger" onclick="eliminaProdotto(${p.id})" style="margin-top:10px;">Elimina dalla dispensa</button>
+  `;
+  showScreen('screen-dettaglio');
+}
+
+async function consumaProdotto(id, qtyAttuali) {
+  const nuova = Math.max(0, qtyAttuali - 1);
+  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
+  toast('Quantità aggiornata');
+  showScreen('screen-inventario');
+}
+
+async function aggiungiQty(id, qtyAttuali) {
+  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali + 1}) });
+  toast('Quantità aggiornata');
+  showScreen('screen-inventario');
+}
+
+async function eliminaProdotto(id) {
+  if (!confirm('Eliminare questo prodotto dalla dispensa?')) return;
+  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'DELETE' });
+  toast('Prodotto eliminato');
+  showScreen('screen-inventario');
+}
+
+function avviaScanner() {
+  if (codeReader) return;
+  document.getElementById('scan-status').textContent = 'Avvio fotocamera...';
+  codeReader = new ZXing.BrowserMultiFormatReader();
+  codeReader.decodeFromVideoDevice(null, 'video', async (result, err) => {
+    if (result) {
+      fermaScanner();
+      document.getElementById('scan-status').textContent = 'Codice rilevato!';
+      await cercaProdotto(result.getText());
+    }
+  });
+  document.getElementById('scan-status').textContent = 'Inquadra il barcode del prodotto';
+}
+
+function fermaScanner() {
+  if (codeReader) { codeReader.reset(); codeReader = null; }
+  const video = document.getElementById('video');
+  if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+}
+
+async function cercaProdotto(ean) {
+  document.getElementById('scan-status').textContent = 'Ricerca prodotto...';
+  try {
+    const r = await fetch(`${API_BASE()}/api/barcode/${ean}`);
+    const data = await r.json();
+    apriConferma(data);
+  } catch(e) {
+    apriConferma({ trovato: false, ean, nome: '', marca: '', categoria: '', immagine_url: '' });
+  }
+}
+
+function suggerisciDaCategoria(categoria) {
+  const cat = (categoria || '').toLowerCase();
+  // Mappatura posizione
+  let posizione = 'Dispensa';
+  if (/latte|yogurt|formaggio|latticin|burro|panna|affettat|salum|carne|pesce|fresc|verdur|frutta|uov|salsa aperta|succo aperto/.test(cat)) posizione = 'Frigo';
+  if (/surgelat|gelat|frozen|ice/.test(cat)) posizione = 'Freezer';
+
+  // Mappatura giorni scadenza suggeriti
+  let giorni = 365; // default dispensa
+  if (/latte/.test(cat)) giorni = 7;
+  else if (/yogurt/.test(cat)) giorni = 14;
+  else if (/formaggio|cheese/.test(cat)) giorni = 21;
+  else if (/burro|panna/.test(cat)) giorni = 30;
+  else if (/carne|pesce|affettat|salum/.test(cat)) giorni = 5;
+  else if (/frutta|verdur/.test(cat)) giorni = 7;
+  else if (/pane|bread/.test(cat)) giorni = 5;
+  else if (/biscott|cracker|snack/.test(cat)) giorni = 180;
+  else if (/pasta|riso|cereali|legum|farin/.test(cat)) giorni = 365;
+  else if (/surgelat|frozen/.test(cat)) giorni = 90;
+  else if (/conserv|scatolam|tonno|sughi/.test(cat)) giorni = 730;
+  else if (/olio|aceto|condiment/.test(cat)) giorni = 365;
+  else if (/bevand|succo|drink/.test(cat)) giorni = 180;
+
+  return { posizione, giorni };
+}
+
+function apriConferma(prodotto) {
+  prodottoCorrente = prodotto;
+  qtyCorrente = 1;
+  document.getElementById('conf-nome').textContent = prodotto.nome || 'Prodotto sconosciuto';
+  document.getElementById('conf-marca').textContent = [prodotto.marca, prodotto.categoria].filter(Boolean).join(' · ');
+  document.getElementById('conf-nome-edit').value = prodotto.nome || '';
+  document.getElementById('conf-qty').textContent = '1';
+  document.getElementById('conf-note').value = '';
+
+  // Calcola posizione e scadenza automatica
+  const { posizione, giorni } = suggerisciDaCategoria(prodotto.categoria);
+  const oggi = new Date();
+  oggi.setDate(oggi.getDate() + giorni);
+  document.getElementById('conf-scadenza').value = oggi.toISOString().split('T')[0];
+  document.getElementById('conf-posizione').value = posizione;
+
+  const img = document.getElementById('conf-img');
+  if (prodotto.immagine_url) { img.src = prodotto.immagine_url; img.style.display = 'block'; }
+  else img.style.display = 'none';
+  const badge = document.getElementById('found-badge-container');
+  badge.innerHTML = prodotto.trovato
+    ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posizione === 'Frigo' ? '🧊 Frigo' : posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'} suggerito</div></div>`
+    : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci manualmente</div></div>`;
+  showScreen('screen-conferma');
+}
+
+function cambiaQty(delta) {
+  qtyCorrente = Math.max(1, qtyCorrente + delta);
+  document.getElementById('conf-qty').textContent = qtyCorrente;
+}
+
+async function salvaInDispensa() {
+  const payload = {
+    ean: prodottoCorrente.ean || '',
+    nome: document.getElementById('conf-nome-edit').value || prodottoCorrente.nome || 'Prodotto',
+    marca: prodottoCorrente.marca || '',
+    categoria: prodottoCorrente.categoria || '',
+    immagine_url: prodottoCorrente.immagine_url || '',
+    quantita: qtyCorrente,
+    scadenza: document.getElementById('conf-scadenza').value || null,
+    note: document.getElementById('conf-note').value || '',
+    posizione: document.getElementById('conf-posizione').value || 'Dispensa',
+    nutriments: prodottoCorrente.nutriments || null,
+    nutriscore: prodottoCorrente.nutriscore || ''
+  };
+
+try {
+    await fetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    // Salva in cache locale se ha un EAN reale
+    if (payload.ean && !payload.ean.startsWith('MANUAL-')) {
+      await fetch(`${API_BASE()}/api/barcode-cache`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          ean: payload.ean,
+          nome: payload.nome,
+          marca: payload.marca,
+          categoria: payload.categoria,
+          immagine_url: payload.immagine_url,
+          nutriments: payload.nutriments,
+          nutriscore: payload.nutriscore
+        })
+      });
+    }
+    toast('Prodotto salvato!');
+    showScreen('screen-inventario');
+  } catch(e) {
+    toast('Errore salvataggio. Riprova.');
+  }
+}
+
+function inserisciManuale() {
+  const ean = prompt('Inserisci il codice a barre (EAN) del prodotto:\n(lascia vuoto per inserimento manuale senza barcode)');
+  if (ean === null) return; // utente ha premuto Annulla
+  if (ean.trim() !== '') {
+    // Ha inserito un EAN, cerca su Open Food Facts
+    cercaProdotto(ean.trim());
+  } else {
+    // Nessun EAN, inserimento completamente manuale
+    apriConferma({ trovato: false, ean: 'MANUAL-' + Date.now(), nome: '', marca: '', categoria: '', immagine_url: '' });
+  }
+}
+
+async function caricaListaSpesa() {
+  try {
+    const r = await fetch(`${API_BASE()}/api/lista-spesa`);
+    const items = await r.json();
+    renderListaSpesa(items);
+  } catch(e) {
+    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
+  }
+}
+
+function renderListaSpesa(items) {
+  if (!items.length) {
+    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">🛒</div><div>Lista spesa vuota!<br>I prodotti esauriti appariranno qui.</div></div>`;
+    return;
+  }
+  let html = '';
+  items.forEach(item => {
+    const done = item.completato === 1;
+    html += `<div class="spesa-item">
+      <div class="spesa-check ${done ? 'done' : ''}" onclick="toggleSpesa(${item.id}, ${done ? 0 : 1})"></div>
+      <div class="spesa-info" style="flex:1;min-width:0;">
+        <div class="spesa-nome ${done ? 'done' : ''}">${item.nome}</div>
+        ${item.marca ? `<div style="font-size:12px;color:var(--muted);">${item.marca}</div>` : ''}
+      </div>
+      <div class="spesa-del" onclick="eliminaSpesa(${item.id})">✕</div>
+    </div>`;
+  });
+  document.getElementById('lista-spesa').innerHTML = html;
+}
+
+async function toggleSpesa(id, completato) {
+  await fetch(`${API_BASE()}/api/lista-spesa/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({completato, quantita: 1})
+  });
+  caricaListaSpesa();
+}
+
+async function eliminaSpesa(id) {
+  await fetch(`${API_BASE()}/api/lista-spesa/${id}`, { method: 'DELETE' });
+  caricaListaSpesa();
+}
+
+async function svuotaCompletati() {
+  await fetch(`${API_BASE()}/api/lista-spesa/svuota-completati`, { method: 'DELETE' });
+  toast('Completati rimossi');
+  caricaListaSpesa();
+}
+
+async function inviaListaSpesaTelegram() {
+  const r = await fetch(`${API_BASE()}/api/lista-spesa/invia-telegram`);
+  const data = await r.json();
+  toast(data.ok ? '📤 Lista inviata su Telegram!' : '⚠️ ' + (data.errore || 'Errore'));
+}
+
+function aggiungiSpesaManuale() {
+  const nome = prompt('Nome del prodotto da aggiungere alla lista:');
+  if (!nome || !nome.trim()) return;
+  fetch(`${API_BASE()}/api/lista-spesa`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({nome: nome.trim(), quantita: 1})
+  }).then(() => {
+    toast('Aggiunto alla lista!');
+    caricaListaSpesa();
+  });
+}
+
+function salvaImpostazioni() {
+  const url = document.getElementById('set-url').value.trim();
+  if (url) localStorage.setItem('dispensa_url', url);
+  toast('Impostazioni salvate');
+  caricaInventario();
+}
+
+document.getElementById('set-url').value = API_BASE();
+caricaInventario();
+</script>
+</body>
+</html>
