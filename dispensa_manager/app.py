@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import os
 import sqlite3
@@ -173,7 +175,6 @@ def aggiorna_sensori_ha():
             requests.post(f"{HA_URL}/api/states/{entity_id}", headers=headers, json=payload, timeout=5)
         except Exception as e:
             print(f"Errore aggiornamento HA {entity_id}: {e}")
-    # Nessuna notifica Telegram automatica — le notifiche sono inviate per ogni azione specifica
 
 def invia_notifica_azione(testo):
     """Invia una notifica Telegram concisa su un'azione specifica."""
@@ -195,7 +196,7 @@ def invia_notifica_azione(testo):
 
 @app.route("/api/barcode/<ean>", methods=["GET"])
 def cerca_barcode(ean):
-    headers = {"User-Agent": "DispensaManager/1.0.1"}
+    headers = {"User-Agent": "DispensaManager/1.0.3"}
     conn = get_db()
     cached = conn.execute("SELECT * FROM barcode_cache WHERE ean = ?", (ean,)).fetchone()
     conn.close()
@@ -247,6 +248,17 @@ def cerca_barcode(ean):
             continue
 
     return jsonify({"trovato": False, "ean": ean, "nome": "", "marca": "", "categoria": "", "immagine_url": "", "nutriscore": "", "nutriments": {}})
+
+@app.route("/api/prodotti/by-ean/<ean>", methods=["GET"])
+def prodotti_by_ean(ean):
+    """Restituisce i prodotti in dispensa con lo stesso EAN (per rilevare duplicati)."""
+    conn = get_db()
+    items = conn.execute(
+        "SELECT id, nome, marca, quantita, scadenza, posizione FROM prodotti WHERE ean = ? AND quantita > 0 ORDER BY scadenza ASC",
+        (ean,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(i) for i in items])
 
 @app.route("/api/lista-spesa", methods=["GET"])
 def get_lista_spesa():
@@ -342,8 +354,15 @@ def salva_barcode_cache():
 
 @app.route("/api/prodotti", methods=["GET"])
 def lista_prodotti():
+    limit = request.args.get('limit', type=int)
+    offset = request.args.get('offset', 0, type=int)
     conn = get_db()
-    prodotti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC NULLS LAST").fetchall()
+    if limit:
+        prodotti = conn.execute(
+            "SELECT * FROM prodotti ORDER BY scadenza ASC NULLS LAST LIMIT ? OFFSET ?", (limit, offset)
+        ).fetchall()
+    else:
+        prodotti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC NULLS LAST").fetchall()
     conn.close()
     oggi = datetime.now().date()
     result = []
@@ -478,6 +497,86 @@ def test_telegram():
         except Exception as e:
             risultati.append({"chat_id": cid, "ok": False, "errore": str(e)})
     return jsonify({"risultati": risultati})
+
+@app.route("/api/alerts", methods=["GET"])
+def invia_alerts():
+    """Endpoint da chiamare con un'automazione HA per notifiche giornaliere su scadenze ed esauriti."""
+    conn = get_db()
+    prodotti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC").fetchall()
+    conn.close()
+
+    oggi = datetime.now().date()
+    opts = get_options()
+    giorni_soglia = opts.get("giorni_alert_scadenza", 3)
+
+    in_scadenza = []
+    esauriti = []
+
+    for p in prodotti:
+        if p["quantita"] <= 0:
+            esauriti.append(p["nome"])
+        if p["scadenza"]:
+            try:
+                scad = datetime.strptime(p["scadenza"], "%Y-%m-%d").date()
+                giorni = (scad - oggi).days
+                if giorni <= giorni_soglia:
+                    in_scadenza.append({"nome": p["nome"], "giorni": giorni})
+            except:
+                pass
+
+    if not in_scadenza and not esauriti:
+        return jsonify({"ok": True, "notifica_inviata": False, "motivo": "Nessun alert da inviare"})
+
+    msg = f"🔔 *Alert Dispensa*\n_{datetime.now().strftime('%d/%m/%Y')}_\n\n"
+    if in_scadenza:
+        msg += "⚠️ *In scadenza:*\n"
+        for p in in_scadenza:
+            if p["giorni"] < 0:
+                label = "già scaduto!"
+            elif p["giorni"] == 0:
+                label = "scade oggi!"
+            elif p["giorni"] == 1:
+                label = "scade domani"
+            else:
+                label = f"tra {p['giorni']} giorni"
+            msg += f"  • {p['nome']} — _{label}_\n"
+        msg += "\n"
+    if esauriti:
+        msg += "❌ *Esauriti:*\n"
+        for nome in esauriti:
+            msg += f"  • {nome}\n"
+
+    invia_notifica_azione(msg)
+    aggiorna_sensori_ha()
+    return jsonify({
+        "ok": True,
+        "notifica_inviata": True,
+        "in_scadenza": len(in_scadenza),
+        "esauriti": len(esauriti)
+    })
+
+@app.route("/api/export-csv", methods=["GET"])
+def export_csv():
+    """Scarica l'inventario completo in formato CSV."""
+    conn = get_db()
+    prodotti = conn.execute("SELECT * FROM prodotti ORDER BY nome ASC").fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Nome', 'Marca', 'Categoria', 'Quantità', 'Scadenza', 'Posizione', 'EAN', 'Note', 'Data inserimento'])
+    for p in prodotti:
+        writer.writerow([
+            p['id'], p['nome'], p['marca'] or '', p['categoria'] or '',
+            p['quantita'], p['scadenza'] or '', p['posizione'] or '',
+            p['ean'] or '', p['note'] or '', p['data_inserimento'] or ''
+        ])
+
+    output.seek(0)
+    response = make_response('\ufeff' + output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename=dispensa_{datetime.now().strftime("%Y%m%d")}.csv'
+    return response
 
 @app.route("/api/report", methods=["GET"])
 def report_dispensa():
