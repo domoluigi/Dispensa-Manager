@@ -90,8 +90,10 @@
   @keyframes scanline { 0%,100% { top: 20%; } 50% { top: 75%; } }
 
   /* Prodotto card in lista */
-  .prod-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); cursor: pointer; }
+  .prod-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); cursor: pointer; transition: background 0.15s; user-select: none; }
   .prod-item:last-child { border-bottom: none; }
+  .prod-item.swipe-left { background: rgba(163,45,45,0.08); }
+  .prod-item.swipe-right { background: rgba(29,158,117,0.08); }
   .prod-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .prod-info { flex: 1; min-width: 0; }
   .prod-nome { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -169,6 +171,9 @@
   .toggle.on { background: var(--green); }
   .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: white; top: 3px; left: 3px; transition: transform 0.2s; }
   .toggle.on::after { transform: translateX(18px); }
+
+  /* Swipe hint */
+  .swipe-hint { font-size: 11px; color: var(--hint); text-align: center; padding: 6px 0 0; }
 </style>
 </head>
 <body>
@@ -182,14 +187,14 @@
   <div class="content">
     <div class="metric-row" id="metrics"></div>
     <div class="search-bar-wrap">
-      <input type="search" id="ricerca-input" placeholder="Cerca prodotto..." oninput="applicaFiltroSort()">
+      <input type="search" id="ricerca-input" placeholder="Cerca prodotto, marca, categoria..." oninput="applicaFiltroSort()">
       <button class="search-bar-scan" onclick="avviaScannerRicerca()" title="Cerca con barcode">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
       </button>
     </div>
     <div class="filter-row">
       <div class="chip active" data-filtro="tutti" onclick="setFiltro('tutti')">Tutti</div>
-      <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
+      <div class="chip" id="chip-scadenza" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
       <div class="chip" data-filtro="esauriti" onclick="setFiltro('esauriti')">⚠️ Esauriti</div>
       <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧊 Frigo</div>
       <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Freezer</div>
@@ -207,6 +212,7 @@
     <div class="card" id="lista-container">
       <div id="lista-prodotti"><div class="empty"><div class="spinner"></div></div></div>
     </div>
+    <div class="swipe-hint">← Scorri sx per consumare · Scorri dx per aggiungere →</div>
   </div>
   <div class="tab-bar">
     <div class="tab active" onclick="showTab('inventario')">
@@ -258,6 +264,15 @@
   </div>
   <div class="content">
     <div id="found-badge-container"></div>
+    <!-- Banner duplicato -->
+    <div id="duplicato-banner" style="display:none; background:var(--amber-l); border-radius:12px; padding:12px; margin-bottom:16px; border:0.5px solid rgba(186,117,23,0.3);">
+      <div style="font-size:13px; font-weight:600; color:var(--amber); margin-bottom:8px;">⚠️ Già presente in dispensa</div>
+      <div id="duplicato-lista" style="font-size:12px; color:var(--amber);"></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+        <button onclick="incrementaDuplicato()" style="padding:10px; border-radius:10px; background:var(--green); color:white; font-size:13px; font-weight:600; border:none; cursor:pointer;">+1 al primo</button>
+        <button onclick="nascondiDuplicatoBanner()" style="padding:10px; border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; border:0.5px solid var(--border); cursor:pointer;">Aggiungi nuovo</button>
+      </div>
+    </div>
     <div class="card card-body">
       <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
         <img id="conf-img" class="product-img" src="" alt="" onerror="this.style.display='none'">
@@ -399,10 +414,6 @@
       <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       <span>Statistiche</span>
     </div>
-    <div class="tab" onclick="showTab('statistiche')">
-      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-      <span>Statistiche</span>
-    </div>
     <div class="tab" onclick="showTab('impostazioni')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span>Impostazioni</span>
@@ -440,9 +451,10 @@
     </div>
     <div class="card card-body" style="margin-top:12px;">
       <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">Dati</div>
-      <button class="btn btn-secondary" onclick="esportaCSV()">📥 Esporta inventario CSV</button>
+      <button class="btn btn-secondary" onclick="esportaCSV()" style="margin-bottom:8px;">📥 Esporta inventario CSV</button>
+      <button class="btn btn-secondary" onclick="esportaCSVServer()">☁️ Esporta da server</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.0.2</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.1.0</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -456,6 +468,10 @@
     <div class="tab" onclick="showTab('spesa')">
       <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
       <span>Spesa</span>
+    </div>
+    <div class="tab" onclick="showTab('statistiche')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Statistiche</span>
     </div>
     <div class="tab active" onclick="showTab('impostazioni')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -525,6 +541,7 @@ let filtroAttivo = 'tutti';
 let modProdottoId = null;
 let modQtyCorrente = 1;
 let detQtyDelta = 1;
+let duplicatiCorrente = []; // prodotti esistenti con stesso EAN
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -561,8 +578,6 @@ async function caricaInventario() {
   }
 }
 
-function filtraInventario(testo) { applicaFiltroSort(); }
-
 function setFiltro(f) {
   filtroAttivo = f;
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -596,7 +611,8 @@ function applicaFiltroSort() {
   if (q) lista = lista.filter(p =>
     (p.nome||'').toLowerCase().includes(q) ||
     (p.marca||'').toLowerCase().includes(q) ||
-    (p.posizione||'').toLowerCase().includes(q)
+    (p.posizione||'').toLowerCase().includes(q) ||
+    (p.categoria||'').toLowerCase().includes(q)
   );
 
   if (ord === 'nome') lista.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
@@ -632,7 +648,7 @@ async function consumaRapido(id, qtyAttuali) {
   const p = prodottiCache.find(x => x.id === id);
   if (p) p.quantita = nuova;
   applicaFiltroSort();
-  toast('−1');
+  toast('−1 consumato');
 }
 
 async function aggiungiRapido(id, qtyAttuali) {
@@ -641,7 +657,7 @@ async function aggiungiRapido(id, qtyAttuali) {
   const p = prodottiCache.find(x => x.id === id);
   if (p) p.quantita = nuova;
   applicaFiltroSort();
-  toast('+1');
+  toast('+1 aggiunto');
 }
 
 function apriModifica(id) {
@@ -713,8 +729,13 @@ function esportaCSV() {
   toast('CSV esportato!');
 }
 
+function esportaCSVServer() {
+  window.open(`${API_BASE()}/api/export-csv`, '_blank');
+}
+
 function renderInventario(prodotti) {
   const oggi = new Date(); oggi.setHours(0,0,0,0);
+  const giorniAlert = parseInt(localStorage.getItem('dispensa_giorni') || '3');
   let totale = prodotti.length;
   let inScadenza = 0; let esauriti = 0;
 
@@ -730,10 +751,10 @@ function renderInventario(prodotti) {
         const giorni = Math.round((scad - oggi) / 86400000);
         if (giorni < 0) { dotClass = 'dot-exp'; metaText = 'Scaduto'; badgeHtml = `<span class="badge badge-exp">Scaduto</span>`; }
         else if (giorni === 0) { dotClass = 'dot-warn'; metaText = 'Scade oggi'; badgeHtml = `<span class="badge badge-warn">Scade oggi</span>`; inScadenza++; }
-        else if (giorni <= 3) { dotClass = 'dot-warn'; metaText = `Scade tra ${giorni}g`; badgeHtml = `<span class="badge badge-warn">In scadenza</span>`; inScadenza++; }
+        else if (giorni <= giorniAlert) { dotClass = 'dot-warn'; metaText = `Scade tra ${giorni}g`; badgeHtml = `<span class="badge badge-warn">In scadenza</span>`; inScadenza++; }
         else { metaText = `Scade ${scad.toLocaleDateString('it-IT', {day:'numeric', month:'short'})}`; }
       }
-      html += `<div class="prod-item" onclick="apriDettaglio(${p.id})">
+      html += `<div class="prod-item" data-id="${p.id}" data-qty="${p.quantita}" onclick="apriDettaglio(${p.id})">
         <div class="prod-dot ${dotClass}"></div>
         <div class="prod-info">
           <div class="prod-nome">${p.nome}</div>
@@ -755,6 +776,53 @@ function renderInventario(prodotti) {
     <div class="metric"><div class="metric-val" style="color:#EF9F27">${inScadenza}</div><div class="metric-label">In scadenza</div></div>
     <div class="metric"><div class="metric-val" style="color:#E24B4A">${esauriti}</div><div class="metric-label">Esauriti</div></div>
   `;
+
+  // Badge sul chip "In scadenza"
+  const chip = document.getElementById('chip-scadenza');
+  if (chip) {
+    chip.textContent = inScadenza > 0 ? `⏰ In scadenza (${inScadenza})` : '⏰ In scadenza';
+  }
+
+  // Attiva swipe gestures
+  initSwipeGestures();
+}
+
+// ===== SWIPE GESTURES =====
+function initSwipeGestures() {
+  document.querySelectorAll('.prod-item').forEach(item => {
+    let startX = 0, startY = 0;
+    let swiping = false;
+
+    item.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      swiping = false;
+    }, {passive: true});
+
+    item.addEventListener('touchmove', e => {
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 12) {
+        swiping = true;
+        item.classList.toggle('swipe-left', dx < -20);
+        item.classList.toggle('swipe-right', dx > 20);
+        e.preventDefault();
+      }
+    }, {passive: false});
+
+    item.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - startX;
+      item.classList.remove('swipe-left', 'swipe-right');
+      if (!swiping) return;
+      const id = parseInt(item.dataset.id);
+      const qty = parseInt(item.dataset.qty);
+      if (dx < -70) {
+        consumaRapido(id, qty);
+      } else if (dx > 70) {
+        aggiungiRapido(id, qty);
+      }
+    }, {passive: true});
+  });
 }
 
 function apriDettaglio(id) {
@@ -871,23 +939,26 @@ function fermaScanner() {
 async function cercaProdotto(ean) {
   document.getElementById('scan-status').textContent = 'Ricerca prodotto...';
   try {
-    const r = await fetch(`${API_BASE()}/api/barcode/${ean}`);
-    const data = await r.json();
+    const [barcodeRes, duplicatiRes] = await Promise.all([
+      fetch(`${API_BASE()}/api/barcode/${ean}`),
+      fetch(`${API_BASE()}/api/prodotti/by-ean/${ean}`)
+    ]);
+    const data = await barcodeRes.json();
+    duplicatiCorrente = await duplicatiRes.json();
     apriConferma(data);
   } catch(e) {
+    duplicatiCorrente = [];
     apriConferma({ trovato: false, ean, nome: '', marca: '', categoria: '', immagine_url: '' });
   }
 }
 
 function suggerisciDaCategoria(categoria) {
   const cat = (categoria || '').toLowerCase();
-  // Mappatura posizione
   let posizione = 'Dispensa';
   if (/latte|yogurt|formaggio|latticin|burro|panna|affettat|salum|carne|pesce|fresc|verdur|frutta|uov|salsa aperta|succo aperto/.test(cat)) posizione = 'Frigo';
   if (/surgelat|gelat|frozen|ice/.test(cat)) posizione = 'Freezer';
 
-  // Mappatura giorni scadenza suggeriti
-  let giorni = 365; // default dispensa
+  let giorni = 365;
   if (/latte/.test(cat)) giorni = 7;
   else if (/yogurt/.test(cat)) giorni = 14;
   else if (/formaggio|cheese/.test(cat)) giorni = 21;
@@ -914,7 +985,6 @@ function apriConferma(prodotto) {
   document.getElementById('conf-qty').textContent = '1';
   document.getElementById('conf-note').value = '';
 
-  // Calcola posizione e scadenza automatica
   const { posizione, giorni } = suggerisciDaCategoria(prodotto.categoria);
   const oggi = new Date();
   oggi.setDate(oggi.getDate() + giorni);
@@ -924,11 +994,46 @@ function apriConferma(prodotto) {
   const img = document.getElementById('conf-img');
   if (prodotto.immagine_url) { img.src = prodotto.immagine_url; img.style.display = 'block'; }
   else img.style.display = 'none';
+
   const badge = document.getElementById('found-badge-container');
   badge.innerHTML = prodotto.trovato
     ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posizione === 'Frigo' ? '🧊 Frigo' : posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'} suggerito</div></div>`
     : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci manualmente</div></div>`;
+
+  // Banner duplicati
+  const banner = document.getElementById('duplicato-banner');
+  if (duplicatiCorrente.length > 0) {
+    const lista = duplicatiCorrente.map(d => {
+      const pos = d.posizione || 'Dispensa';
+      const posIcon = {'Frigo':'🧊','Freezer':'❄️','Dispensa':'🗄️'}[pos] || '📦';
+      const scad = d.scadenza ? ` · scad. ${new Date(d.scadenza).toLocaleDateString('it-IT',{day:'numeric',month:'short'})}` : '';
+      return `• ${d.nome} ×${d.quantita} ${posIcon}${scad}`;
+    }).join('\n');
+    document.getElementById('duplicato-lista').textContent = lista;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+
   showScreen('screen-conferma');
+}
+
+async function incrementaDuplicato() {
+  // Incrementa il primo duplicato trovato
+  const primo = duplicatiCorrente[0];
+  if (!primo) return;
+  await fetch(`${API_BASE()}/api/prodotti/${primo.id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({quantita: primo.quantita + 1})
+  });
+  toast(`+1 a "${primo.nome}" (tot: ${primo.quantita + 1})`);
+  showScreen('screen-inventario');
+}
+
+function nascondiDuplicatoBanner() {
+  document.getElementById('duplicato-banner').style.display = 'none';
+  duplicatiCorrente = [];
 }
 
 function cambiaQty(delta) {
@@ -951,9 +1056,8 @@ async function salvaInDispensa() {
     nutriscore: prodottoCorrente.nutriscore || ''
   };
 
-try {
+  try {
     await fetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    // Salva in cache locale se ha un EAN reale
     if (payload.ean && !payload.ean.startsWith('MANUAL-')) {
       await fetch(`${API_BASE()}/api/barcode-cache`, {
         method: 'POST',
@@ -978,12 +1082,11 @@ try {
 
 function inserisciManuale() {
   const ean = prompt('Inserisci il codice a barre (EAN) del prodotto:\n(lascia vuoto per inserimento manuale senza barcode)');
-  if (ean === null) return; // utente ha premuto Annulla
+  if (ean === null) return;
   if (ean.trim() !== '') {
-    // Ha inserito un EAN, cerca su Open Food Facts
     cercaProdotto(ean.trim());
   } else {
-    // Nessun EAN, inserimento completamente manuale
+    duplicatiCorrente = [];
     apriConferma({ trovato: false, ean: 'MANUAL-' + Date.now(), nome: '', marca: '', categoria: '', immagine_url: '' });
   }
 }
@@ -1141,7 +1244,6 @@ function chiudiOCR() {
 }
 
 function preprocessCanvas(canvas) {
-  // Pre-elaborazione: scala 2x + contrasto alto + bianco/nero
   const w = canvas.width, h = canvas.height;
   const scaled = document.createElement('canvas');
   scaled.width = w * 2; scaled.height = h * 2;
@@ -1152,9 +1254,7 @@ function preprocessCanvas(canvas) {
   const imgData = sCtx.getImageData(0, 0, scaled.width, scaled.height);
   const data = imgData.data;
   for (let i = 0; i < data.length; i += 4) {
-    // Luminanza
     const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-    // Contrasto alto + soglia
     const val = lum > 128 ? 255 : 0;
     data[i] = data[i+1] = data[i+2] = val;
   }
@@ -1171,7 +1271,6 @@ async function scattaFotoOCR() {
   document.getElementById('ocr-status').textContent = '🔍 Elaborazione immagine...';
 
   try {
-    // Prova prima con immagine pre-elaborata, poi con originale
     const processed = preprocessCanvas(canvas);
     let text = '';
 
@@ -1182,7 +1281,6 @@ async function scattaFotoOCR() {
 
     let data = estraiDataScadenza(text);
 
-    // Se non trova con elaborata, prova con originale
     if (!data) {
       const r2 = await Tesseract.recognize(canvas, 'ita+eng', { logger: () => {} });
       text = r2.data.text;
@@ -1196,7 +1294,6 @@ async function scattaFotoOCR() {
     } else {
       const testoLetto = text.replace(/\n/g, ' ').trim().substring(0, 100);
       document.getElementById('ocr-status').textContent = '⚠️ Data non rilevata automaticamente.';
-      // Mostra campo inserimento manuale
       document.getElementById('ocr-testo-letto').textContent = testoLetto ? `Testo letto: "${testoLetto}"` : '';
       document.getElementById('ocr-manuale').style.display = 'block';
     }
@@ -1219,7 +1316,6 @@ function confermaManualeOCR() {
 }
 
 function estraiDataLibera(input) {
-  // Permette inserimento libero dall'utente con qualsiasi separatore
   const t = input.trim().replace(/\s+/g, ' ');
   return estraiDataScadenza(t);
 }
@@ -1227,7 +1323,6 @@ function estraiDataLibera(input) {
 function estraiDataScadenza(testo) {
   if (!testo) return null;
 
-  // Pulizia testo — correggi caratteri OCR comuni
   let t = testo.toUpperCase()
     .replace(/[Oo]/g, '0')
     .replace(/[Il\|]/g, '1')
@@ -1236,10 +1331,8 @@ function estraiDataScadenza(testo) {
     .replace(/\r/g, ' ')
     .replace(/\n/g, ' ');
 
-  // Rimuovi prefissi comuni
   t = t.replace(/\b(EXP|SCAD|TMC|BB|USE BY|BEST BY|CONSUMARE ENTRO|CONS\.?\s*ENT\.?|LOT|LOTTO|L\.?)\s*/g, ' ');
 
-  // ── PATTERN 1: DDMMYY tutto attaccato (6 cifre es. 090927)
   let m = t.match(/\b(\d{2})(\d{2})(\d{2})\b/);
   if (m) {
     const [, g, ms, aa] = m;
@@ -1248,7 +1341,6 @@ function estraiDataScadenza(testo) {
     if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
   }
 
-  // ── PATTERN 2: DDMMYYYY tutto attaccato (8 cifre es. 09092027)
   m = t.match(/\b(\d{2})(\d{2})(\d{4})\b/);
   if (m) {
     const [, g, ms, a] = m;
@@ -1256,7 +1348,6 @@ function estraiDataScadenza(testo) {
     if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
   }
 
-  // ── PATTERN 3: YYYYMMDD tutto attaccato (es. 20270909)
   m = t.match(/\b(202\d)(\d{2})(\d{2})\b/);
   if (m) {
     const [, a, ms, g] = m;
@@ -1264,7 +1355,6 @@ function estraiDataScadenza(testo) {
     if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
   }
 
-  // ── PATTERN 4: DD/MM/YYYY o DD-MM-YYYY o DD.MM.YYYY o DD MM YYYY
   m = t.match(/\b(\d{1,2})[\s\/\-\.](\d{1,2})[\s\/\-\.](\d{2,4})\b/);
   if (m) {
     let [, g, ms, a] = m;
@@ -1273,7 +1363,6 @@ function estraiDataScadenza(testo) {
     if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
   }
 
-  // ── PATTERN 5: YYYY/MM o YYYY-MM o YYYY MM (anno mese invertito)
   m = t.match(/\b(202\d)[\s\/\-\.](\d{1,2})\b/);
   if (m) {
     const [, a, ms] = m;
@@ -1282,7 +1371,6 @@ function estraiDataScadenza(testo) {
     if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
   }
 
-  // ── PATTERN 6: MM/YYYY o MM-YYYY o MM.YYYY o MM YYYY (solo mese anno)
   m = t.match(/\b(\d{1,2})[\s\/\-\.](202\d)\b/);
   if (m) {
     const [, ms, a] = m;
@@ -1291,7 +1379,6 @@ function estraiDataScadenza(testo) {
     if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
   }
 
-  // ── PATTERN 7: Solo anno+mese attaccati YYYYMM (es. 202709)
   m = t.match(/\b(202\d)(0[1-9]|1[0-2])\b/);
   if (m) {
     const [, a, ms] = m;
@@ -1300,12 +1387,11 @@ function estraiDataScadenza(testo) {
     if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
   }
 
-  // ── PATTERN 8: mese testuale IT es. "GEN 2026", "09 GENNAIO 2026"
   const mesiIT = {
     GEN:1, FEB:2, MAR:3, APR:4, MAG:5, GIU:6, LUG:7, AGO:8, SET:9, OTT:10, NOV:11, DIC:12,
     GENNAIO:1, FEBBRAIO:2, MARZO:3, APRILE:4, MAGGIO:5, GIUGNO:6,
     LUGLIO:7, AGOSTO:8, SETTEMBRE:9, OTTOBRE:10, NOVEMBRE:11, DICEMBRE:12,
-    JAN:1, FEB2:2, MAR2:3, APR2:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV2:11, DEC:12
+    JAN:1, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, DEC:12
   };
   for (const [nome, num] of Object.entries(mesiIT)) {
     const re = new RegExp(`\\b(\\d{1,2})?\\s*${nome}\\s*(\\d{4}|\\d{2})\\b`);
@@ -1356,6 +1442,13 @@ document.getElementById('set-url').value = API_BASE();
 document.getElementById('set-giorni').value = localStorage.getItem('dispensa_giorni') || '3';
 initDarkMode();
 caricaInventario();
+
+// ===== SERVICE WORKER =====
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/local/dispensa/sw.js', { scope: '/local/dispensa/' })
+    .then(() => console.log('Dispensa SW registrato'))
+    .catch(e => console.log('SW non disponibile:', e.message));
+}
 </script>
 </body>
 </html>
