@@ -103,6 +103,12 @@
   .dot-exp { background: var(--red); }
   .dot-out { background: #ccc; }
 
+  .search-bar-wrap { position: relative; margin-bottom: 12px; }
+  .search-bar-wrap input { width: 100%; padding: 10px 48px 10px 14px; border-radius: 14px; border: 0.5px solid var(--border); background: var(--surface); font-size: 16px; color: var(--text); font-family: inherit; -webkit-appearance: none; appearance: none; }
+  .search-bar-wrap input:focus { outline: none; border-color: var(--green); }
+  .search-bar-scan { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; }
+  .search-bar-scan svg { width: 22px; height: 22px; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
   .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; margin-top: 4px; }
   .badge-warn { background: var(--amber-l); color: var(--amber); }
   .badge-exp { background: var(--red-l); color: var(--red); }
@@ -136,6 +142,33 @@
   .spesa-nome { flex: 1; font-size: 15px; font-weight: 500; }
   .spesa-nome.done { text-decoration: line-through; color: var(--hint); }
   .spesa-del { font-size: 18px; color: var(--hint); cursor: pointer; padding: 4px; }
+
+  /* Dark mode */
+  .dark { --bg: #111110; --surface: #1c1c1a; --text: #f0efe8; --muted: #9e9e94; --hint: #6b6b63; --border: rgba(255,255,255,0.10); --green-l: rgba(29,158,117,0.15); --amber-l: rgba(186,117,23,0.15); --red-l: rgba(163,45,45,0.15); }
+
+  /* Filter chips */
+  .filter-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; scrollbar-width: none; }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .chip { flex-shrink: 0; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; border: 0.5px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .chip.active { background: var(--green); color: white; border-color: var(--green); }
+
+  /* Sort bar */
+  .sort-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .sort-label { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .sort-bar select { flex: 1; padding: 8px 12px; border-radius: 12px; border: 0.5px solid var(--border); background: var(--surface); font-size: 13px; color: var(--text); font-family: inherit; -webkit-appearance: none; appearance: none; }
+
+  /* Quick action buttons in list */
+  .prod-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .quick-btn { width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid var(--border); background: var(--bg); font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); transition: background 0.1s; line-height: 1; }
+  .quick-btn:active { background: var(--green-l); }
+
+  /* Settings toggle row */
+  .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+  .setting-row:last-child { border-bottom: none; }
+  .toggle { width: 44px; height: 26px; border-radius: 13px; background: var(--border); border: none; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+  .toggle.on { background: var(--green); }
+  .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: white; top: 3px; left: 3px; transition: transform 0.2s; }
+  .toggle.on::after { transform: translateX(18px); }
 </style>
 </head>
 <body>
@@ -144,10 +177,33 @@
 <div class="screen active" id="screen-inventario">
   <div class="topbar">
     <div class="topbar-title">Dispensa</div>
-    <div class="topbar-action" onclick="showScreen('screen-scan')">+ Aggiungi</div>
+    <div class="topbar-action" onclick="scanMode='add'; showScreen('screen-scan')">+ Aggiungi</div>
   </div>
   <div class="content">
     <div class="metric-row" id="metrics"></div>
+    <div class="search-bar-wrap">
+      <input type="search" id="ricerca-input" placeholder="Cerca prodotto..." oninput="applicaFiltroSort()">
+      <button class="search-bar-scan" onclick="avviaScannerRicerca()" title="Cerca con barcode">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
+      </button>
+    </div>
+    <div class="filter-row">
+      <div class="chip active" data-filtro="tutti" onclick="setFiltro('tutti')">Tutti</div>
+      <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
+      <div class="chip" data-filtro="esauriti" onclick="setFiltro('esauriti')">⚠️ Esauriti</div>
+      <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧊 Frigo</div>
+      <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Freezer</div>
+      <div class="chip" data-filtro="dispensa" onclick="setFiltro('dispensa')">🗄️ Dispensa</div>
+    </div>
+    <div class="sort-bar">
+      <span class="sort-label">Ordina:</span>
+      <select id="sort-select" onchange="applicaFiltroSort()">
+        <option value="inserimento">Inserimento</option>
+        <option value="scadenza">Scadenza</option>
+        <option value="nome">Nome A→Z</option>
+        <option value="quantita">Quantità</option>
+      </select>
+    </div>
     <div class="card" id="lista-container">
       <div id="lista-prodotti"><div class="empty"><div class="spinner"></div></div></div>
     </div>
@@ -375,6 +431,17 @@
         <input type="number" id="set-giorni" value="3" min="1" max="30">
       </div>
     </div>
+    <div class="card card-body" style="margin-top:12px;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:12px;color:var(--muted);">Aspetto</div>
+      <div class="setting-row">
+        <span style="font-size:15px;">Tema scuro</span>
+        <button class="toggle" id="dark-toggle" onclick="toggleDarkMode()"></button>
+      </div>
+    </div>
+    <div class="card card-body" style="margin-top:12px;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">Dati</div>
+      <button class="btn btn-secondary" onclick="esportaCSV()">📥 Esporta inventario CSV</button>
+    </div>
     <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.0.2</div>
   </div>
   <div class="tab-bar">
@@ -397,6 +464,51 @@
   </div>
 </div>
 
+<!-- SCREEN: Modifica prodotto -->
+<div class="screen" id="screen-modifica">
+  <div class="topbar">
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">‹</div>
+    <div class="topbar-title">Modifica prodotto</div>
+  </div>
+  <div class="content">
+    <div class="card card-body">
+      <div class="field">
+        <label>Nome prodotto</label>
+        <input type="text" id="mod-nome">
+      </div>
+      <div class="field">
+        <label>Marca (opzionale)</label>
+        <input type="text" id="mod-marca">
+      </div>
+      <div class="field">
+        <label>Quantità</label>
+        <div class="qty-row">
+          <div class="qty-btn" onclick="cambiaQtyMod(-1)">−</div>
+          <div class="qty-val" id="mod-qty-val">1</div>
+          <div class="qty-btn" onclick="cambiaQtyMod(1)">+</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Data di scadenza</label>
+        <input type="date" id="mod-scadenza">
+      </div>
+      <div class="field">
+        <label>Posizione</label>
+        <select id="mod-posizione">
+          <option value="Dispensa">🗄️ Dispensa</option>
+          <option value="Frigo">🧊 Frigo</option>
+          <option value="Freezer">❄️ Freezer</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Note (opzionale)</label>
+        <input type="text" id="mod-note" placeholder="es. aperto, in frigo...">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="salvaModifica()" style="margin-top:8px;">Salva modifiche</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
@@ -408,6 +520,11 @@ let codeReader = null;
 let prodottoCorrente = {};
 let qtyCorrente = 1;
 let prodottiCache = [];
+let scanMode = 'add'; // 'add' | 'search'
+let filtroAttivo = 'tutti';
+let modProdottoId = null;
+let modQtyCorrente = 1;
+let detQtyDelta = 1;
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -421,7 +538,7 @@ function showScreen(id) {
 
 function showTab(tab) {
   if (tab === 'inventario') showScreen('screen-inventario');
-  else if (tab === 'scan') showScreen('screen-scan');
+  else if (tab === 'scan') { scanMode = 'add'; showScreen('screen-scan'); }
   else if (tab === 'spesa') showScreen('screen-spesa');
   else if (tab === 'statistiche') showScreen('screen-statistiche');
   else if (tab === 'impostazioni') showScreen('screen-impostazioni');
@@ -438,10 +555,162 @@ async function caricaInventario() {
   try {
     const r = await fetch(`${API_BASE()}/api/prodotti`);
     prodottiCache = await r.json();
-    renderInventario(prodottiCache);
+    applicaFiltroSort();
   } catch(e) {
     document.getElementById('lista-prodotti').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.<br>Controlla le impostazioni.</div></div>`;
   }
+}
+
+function filtraInventario(testo) { applicaFiltroSort(); }
+
+function setFiltro(f) {
+  filtroAttivo = f;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.chip[data-filtro="${f}"]`).classList.add('active');
+  applicaFiltroSort();
+}
+
+function applicaFiltroSort() {
+  const q = (document.getElementById('ricerca-input')?.value || '').toLowerCase().trim();
+  const ord = document.getElementById('sort-select')?.value || 'inserimento';
+  const giorniAlert = parseInt(localStorage.getItem('dispensa_giorni') || '3');
+  const oggi = new Date(); oggi.setHours(0,0,0,0);
+  let lista = [...prodottiCache];
+
+  if (filtroAttivo === 'scadenza') {
+    lista = lista.filter(p => {
+      if (!p.scadenza) return false;
+      const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000);
+      return gg >= 0 && gg <= giorniAlert;
+    });
+  } else if (filtroAttivo === 'esauriti') {
+    lista = lista.filter(p => p.quantita <= 0);
+  } else if (filtroAttivo === 'frigo') {
+    lista = lista.filter(p => p.posizione === 'Frigo');
+  } else if (filtroAttivo === 'freezer') {
+    lista = lista.filter(p => p.posizione === 'Freezer');
+  } else if (filtroAttivo === 'dispensa') {
+    lista = lista.filter(p => p.posizione === 'Dispensa');
+  }
+
+  if (q) lista = lista.filter(p =>
+    (p.nome||'').toLowerCase().includes(q) ||
+    (p.marca||'').toLowerCase().includes(q) ||
+    (p.posizione||'').toLowerCase().includes(q)
+  );
+
+  if (ord === 'nome') lista.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+  else if (ord === 'quantita') lista.sort((a,b) => b.quantita - a.quantita);
+  else if (ord === 'scadenza') lista.sort((a,b) => {
+    if (!a.scadenza && !b.scadenza) return 0;
+    if (!a.scadenza) return 1;
+    if (!b.scadenza) return -1;
+    return new Date(a.scadenza) - new Date(b.scadenza);
+  });
+
+  renderInventario(lista);
+}
+
+function avviaScannerRicerca() {
+  scanMode = 'search';
+  showScreen('screen-scan');
+}
+
+function cercaNellaDispensa(ean) {
+  const trovato = prodottiCache.find(p => p.ean === ean);
+  showScreen('screen-inventario');
+  if (trovato) {
+    apriDettaglio(trovato.id);
+  } else {
+    toast('Prodotto non trovato in dispensa');
+  }
+}
+
+async function consumaRapido(id, qtyAttuali) {
+  const nuova = Math.max(0, qtyAttuali - 1);
+  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
+  const p = prodottiCache.find(x => x.id === id);
+  if (p) p.quantita = nuova;
+  applicaFiltroSort();
+  toast('−1');
+}
+
+async function aggiungiRapido(id, qtyAttuali) {
+  const nuova = qtyAttuali + 1;
+  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
+  const p = prodottiCache.find(x => x.id === id);
+  if (p) p.quantita = nuova;
+  applicaFiltroSort();
+  toast('+1');
+}
+
+function apriModifica(id) {
+  const p = prodottiCache.find(x => x.id === id);
+  if (!p) return;
+  modProdottoId = id;
+  modQtyCorrente = p.quantita;
+  document.getElementById('mod-nome').value = p.nome || '';
+  document.getElementById('mod-marca').value = p.marca || '';
+  document.getElementById('mod-qty-val').textContent = modQtyCorrente;
+  document.getElementById('mod-scadenza').value = p.scadenza || '';
+  document.getElementById('mod-posizione').value = p.posizione || 'Dispensa';
+  document.getElementById('mod-note').value = p.note || '';
+  showScreen('screen-modifica');
+}
+
+function cambiaQtyMod(delta) {
+  modQtyCorrente = Math.max(0, modQtyCorrente + delta);
+  document.getElementById('mod-qty-val').textContent = modQtyCorrente;
+}
+
+async function salvaModifica() {
+  const payload = {
+    nome: document.getElementById('mod-nome').value.trim() || 'Prodotto',
+    marca: document.getElementById('mod-marca').value.trim(),
+    quantita: modQtyCorrente,
+    scadenza: document.getElementById('mod-scadenza').value || null,
+    posizione: document.getElementById('mod-posizione').value,
+    note: document.getElementById('mod-note').value.trim()
+  };
+  try {
+    await fetch(`${API_BASE()}/api/prodotti/${modProdottoId}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    toast('Prodotto aggiornato!');
+    showScreen('screen-inventario');
+  } catch(e) {
+    toast('Errore salvataggio. Riprova.');
+  }
+}
+
+function initDarkMode() {
+  const isDark = localStorage.getItem('dispensa_dark') === '1';
+  if (isDark) document.documentElement.classList.add('dark');
+  const btn = document.getElementById('dark-toggle');
+  if (btn) btn.classList.toggle('on', isDark);
+}
+
+function toggleDarkMode() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('dispensa_dark', isDark ? '1' : '0');
+  const btn = document.getElementById('dark-toggle');
+  if (btn) btn.classList.toggle('on', isDark);
+}
+
+function esportaCSV() {
+  if (!prodottiCache.length) { toast('Nessun prodotto da esportare'); return; }
+  const cols = ['ID','Nome','Marca','Categoria','Quantità','Scadenza','Posizione','EAN','Note'];
+  const righe = prodottiCache.map(p => [
+    p.id, p.nome, p.marca||'', p.categoria||'', p.quantita,
+    p.scadenza||'', p.posizione||'', p.ean||'', (p.note||'').replace(/"/g,"'")
+  ].map(v => `"${v}"`).join(','));
+  const csv = [cols.join(','), ...righe].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], {type: 'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `dispensa_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('CSV esportato!');
 }
 
 function renderInventario(prodotti) {
@@ -471,7 +740,11 @@ function renderInventario(prodotti) {
           <div class="prod-meta">${p.marca ? p.marca + ' · ' : ''}${p.posizione ? p.posizione + (metaText ? ' · ' : '') : ''}${metaText}</div>
           ${badgeHtml}
         </div>
-        <div class="prod-qty">×${p.quantita}</div>
+        <div class="prod-actions" onclick="event.stopPropagation()">
+          <div class="quick-btn" onclick="consumaRapido(${p.id},${p.quantita})">−</div>
+          <div class="prod-qty">×${p.quantita}</div>
+          <div class="quick-btn" onclick="aggiungiRapido(${p.id},${p.quantita})">+</div>
+        </div>
       </div>`;
     });
   }
@@ -487,6 +760,7 @@ function renderInventario(prodotti) {
 function apriDettaglio(id) {
   const p = prodottiCache.find(x => x.id === id);
   if (!p) return;
+  detQtyDelta = 1;
   document.getElementById('det-title').textContent = p.nome;
   const scadFormatted = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'long',year:'numeric'}) : 'Non specificata';
   document.getElementById('det-content').innerHTML = `
@@ -522,25 +796,42 @@ function apriDettaglio(id) {
         ${p.nutriscore ? `<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:${nsColor[p.nutriscore]||'var(--text)'}">● ${p.nutriscore}</strong></div>` : ''}
       </div>`;
     })() : ''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
-      <button class="btn btn-secondary" onclick="consumaProdotto(${p.id},${p.quantita})">− Consuma</button>
-      <button class="btn btn-secondary" onclick="aggiungiQty(${p.id},${p.quantita})">+ Aggiungi</button>
+    <div class="card card-body" style="margin-top:8px;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>
+      <div class="qty-row" style="margin-bottom:12px;">
+        <div class="qty-btn" onclick="cambiaQtyDet(-1)">−</div>
+        <div class="qty-val" id="det-qty-delta">1</div>
+        <div class="qty-btn" onclick="cambiaQtyDet(1)">+</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button class="btn btn-secondary" onclick="consumaProdotto(${p.id},${p.quantita})">− Consuma</button>
+        <button class="btn btn-secondary" onclick="aggiungiQty(${p.id},${p.quantita})">+ Aggiungi</button>
+      </div>
     </div>
-    <button class="btn btn-danger" onclick="eliminaProdotto(${p.id})" style="margin-top:10px;">Elimina dalla dispensa</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+      <button class="btn btn-secondary" onclick="apriModifica(${p.id})">✏️ Modifica</button>
+      <button class="btn btn-danger" onclick="eliminaProdotto(${p.id})">🗑️ Elimina</button>
+    </div>
   `;
   showScreen('screen-dettaglio');
 }
 
+function cambiaQtyDet(delta) {
+  detQtyDelta = Math.max(1, detQtyDelta + delta);
+  const el = document.getElementById('det-qty-delta');
+  if (el) el.textContent = detQtyDelta;
+}
+
 async function consumaProdotto(id, qtyAttuali) {
-  const nuova = Math.max(0, qtyAttuali - 1);
+  const nuova = Math.max(0, qtyAttuali - detQtyDelta);
   await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
-  toast('Quantità aggiornata');
+  toast(`Quantità aggiornata (−${detQtyDelta})`);
   showScreen('screen-inventario');
 }
 
 async function aggiungiQty(id, qtyAttuali) {
-  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali + 1}) });
-  toast('Quantità aggiornata');
+  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali + detQtyDelta}) });
+  toast(`Quantità aggiornata (+${detQtyDelta})`);
   showScreen('screen-inventario');
 }
 
@@ -559,10 +850,16 @@ function avviaScanner() {
     if (result) {
       fermaScanner();
       document.getElementById('scan-status').textContent = 'Codice rilevato!';
-      await cercaProdotto(result.getText());
+      if (scanMode === 'search') {
+        cercaNellaDispensa(result.getText());
+      } else {
+        await cercaProdotto(result.getText());
+      }
     }
   });
-  document.getElementById('scan-status').textContent = 'Inquadra il barcode del prodotto';
+  document.getElementById('scan-status').textContent = scanMode === 'search'
+    ? 'Inquadra il barcode per cercare nella dispensa'
+    : 'Inquadra il barcode del prodotto';
 }
 
 function fermaScanner() {
@@ -1049,11 +1346,15 @@ function formatDataIT(iso) {
 function salvaImpostazioni() {
   const url = document.getElementById('set-url').value.trim();
   if (url) localStorage.setItem('dispensa_url', url);
+  const giorni = document.getElementById('set-giorni').value;
+  if (giorni) localStorage.setItem('dispensa_giorni', giorni);
   toast('Impostazioni salvate');
   caricaInventario();
 }
 
 document.getElementById('set-url').value = API_BASE();
+document.getElementById('set-giorni').value = localStorage.getItem('dispensa_giorni') || '3';
+initDarkMode();
 caricaInventario();
 </script>
 </body>
