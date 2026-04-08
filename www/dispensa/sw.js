@@ -1,4 +1,4 @@
-const CACHE = 'dispensa-v1';
+const CACHE = 'dispensa-v2';
 const STATIC_ASSETS = [
   '/local/dispensa/',
   '/local/dispensa/index.html',
