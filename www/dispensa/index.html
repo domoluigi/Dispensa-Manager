@@ -8,7 +8,8 @@
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
 <title>Dispensa</title>
-<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="/local/dispensa/manifest.json">
+<link rel="apple-touch-icon" href="/local/dispensa/icon-192.png">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -1410,6 +1411,11 @@ document.getElementById('set-url').value = API_BASE();
 document.getElementById('set-giorni').value = localStorage.getItem('dispensa_giorni') || '3';
 initDarkMode();
 caricaInventario();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/local/dispensa/sw.js')
+    .catch(err => console.warn('SW non registrato:', err));
+}
 </script>
 </body>
 </html>
