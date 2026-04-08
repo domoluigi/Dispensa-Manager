@@ -1401,6 +1401,7 @@ function formatDataIT(iso) {
 function salvaImpostazioni() {
   const url = document.getElementById('set-url').value.trim();
   if (url) localStorage.setItem('dispensa_url', url);
+  else localStorage.removeItem('dispensa_url');
   const giorni = document.getElementById('set-giorni').value;
   if (giorni) localStorage.setItem('dispensa_giorni', giorni);
   toast('Impostazioni salvate');
