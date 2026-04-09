@@ -20,9 +20,9 @@ def after_request(response):
 
 @app.route('/')
 def index():
-    pwa_url = get_options().get('pwa_url', '')
-    if pwa_url:
-        return redirect(pwa_url)
+    base_url = get_options().get('pwa_url', '').rstrip('/')
+    if base_url:
+        return redirect(base_url + '/local/dispensa/index.html')
     return jsonify({"status": "Dispensa Manager running", "info": "Configura pwa_url nelle opzioni addon per aprire la PWA da qui"}), 200
 
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
