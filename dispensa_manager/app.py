@@ -20,7 +20,10 @@ def after_request(response):
 
 @app.route('/')
 def index():
-    return redirect('https://hmdomowizards.it/local/dispensa/index.html')
+    pwa_url = get_options().get('pwa_url', '')
+    if pwa_url:
+        return redirect(pwa_url)
+    return jsonify({"status": "Dispensa Manager running", "info": "Configura pwa_url nelle opzioni addon per aprire la PWA da qui"}), 200
 
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
 HA_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
