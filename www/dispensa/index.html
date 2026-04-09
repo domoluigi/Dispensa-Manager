@@ -517,7 +517,12 @@
 <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
 <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
-const API_BASE = () => localStorage.getItem('dispensa_url') || 'https://hmdomowizard.it/api/hassio_ingress/iU3KAIJIup-On5d1BHN_AuyoEAUM8ey4-5zabeXWn9k';
+const API_BASE = () => localStorage.getItem('dispensa_url') || 'https://dispensa-api.hmdomowizard.it';
+const JARVIS_TOKEN = 'Jarvis2026@xY7mP2qL1nL';
+function apiFetch(url, opts = {}) {
+  opts.headers = Object.assign({'x-jarvis-token': JARVIS_TOKEN}, opts.headers || {});
+  return fetch(url, opts);
+}
 
 let codeReader = null;
 let prodottoCorrente = {};
@@ -585,7 +590,7 @@ async function _eseguiUndo() {
 
 async function caricaInventario() {
   try {
-    const r = await fetch(`${API_BASE()}/api/prodotti`);
+    const r = await apiFetch(`${API_BASE()}/api/prodotti`);
     prodottiCache = await r.json();
     applicaFiltroSort();
   } catch(e) {
@@ -660,12 +665,12 @@ function cercaNellaDispensa(ean) {
 
 async function consumaRapido(id, qtyAttuali) {
   const nuova = Math.max(0, qtyAttuali - 1);
-  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
+  await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
   const p = prodottiCache.find(x => x.id === id);
   if (p) p.quantita = nuova;
   applicaFiltroSort();
   toastUndo('−1', async () => {
-    await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
+    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
     const p2 = prodottiCache.find(x => x.id === id);
     if (p2) p2.quantita = qtyAttuali;
     applicaFiltroSort();
@@ -674,12 +679,12 @@ async function consumaRapido(id, qtyAttuali) {
 
 async function aggiungiRapido(id, qtyAttuali) {
   const nuova = qtyAttuali + 1;
-  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
+  await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
   const p = prodottiCache.find(x => x.id === id);
   if (p) p.quantita = nuova;
   applicaFiltroSort();
   toastUndo('+1', async () => {
-    await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
+    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
     const p2 = prodottiCache.find(x => x.id === id);
     if (p2) p2.quantita = qtyAttuali;
     applicaFiltroSort();
@@ -715,7 +720,7 @@ async function salvaModifica() {
     note: document.getElementById('mod-note').value.trim()
   };
   try {
-    await fetch(`${API_BASE()}/api/prodotti/${modProdottoId}`, {
+    await apiFetch(`${API_BASE()}/api/prodotti/${modProdottoId}`, {
       method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
     });
     toast('Prodotto aggiornato!');
@@ -867,10 +872,10 @@ function cambiaQtyDet(delta) {
 async function consumaProdotto(id, qtyAttuali) {
   const delta = detQtyDelta;
   const nuova = Math.max(0, qtyAttuali - delta);
-  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
+  await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
   showScreen('screen-inventario');
   toastUndo(`−${delta}`, async () => {
-    await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
+    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
     const p = prodottiCache.find(x => x.id === id);
     if (p) p.quantita = qtyAttuali;
     applicaFiltroSort();
@@ -880,10 +885,10 @@ async function consumaProdotto(id, qtyAttuali) {
 async function aggiungiQty(id, qtyAttuali) {
   const delta = detQtyDelta;
   const nuova = qtyAttuali + delta;
-  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
+  await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
   showScreen('screen-inventario');
   toastUndo(`+${delta}`, async () => {
-    await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
+    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
     const p = prodottiCache.find(x => x.id === id);
     if (p) p.quantita = qtyAttuali;
     applicaFiltroSort();
@@ -892,7 +897,7 @@ async function aggiungiQty(id, qtyAttuali) {
 
 async function eliminaProdotto(id) {
   if (!confirm('Eliminare questo prodotto dalla dispensa?')) return;
-  await fetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'DELETE' });
+  await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'DELETE' });
   toast('Prodotto eliminato');
   showScreen('screen-inventario');
 }
@@ -926,7 +931,7 @@ function fermaScanner() {
 async function cercaProdotto(ean) {
   document.getElementById('scan-status').textContent = 'Ricerca prodotto...';
   try {
-    const r = await fetch(`${API_BASE()}/api/barcode/${ean}`);
+    const r = await apiFetch(`${API_BASE()}/api/barcode/${ean}`);
     const data = await r.json();
     apriConferma(data);
   } catch(e) {
@@ -1007,10 +1012,10 @@ async function salvaInDispensa() {
   };
 
 try {
-    await fetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    await apiFetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     // Salva in cache locale se ha un EAN reale
     if (payload.ean && !payload.ean.startsWith('MANUAL-')) {
-      await fetch(`${API_BASE()}/api/barcode-cache`, {
+      await apiFetch(`${API_BASE()}/api/barcode-cache`, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
@@ -1045,7 +1050,7 @@ function inserisciManuale() {
 
 async function caricaListaSpesa() {
   try {
-    const r = await fetch(`${API_BASE()}/api/lista-spesa`);
+    const r = await apiFetch(`${API_BASE()}/api/lista-spesa`);
     const items = await r.json();
     renderListaSpesa(items);
   } catch(e) {
@@ -1074,7 +1079,7 @@ function renderListaSpesa(items) {
 }
 
 async function toggleSpesa(id, completato) {
-  await fetch(`${API_BASE()}/api/lista-spesa/${id}`, {
+  await apiFetch(`${API_BASE()}/api/lista-spesa/${id}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({completato, quantita: 1})
@@ -1083,18 +1088,18 @@ async function toggleSpesa(id, completato) {
 }
 
 async function eliminaSpesa(id) {
-  await fetch(`${API_BASE()}/api/lista-spesa/${id}`, { method: 'DELETE' });
+  await apiFetch(`${API_BASE()}/api/lista-spesa/${id}`, { method: 'DELETE' });
   caricaListaSpesa();
 }
 
 async function svuotaCompletati() {
-  await fetch(`${API_BASE()}/api/lista-spesa/svuota-completati`, { method: 'DELETE' });
+  await apiFetch(`${API_BASE()}/api/lista-spesa/svuota-completati`, { method: 'DELETE' });
   toast('Completati rimossi');
   caricaListaSpesa();
 }
 
 async function inviaListaSpesaTelegram() {
-  const r = await fetch(`${API_BASE()}/api/lista-spesa/invia-telegram`);
+  const r = await apiFetch(`${API_BASE()}/api/lista-spesa/invia-telegram`);
   const data = await r.json();
   toast(data.ok ? '📤 Lista inviata su Telegram!' : '⚠️ ' + (data.errore || 'Errore'));
 }
@@ -1102,7 +1107,7 @@ async function inviaListaSpesaTelegram() {
 function aggiungiSpesaManuale() {
   const nome = prompt('Nome del prodotto da aggiungere alla lista:');
   if (!nome || !nome.trim()) return;
-  fetch(`${API_BASE()}/api/lista-spesa`, {
+  apiFetch(`${API_BASE()}/api/lista-spesa`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({nome: nome.trim(), quantita: 1})
@@ -1114,7 +1119,7 @@ function aggiungiSpesaManuale() {
 
 async function caricaStatistiche() {
   try {
-    const r = await fetch(`${API_BASE()}/api/statistiche`);
+    const r = await apiFetch(`${API_BASE()}/api/statistiche`);
     const s = await r.json();
     const posIcon = {'Frigo':'🧊','Freezer':'❄️','Dispensa':'🗄️'};
     let html = `
