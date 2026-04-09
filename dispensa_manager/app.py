@@ -475,6 +475,13 @@ def elimina_prodotto(id):
     aggiorna_sensori_ha()
     return jsonify({"ok": True})
 
+@app.route("/api/config", methods=["GET"])
+def get_public_config():
+    """Espone configurazione pubblica (token CF) via ingress HA."""
+    opts = get_options()
+    return jsonify({"cloudflare_token": opts.get("cloudflare_token", "")})
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
