@@ -1,6 +1,6 @@
 # 🛒 Dispensa Manager — Home Assistant Add-on
 
-[![Version](https://img.shields.io/badge/version-1.3.0-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
+[![Version](https://img.shields.io/badge/version-1.3.2-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HA](https://img.shields.io/badge/Home%20Assistant-Add--on-blue)](https://www.home-assistant.io/)
 
@@ -70,9 +70,12 @@ telegram_chat_id: "IL_TUO_CHAT_ID"       # opzionale, supporta più ID separati 
 giorni_alert_scadenza: 3                  # giorni prima della scadenza per l'alert
 soglia_scorte_minime: 1                   # quantità minima prima di aggiungere alla lista spesa
 cloudflare_token: ""                      # opzionale, vedi sezione Cloudflare
+pwa_url: "http://IP_HOME_ASSISTANT:8123/local/dispensa/index.html"  # opzionale, vedi sotto
 ```
 
 > **Nota:** `telegram_chat_id` supporta più ID separati da virgola es. `123456,789012`
+
+> **Nota:** `pwa_url` è l'indirizzo della tua PWA. Se configurato, il pulsante **"Apri interfaccia utente web"** nell'add-on aprirà direttamente la PWA. Usa l'indirizzo locale o il tuo dominio esterno (es. Cloudflare). Non viene mai incluso nel codice sorgente per preservare la privacy.
 
 ### 5. Avvia l'add-on
 
@@ -80,7 +83,10 @@ Clicca **Avvia** e verifica i log.
 
 ### 6. Accedi alla PWA
 
-Apri nel browser:
+**Opzione A — dal pannello HA:**
+Configura `pwa_url` nelle opzioni dell'add-on (passaggio 4), poi clicca **"Apri interfaccia utente web"** nella pagina dell'add-on.
+
+**Opzione B — direttamente dal browser:**
 ```
 http://IP_HOME_ASSISTANT:8123/local/dispensa/index.html
 ```
@@ -425,6 +431,13 @@ Dalla schermata di conferma prodotto, accanto al campo data di scadenza è prese
 ---
 
 ## 📋 Changelog
+
+### v1.3.2
+- 🔗 Opzione `pwa_url` nelle configurazioni addon — il pulsante "Apri interfaccia utente web" apre la PWA direttamente dal pannello HA
+- 🔒 L'URL della PWA rimane locale e non è mai incluso nel codice sorgente
+
+### v1.3.1
+- 🛠️ Fix ingress HA: aggiunta route `/` nel backend Flask (prima restituiva 404)
 
 ### v1.3.0
 - 🌐 Token Cloudflare configurabile nelle opzioni addon (non più nel sorgente)
