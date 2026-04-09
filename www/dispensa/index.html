@@ -425,6 +425,10 @@
         <label>URL backend (es. http://192.168.1.10:5000)</label>
         <input type="text" id="set-url" placeholder="http://192.168.x.x:5000" inputmode="url" autocomplete="url" spellcheck="false">
       </div>
+      <div class="field">
+        <label>Token Cloudflare (x-jarvis-token)</label>
+        <input type="password" id="set-cf-token" placeholder="Lascia vuoto per auto-configurazione" autocomplete="off" spellcheck="false">
+      </div>
       <button class="btn btn-primary" onclick="salvaImpostazioni()">Salva</button>
     </div>
     <div class="card card-body" style="margin-top: 12px;">
@@ -518,10 +522,23 @@
 <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 const API_BASE = () => localStorage.getItem('dispensa_url') || 'https://dispensa-api.hmdomowizards.it';
-const JARVIS_TOKEN = 'Jarvis2026@xY7mP2qL1nL';
+const INGRESS_BASE = '/api/hassio_ingress/iU3KAIJIup-On5d1BHN_AuyoEAUM8ey4-5zabeXWn9k';
+
+function getCfToken() { return localStorage.getItem('dispensa_cf_token') || ''; }
+
 function apiFetch(url, opts = {}) {
-  opts.headers = Object.assign({'x-jarvis-token': JARVIS_TOKEN}, opts.headers || {});
+  const token = getCfToken();
+  if (token) opts.headers = Object.assign({'x-jarvis-token': token}, opts.headers || {});
   return fetch(url, opts);
+}
+
+async function initCfToken() {
+  if (getCfToken()) return;
+  try {
+    const r = await fetch(`${INGRESS_BASE}/api/config`);
+    const d = await r.json();
+    if (d.cloudflare_token) localStorage.setItem('dispensa_cf_token', d.cloudflare_token);
+  } catch(e) {}
 }
 
 let codeReader = null;
@@ -1409,14 +1426,18 @@ function salvaImpostazioni() {
   else localStorage.removeItem('dispensa_url');
   const giorni = document.getElementById('set-giorni').value;
   if (giorni) localStorage.setItem('dispensa_giorni', giorni);
+  const cfToken = document.getElementById('set-cf-token').value.trim();
+  if (cfToken) localStorage.setItem('dispensa_cf_token', cfToken);
+  else localStorage.removeItem('dispensa_cf_token');
   toast('Impostazioni salvate');
   caricaInventario();
 }
 
 document.getElementById('set-url').value = API_BASE();
 document.getElementById('set-giorni').value = localStorage.getItem('dispensa_giorni') || '3';
+document.getElementById('set-cf-token').value = getCfToken();
 initDarkMode();
-caricaInventario();
+initCfToken().then(() => caricaInventario());
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/local/dispensa/sw.js')
