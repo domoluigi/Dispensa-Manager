@@ -1,6 +1,6 @@
 # 🛒 Dispensa Manager — Home Assistant Add-on
 
-[![Version](https://img.shields.io/badge/version-1.0.2-green)](https://github.com/elbarto8383/Dispensa-Manager/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HA](https://img.shields.io/badge/Home%20Assistant-Add--on-blue)](https://www.home-assistant.io/)
 
@@ -26,13 +26,15 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 🔔 **Alexa** — annunci vocali tramite Alexa Media Player
 - ⏰ **Automazioni HA** — report mattutino, sync all'avvio
 - 🔗 **API REST completa** — per integrazioni personalizzate
+- ↩️ **Pulsante Annulla** — annulla l'ultima modifica di quantità entro 4 secondi
+- 🌐 **Accesso esterno sicuro** — supporto Cloudflare Tunnel con autenticazione header
 
 ---
 
 ## 📋 Requisiti
 
 - Home Assistant OS o Supervised
-- Add-on **File Editor** o **Studio Code Server** (per copiare i file)
+- Add-on **File Editor** o **Studio Code Server** (per copiare i file PWA)
 - Bot Telegram (opzionale, per le notifiche)
 - Alexa Media Player (opzionale, per gli annunci vocali)
 
@@ -45,7 +47,7 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 Vai in HA → **Impostazioni** → **Add-on** → **Add-on Store** → ⋮ → **Repository** → incolla:
 
 ```
-https://github.com/elbarto8383/Dispensa-Manager
+https://github.com/domoluigi/Dispensa-Manager
 ```
 
 Clicca **Aggiungi** → **Chiudi**.
@@ -67,6 +69,7 @@ telegram_token: "IL_TUO_BOT_TOKEN"       # opzionale
 telegram_chat_id: "IL_TUO_CHAT_ID"       # opzionale, supporta più ID separati da virgola
 giorni_alert_scadenza: 3                  # giorni prima della scadenza per l'alert
 soglia_scorte_minime: 1                   # quantità minima prima di aggiungere alla lista spesa
+cloudflare_token: ""                      # opzionale, vedi sezione Cloudflare
 ```
 
 > **Nota:** `telegram_chat_id` supporta più ID separati da virgola es. `123456,789012`
@@ -83,6 +86,85 @@ http://IP_HOME_ASSISTANT:8123/local/dispensa/index.html
 ```
 
 Su iPhone puoi installarla come app: **Condividi** → **Aggiungi a schermata Home**.
+Su Android: Chrome → menu ⋮ → **Installa app**.
+
+---
+
+## 🌐 Accesso Esterno con Cloudflare Tunnel
+
+Se esponi Home Assistant su internet tramite **Cloudflare Tunnel**, puoi rendere il backend accessibile in HTTPS in modo sicuro senza aprire porte aggiuntive.
+
+### Architettura
+
+```
+Telefono (HTTPS)
+    ↓
+Cloudflare Tunnel
+    ├── tuodominio.it → HA :8123  (dashboard)
+    └── dispensa-api.tuodominio.it → HA :5000  (backend Flask)
+```
+
+### 1. Aggiungi un hostname nel tunnel
+
+Nel dashboard Cloudflare → **Zero Trust** → **Networks** → **Tunnels** → seleziona il tuo tunnel → **Public Hostnames** → **Add a public hostname**:
+
+| Campo | Valore |
+|---|---|
+| Subdomain | `dispensa-api` |
+| Domain | `tuodominio.it` |
+| Service Type | `HTTP` |
+| URL | `192.168.1.X:5000` |
+
+### 2. Configura le WAF Custom Rules
+
+Crea due regole in **Security** → **WAF** → **Custom Rules**:
+
+**Regola 1 — Skip antibot per richieste autenticate** (azione: Skip, priorità: First)
+```
+(http.request.uri.path contains "/api/") and
+(http.request.headers["x-jarvis-token"][0] eq "IL_TUO_TOKEN_SEGRETO")
+```
+
+**Regola 2 — Blocca accesso non autenticato al backend** (azione: Block, priorità: Last)
+```
+(http.host eq "dispensa-api.tuodominio.it") and
+not (http.request.headers["x-jarvis-token"][0] eq "IL_TUO_TOKEN_SEGRETO") and
+not (http.request.method eq "OPTIONS")
+```
+
+> La regola 2 deve essere **Last** — la regola 1 scatta prima per le richieste autenticate; i preflight CORS (`OPTIONS`) passano sempre perché necessari al browser.
+
+### 3. Configura l'add-on
+
+Nelle opzioni dell'add-on inserisci il token scelto:
+```yaml
+cloudflare_token: "IL_TUO_TOKEN_SEGRETO"
+```
+
+### 4. Configura la PWA
+
+Apri la PWA → **Impostazioni** → imposta:
+
+- **URL backend**: `https://dispensa-api.tuodominio.it`
+- **Token Cloudflare**: il token scelto nel passaggio precedente
+
+Il token viene salvato in localStorage e aggiunto automaticamente a ogni chiamata API tramite l'header `x-jarvis-token`.
+
+### 5. Installa come app
+
+Con l'accesso HTTPS il service worker si attiva correttamente e la PWA è installabile come app nativa:
+- **Android**: Chrome → menu ⋮ → **Installa app**
+- **iPhone**: Safari → Condividi → **Aggiungi a schermata Home**
+
+---
+
+## ↩️ Pulsante Annulla
+
+Quando modifichi la quantità di un prodotto tramite i pulsanti rapidi **+** / **−** (sia nella lista che nel dettaglio prodotto), appare in basso un toast con il pulsante **Annulla**:
+
+- Il toast rimane visibile per **4 secondi**
+- Se clicchi **Annulla** entro 4 secondi, la quantità torna al valore precedente
+- Dopo 4 secondi il pulsante scompare e la modifica è definitiva
 
 ---
 
@@ -96,7 +178,7 @@ La PWA è composta da 5 sezioni accessibili dalla barra in basso:
 | 📷 **Scansiona** | Scanner barcode con ricerca automatica su Open Food Facts |
 | 🛒 **Spesa** | Lista della spesa con spunta e invio Telegram |
 | 📊 **Statistiche** | Consumi, acquisti, top prodotti, prodotti per posizione |
-| ⚙️ **Impostazioni** | URL backend e configurazione alert scadenza |
+| ⚙️ **Impostazioni** | URL backend, token Cloudflare, alert scadenza, tema scuro |
 
 ---
 
@@ -267,6 +349,7 @@ La schermata Statistiche mostra:
 | POST | `/api/prodotti` | Aggiunge un prodotto |
 | PUT | `/api/prodotti/<id>` | Aggiorna un prodotto |
 | DELETE | `/api/prodotti/<id>` | Elimina un prodotto |
+| GET | `/api/prodotti/by-ean/<ean>` | Cerca prodotti duplicati per EAN |
 | GET | `/api/barcode/<ean>` | Cerca un prodotto per EAN |
 | POST | `/api/barcode-cache` | Salva in cache locale |
 | DELETE | `/api/barcode-cache/<ean>` | Rimuove dalla cache |
@@ -278,7 +361,10 @@ La schermata Statistiche mostra:
 | GET | `/api/lista-spesa/invia-telegram` | Invia lista su Telegram |
 | GET | `/api/statistiche` | Statistiche consumi |
 | GET | `/api/report` | Report completo su Telegram |
+| GET | `/api/alerts` | Invia alert scadenze/esauriti su Telegram |
+| GET | `/api/export-csv` | Scarica inventario in formato CSV |
 | GET | `/api/sync-ha` | Aggiorna sensori HA |
+| GET | `/api/config` | Configurazione pubblica (token CF) via ingress |
 | GET | `/api/test-telegram` | Test notifiche Telegram |
 | GET | `/api/health` | Stato del servizio |
 
@@ -308,7 +394,11 @@ Dispensa-Manager/
 │   └── requirements.txt
 ├── www/
 │   └── dispensa/
-│       └── index.html      # PWA frontend
+│       ├── index.html      # PWA frontend
+│       ├── sw.js           # Service Worker (offline + cache)
+│       ├── manifest.json   # Web App Manifest (installazione PWA)
+│       ├── icon-192.png    # Icona app 192×192
+│       └── icon-512.png    # Icona app 512×512
 ├── repository.json         # Custom store HA
 ├── .gitignore
 └── README.md
@@ -335,6 +425,21 @@ Dalla schermata di conferma prodotto, accanto al campo data di scadenza è prese
 ---
 
 ## 📋 Changelog
+
+### v1.3.0
+- 🌐 Token Cloudflare configurabile nelle opzioni addon (non più nel sorgente)
+- 🔒 Endpoint `/api/config` per recupero automatico token via ingress HA
+- ⚙️ Campo Token Cloudflare nelle impostazioni PWA
+- 🔧 CORS: aggiunto `x-jarvis-token` negli header permessi
+
+### v1.2.0
+- 🚇 Ingress HA abilitato (accesso HTTPS nativo senza configurazione extra)
+- 🏠 Icona panel HA `mdi:fridge-outline`
+
+### v1.1.0
+- 🔍 Endpoint `/api/prodotti/by-ean/<ean>` per rilevare duplicati
+- 🔔 Endpoint `/api/alerts` — alert dettagliati su Telegram (scadenze ed esauriti)
+- 📥 Endpoint `/api/export-csv` — esporta inventario in CSV
 
 ### v1.0.2
 - 🔍 OCR scadenza automatica con fotocamera (Tesseract.js)
@@ -376,6 +481,6 @@ MIT License — vedi [LICENSE](LICENSE) per i dettagli.
 
 ## 👤 Autore
 
-Creato da **Bart** ([@elbarto8383](https://github.com/elbarto8383))
+Creato da **Luigi** ([@domoluigi](https://github.com/domoluigi))
 
 Sviluppato con ❤️ per la community di Home Assistant Italia.
