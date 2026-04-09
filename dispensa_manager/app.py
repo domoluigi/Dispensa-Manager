@@ -5,7 +5,7 @@ import os
 import sqlite3
 import requests
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, redirect
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -17,6 +17,10 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type, x-jarvis-token')
     response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
     return response
+
+@app.route('/')
+def index():
+    return redirect('https://hmdomowizards.it/local/dispensa/index.html')
 
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
 HA_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
