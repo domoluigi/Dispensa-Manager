@@ -1,6 +1,6 @@
 name: "Dispensa Manager"
 description: "Backend API per la gestione della dispensa con barcode scanner, PWA iPhone e notifiche Telegram"
-version: "1.2.1"
+version: "1.3.0"
 slug: dispensa_manager
 init: false
 arch:
@@ -20,11 +20,13 @@ options:
   telegram_chat_id: ""
   giorni_alert_scadenza: 3
   soglia_scorte_minime: 1
+  cloudflare_token: ""
 schema:
   telegram_token: str
   telegram_chat_id: str
   giorni_alert_scadenza: int
   soglia_scorte_minime: int
+  cloudflare_token: str
 ports:
   5000/tcp: 5000
 ports_description:
