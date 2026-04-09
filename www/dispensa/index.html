@@ -131,10 +131,11 @@
   .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .toast { position: fixed; bottom: calc(var(--safe-bot) + 70px); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; z-index: 999; display: flex; align-items: center; gap: 10px; }
+  .toast { position: fixed; bottom: calc(var(--safe-bot) + 70px); left: 50%; transform: translateX(-50%) translateY(20px); background: #1a1a18; color: #f0efe8; padding: 10px 20px; border-radius: 20px; font-size: 14px; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; z-index: 999; display: flex; align-items: center; gap: 10px; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.with-undo { pointer-events: auto; }
-  .toast-undo-btn { background: rgba(255,255,255,0.22); border: none; color: white; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 12px; cursor: pointer; font-family: inherit; flex-shrink: 0; letter-spacing: 0.01em; }
+  .toast-undo-btn { background: rgba(255,255,255,0.22); border: none; color: #f0efe8; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 12px; cursor: pointer; font-family: inherit; flex-shrink: 0; letter-spacing: 0.01em; }
+  .dark .toast { background: #2c2c2a; }
 
   /* Lista spesa */
   .spesa-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); }
