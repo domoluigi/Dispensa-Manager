@@ -1,7 +1,9 @@
+import base64
 import csv
 import io
 import json
 import os
+import re
 import sqlite3
 import requests
 from datetime import datetime, timedelta
@@ -92,7 +94,7 @@ def init_db():
         )
     """)
     conn.commit()
-    # Migrazione DB — aggiunge colonne se non esistono
+    # Migrazione DB
     for alter in [
         "ALTER TABLE prodotti ADD COLUMN nutriments TEXT",
         "ALTER TABLE prodotti ADD COLUMN nutriscore TEXT",
@@ -136,21 +138,20 @@ def log_movimento(nome, tipo, ean="", marca="", categoria="", quantita=1):
 
 def aggiorna_sensori_ha():
     conn = get_db()
-    prodotti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC").fetchall()
+    tutti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC").fetchall()
     conn.close()
 
     oggi = datetime.now().date()
     opts = get_options()
     giorni_soglia = opts.get("giorni_alert_scadenza", 3)
 
-    in_scadenza = []
-    esauriti = []
-    totale = len(prodotti)
+    # Attivi (quantita > 0) per totale e in_scadenza
+    attivi = [p for p in tutti if p["quantita"] > 0]
+    # Esauriti (quantita <= 0)
+    esauriti_list = [p for p in tutti if p["quantita"] <= 0]
 
-    for p in prodotti:
-        if p["quantita"] <= opts.get("soglia_scorte_minime", 1) - 1:
-            esauriti.append(p["nome"])
-            aggiungi_a_lista_spesa(p["nome"], p["ean"], p["marca"] or "")
+    in_scadenza = []
+    for p in attivi:
         if p["scadenza"]:
             try:
                 scad = datetime.strptime(p["scadenza"], "%Y-%m-%d").date()
@@ -159,13 +160,18 @@ def aggiorna_sensori_ha():
             except:
                 pass
 
+    # Aggiungi esauriti alla lista spesa
+    for p in esauriti_list:
+        aggiungi_a_lista_spesa(p["nome"], p["ean"], p["marca"] or "")
+
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json"
     }
+    # totale = solo prodotti attivi
     stati = {
         "sensor.dispensa_totale_prodotti": {
-            "state": totale,
+            "state": len(attivi),
             "attributes": {"friendly_name": "Dispensa: prodotti totali", "icon": "mdi:package-variant"}
         },
         "sensor.dispensa_in_scadenza": {
@@ -173,8 +179,8 @@ def aggiorna_sensori_ha():
             "attributes": {"friendly_name": "Dispensa: in scadenza", "prodotti": in_scadenza, "icon": "mdi:calendar-alert"}
         },
         "sensor.dispensa_esauriti": {
-            "state": len(esauriti),
-            "attributes": {"friendly_name": "Dispensa: esauriti", "prodotti": esauriti, "icon": "mdi:package-variant-remove"}
+            "state": len(esauriti_list),
+            "attributes": {"friendly_name": "Dispensa: esauriti", "prodotti": [p["nome"] for p in esauriti_list], "icon": "mdi:package-variant-remove"}
         }
     }
     for entity_id, payload in stati.items():
@@ -184,7 +190,6 @@ def aggiorna_sensori_ha():
             print(f"Errore aggiornamento HA {entity_id}: {e}")
 
 def invia_notifica_azione(testo):
-    """Invia una notifica Telegram concisa su un'azione specifica."""
     opts = get_options()
     token = opts.get("telegram_token", "")
     chat_id_raw = opts.get("telegram_chat_id", "")
@@ -203,7 +208,7 @@ def invia_notifica_azione(testo):
 
 @app.route("/api/barcode/<ean>", methods=["GET"])
 def cerca_barcode(ean):
-    headers = {"User-Agent": "DispensaManager/1.0.3"}
+    headers = {"User-Agent": "DispensaManager/1.4.0"}
     conn = get_db()
     cached = conn.execute("SELECT * FROM barcode_cache WHERE ean = ?", (ean,)).fetchone()
     conn.close()
@@ -258,7 +263,6 @@ def cerca_barcode(ean):
 
 @app.route("/api/prodotti/by-ean/<ean>", methods=["GET"])
 def prodotti_by_ean(ean):
-    """Restituisce i prodotti in dispensa con lo stesso EAN (per rilevare duplicati)."""
     conn = get_db()
     items = conn.execute(
         "SELECT id, nome, marca, quantita, scadenza, posizione FROM prodotti WHERE ean = ? AND quantita > 0 ORDER BY scadenza ASC",
@@ -266,6 +270,16 @@ def prodotti_by_ean(ean):
     ).fetchall()
     conn.close()
     return jsonify([dict(i) for i in items])
+
+@app.route("/api/prodotti/esauriti", methods=["GET"])
+def lista_esauriti():
+    """Restituisce solo i prodotti con quantita <= 0 (archivio esauriti)."""
+    conn = get_db()
+    prodotti = conn.execute(
+        "SELECT * FROM prodotti WHERE quantita <= 0 ORDER BY nome ASC"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(p) for p in prodotti])
 
 @app.route("/api/lista-spesa", methods=["GET"])
 def get_lista_spesa():
@@ -395,12 +409,19 @@ def lista_prodotti():
 def aggiungi_prodotto():
     data = request.json
     conn = get_db()
+
+    # Gestione immagine: se è un data-URL base64 la salviamo direttamente
+    immagine_url = data.get("immagine_url", "")
+    # Tronchiamo le immagini base64 molto grandi a 500KB per sicurezza DB
+    if immagine_url and immagine_url.startswith("data:") and len(immagine_url) > 600000:
+        immagine_url = ""  # scarta immagini troppo grandi
+
     conn.execute("""
         INSERT INTO prodotti (ean, nome, marca, categoria, immagine_url, quantita, scadenza, note, nutriments, nutriscore, posizione)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get("ean", ""), data.get("nome", "Prodotto"), data.get("marca", ""),
-        data.get("categoria", ""), data.get("immagine_url", ""), data.get("quantita", 1),
+        data.get("categoria", ""), immagine_url, data.get("quantita", 1),
         data.get("scadenza"), data.get("note", ""),
         json.dumps(data.get("nutriments")) if data.get("nutriments") else None,
         data.get("nutriscore", ""), data.get("posizione", "Dispensa")
@@ -484,14 +505,12 @@ def elimina_prodotto(id):
 
 @app.route("/api/config", methods=["GET"])
 def get_public_config():
-    """Espone configurazione pubblica (token CF) via ingress HA."""
     opts = get_options()
     return jsonify({"cloudflare_token": opts.get("cloudflare_token", "")})
 
-
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
+    return jsonify({"status": "ok", "version": "1.4.0", "timestamp": datetime.now().isoformat()})
 
 @app.route("/api/test-telegram", methods=["GET"])
 def test_telegram():
@@ -514,7 +533,6 @@ def test_telegram():
 
 @app.route("/api/alerts", methods=["GET"])
 def invia_alerts():
-    """Endpoint da chiamare con un'automazione HA per notifiche giornaliere su scadenze ed esauriti."""
     conn = get_db()
     prodotti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC").fetchall()
     conn.close()
@@ -529,7 +547,7 @@ def invia_alerts():
     for p in prodotti:
         if p["quantita"] <= 0:
             esauriti.append(p["nome"])
-        if p["scadenza"]:
+        if p["quantita"] > 0 and p["scadenza"]:
             try:
                 scad = datetime.strptime(p["scadenza"], "%Y-%m-%d").date()
                 giorni = (scad - oggi).days
@@ -545,14 +563,10 @@ def invia_alerts():
     if in_scadenza:
         msg += "⚠️ *In scadenza:*\n"
         for p in in_scadenza:
-            if p["giorni"] < 0:
-                label = "già scaduto!"
-            elif p["giorni"] == 0:
-                label = "scade oggi!"
-            elif p["giorni"] == 1:
-                label = "scade domani"
-            else:
-                label = f"tra {p['giorni']} giorni"
+            if p["giorni"] < 0: label = "già scaduto!"
+            elif p["giorni"] == 0: label = "scade oggi!"
+            elif p["giorni"] == 1: label = "scade domani"
+            else: label = f"tra {p['giorni']} giorni"
             msg += f"  • {p['nome']} — _{label}_\n"
         msg += "\n"
     if esauriti:
@@ -562,16 +576,10 @@ def invia_alerts():
 
     invia_notifica_azione(msg)
     aggiorna_sensori_ha()
-    return jsonify({
-        "ok": True,
-        "notifica_inviata": True,
-        "in_scadenza": len(in_scadenza),
-        "esauriti": len(esauriti)
-    })
+    return jsonify({"ok": True, "notifica_inviata": True, "in_scadenza": len(in_scadenza), "esauriti": len(esauriti)})
 
 @app.route("/api/export-csv", methods=["GET"])
 def export_csv():
-    """Scarica l'inventario completo in formato CSV."""
     conn = get_db()
     prodotti = conn.execute("SELECT * FROM prodotti ORDER BY nome ASC").fetchall()
     conn.close()
@@ -628,8 +636,12 @@ def report_dispensa():
         else:
             ok_list.append(p)
 
+    attivi = len([p for p in prodotti if p["quantita"] > 0])
     msg = f"📦 *Report Dispensa*\n_{datetime.now().strftime('%d/%m/%Y %H:%M')}_\n\n"
-    msg += f"*Totale prodotti: {len(prodotti)}*\n\n"
+    msg += f"*Prodotti in dispensa: {attivi}*"
+    if esauriti:
+        msg += f" _(+ {len(esauriti)} esauriti)_"
+    msg += "\n\n"
     if in_scadenza:
         msg += "⚠️ *In scadenza:*\n"
         for p in in_scadenza:
@@ -655,7 +667,7 @@ def report_dispensa():
                 json={"chat_id": cid, "text": msg, "parse_mode": "Markdown"}, timeout=10)
         except Exception as e:
             print(f"Errore Telegram report {cid}: {e}")
-    return jsonify({"ok": True, "totale": len(prodotti)})
+    return jsonify({"ok": True, "totale": attivi})
 
 @app.route("/api/barcode-cache/<ean>", methods=["DELETE"])
 def elimina_barcode_cache(ean):
@@ -707,5 +719,5 @@ def sync_ha():
 
 if __name__ == "__main__":
     init_db()
-    print("Dispensa Manager avviato su porta 5000")
+    print("Dispensa Manager v1.4.0 avviato su porta 5000")
     app.run(host="0.0.0.0", port=5000, debug=False)

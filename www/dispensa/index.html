@@ -16,6 +16,7 @@
     --green: #1D9E75; --green-d: #0F6E56; --green-l: #E1F5EE;
     --amber: #BA7517; --amber-l: #FAEEDA;
     --red: #A32D2D; --red-l: #FCEBEB;
+    --gray: #888780; --gray-l: #F1EFE8;
     --bg: #F7F6F2; --surface: #fff;
     --text: #1a1a18; --muted: #6b6b63; --hint: #9e9e94;
     --border: rgba(0,0,0,0.10);
@@ -104,6 +105,21 @@
   .dot-exp { background: var(--red); }
   .dot-out { background: #ccc; }
 
+  /* Sezione esauriti */
+  .esauriti-section { margin-top: 8px; }
+  .esauriti-header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+    background: var(--gray-l); border-radius: 12px; margin-bottom: 4px; cursor: pointer;
+  }
+  .esauriti-header-title { font-size: 13px; font-weight: 600; color: var(--gray); flex: 1; }
+  .esauriti-header-count { font-size: 12px; color: var(--gray); background: rgba(136,135,128,0.15); padding: 2px 8px; border-radius: 10px; }
+  .esauriti-chevron { font-size: 12px; color: var(--gray); transition: transform 0.2s; }
+  .esauriti-chevron.open { transform: rotate(90deg); }
+  .esauriti-list { display: none; }
+  .esauriti-list.open { display: block; }
+  .prod-item.esaurito { opacity: 0.65; }
+  .prod-nome.esaurito-text { color: var(--muted); }
+
   .search-bar-wrap { position: relative; margin-bottom: 12px; }
   .search-bar-wrap input { width: 100%; padding: 10px 48px 10px 14px; border-radius: 14px; border: 0.5px solid var(--border); background: var(--surface); font-size: 16px; color: var(--text); font-family: inherit; -webkit-appearance: none; appearance: none; }
   .search-bar-wrap input:focus { outline: none; border-color: var(--green); }
@@ -125,6 +141,26 @@
   .found-badge-text { font-size: 12px; color: var(--green-d); font-weight: 500; }
 
   .product-img { width: 64px; height: 64px; border-radius: 10px; object-fit: contain; background: var(--bg); border: 0.5px solid var(--border); flex-shrink: 0; }
+
+  /* Foto prodotto upload */
+  .foto-upload-area {
+    border: 1.5px dashed var(--border); border-radius: 14px; padding: 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    cursor: pointer; margin-bottom: 16px; background: var(--bg);
+    transition: border-color 0.15s;
+  }
+  .foto-upload-area:active { border-color: var(--green); }
+  .foto-upload-area.has-photo { border-style: solid; border-color: var(--green); }
+  .foto-preview { width: 100%; max-height: 160px; object-fit: contain; border-radius: 10px; display: none; }
+  .foto-preview.visible { display: block; }
+  .foto-label { font-size: 13px; color: var(--muted); text-align: center; }
+  .foto-actions { display: flex; gap: 8px; }
+  .foto-action-btn {
+    padding: 8px 16px; border-radius: 10px; border: 0.5px solid var(--border);
+    background: var(--surface); font-size: 13px; font-weight: 500; cursor: pointer;
+    color: var(--text); font-family: inherit;
+  }
+  #foto-input { display: none; }
 
   .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
   .empty-icon { font-size: 40px; margin-bottom: 12px; }
@@ -148,7 +184,7 @@
   .spesa-del { font-size: 18px; color: var(--hint); cursor: pointer; padding: 4px; }
 
   /* Dark mode */
-  .dark { --bg: #111110; --surface: #1c1c1a; --text: #f0efe8; --muted: #9e9e94; --hint: #6b6b63; --border: rgba(255,255,255,0.10); --green-l: rgba(29,158,117,0.15); --amber-l: rgba(186,117,23,0.15); --red-l: rgba(163,45,45,0.15); }
+  .dark { --bg: #111110; --surface: #1c1c1a; --text: #f0efe8; --muted: #9e9e94; --hint: #6b6b63; --border: rgba(255,255,255,0.10); --green-l: rgba(29,158,117,0.15); --amber-l: rgba(186,117,23,0.15); --red-l: rgba(163,45,45,0.15); --gray-l: rgba(136,135,128,0.12); }
 
   /* Filter chips */
   .filter-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; scrollbar-width: none; }
@@ -194,7 +230,6 @@
     <div class="filter-row">
       <div class="chip active" data-filtro="tutti" onclick="setFiltro('tutti')">Tutti</div>
       <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
-      <div class="chip" data-filtro="esauriti" onclick="setFiltro('esauriti')">⚠️ Esauriti</div>
       <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧊 Frigo</div>
       <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Freezer</div>
       <div class="chip" data-filtro="dispensa" onclick="setFiltro('dispensa')">🗄️ Dispensa</div>
@@ -274,6 +309,20 @@
         <label>Nome prodotto</label>
         <input type="text" id="conf-nome-edit">
       </div>
+
+      <!-- Sezione foto prodotto (visibile solo se barcode non trovato) -->
+      <div id="foto-section" style="display:none;">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">Foto prodotto (opzionale)</div>
+        <div class="foto-upload-area" id="foto-upload-area" onclick="apriFotoMenu()">
+          <img id="foto-preview" class="foto-preview" src="" alt="Anteprima foto">
+          <div id="foto-placeholder" style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <span style="font-size:28px;">📷</span>
+            <div class="foto-label">Scatta o scegli una foto del prodotto</div>
+          </div>
+        </div>
+        <input type="file" id="foto-input" accept="image/*">
+      </div>
+
       <div class="field">
         <label>Quantità</label>
         <div class="qty-row">
@@ -301,7 +350,6 @@
         </div>
         <div id="ocr-status" style="color:white;margin-top:16px;font-size:14px;text-align:center;padding:0 20px;">Inquadra la data di scadenza nella cornice verde</div>
         <div id="ocr-testo-letto" style="color:rgba(255,255,255,0.5);margin-top:6px;font-size:11px;text-align:center;padding:0 20px;"></div>
-        <!-- Campo inserimento manuale -->
         <div id="ocr-manuale" style="display:none;margin-top:12px;width:90%;max-width:400px;">
           <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:6px;text-align:center;">Inserisci la data manualmente:</div>
           <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:8px;text-align:center;">es. 09/09/27 · 09/2027 · 2027/09 · 090927 · SET 2027</div>
@@ -315,6 +363,7 @@
           <button onclick="chiudiOCR()" style="padding:14px 28px;border-radius:14px;background:rgba(255,255,255,0.2);color:white;font-size:16px;border:none;cursor:pointer;">✕ Annulla</button>
         </div>
       </div>
+
       <div class="field">
         <label>Posizione</label>
         <select id="conf-posizione">
@@ -403,10 +452,6 @@
       <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       <span>Statistiche</span>
     </div>
-    <div class="tab" onclick="showTab('statistiche')">
-      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-      <span>Statistiche</span>
-    </div>
     <div class="tab" onclick="showTab('impostazioni')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span>Impostazioni</span>
@@ -450,7 +495,7 @@
       <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">Dati</div>
       <button class="btn btn-secondary" onclick="esportaCSV()">📥 Esporta inventario CSV</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.0.2</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.4.0</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -464,6 +509,10 @@
     <div class="tab" onclick="showTab('spesa')">
       <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
       <span>Spesa</span>
+    </div>
+    <div class="tab" onclick="showTab('statistiche')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Statistiche</span>
     </div>
     <div class="tab active" onclick="showTab('impostazioni')">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -545,12 +594,14 @@ async function initCfToken() {
 let codeReader = null;
 let prodottoCorrente = {};
 let qtyCorrente = 1;
+let fotoBase64 = null;       // foto scattata per prodotto sconosciuto
 let prodottiCache = [];
-let scanMode = 'add'; // 'add' | 'search'
+let scanMode = 'add';
 let filtroAttivo = 'tutti';
 let modProdottoId = null;
 let modQtyCorrente = 1;
 let detQtyDelta = 1;
+let esauritiOpen = false;
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -616,8 +667,6 @@ async function caricaInventario() {
   }
 }
 
-function filtraInventario(testo) { applicaFiltroSort(); }
-
 function setFiltro(f) {
   filtroAttivo = f;
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -630,40 +679,48 @@ function applicaFiltroSort() {
   const ord = document.getElementById('sort-select')?.value || 'inserimento';
   const giorniAlert = parseInt(localStorage.getItem('dispensa_giorni') || '3');
   const oggi = new Date(); oggi.setHours(0,0,0,0);
-  let lista = [...prodottiCache];
 
+  // Separa sempre attivi da esauriti
+  let attivi = prodottiCache.filter(p => p.quantita > 0);
+  let esauriti = prodottiCache.filter(p => p.quantita <= 0);
+
+  // Applica filtro (solo sugli attivi, eccetto se filtro=esauriti)
   if (filtroAttivo === 'scadenza') {
-    lista = lista.filter(p => {
+    attivi = attivi.filter(p => {
       if (!p.scadenza) return false;
       const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000);
       return gg >= 0 && gg <= giorniAlert;
     });
-  } else if (filtroAttivo === 'esauriti') {
-    lista = lista.filter(p => p.quantita <= 0);
+    esauriti = [];
   } else if (filtroAttivo === 'frigo') {
-    lista = lista.filter(p => p.posizione === 'Frigo');
+    attivi = attivi.filter(p => p.posizione === 'Frigo');
+    esauriti = esauriti.filter(p => p.posizione === 'Frigo');
   } else if (filtroAttivo === 'freezer') {
-    lista = lista.filter(p => p.posizione === 'Freezer');
+    attivi = attivi.filter(p => p.posizione === 'Freezer');
+    esauriti = esauriti.filter(p => p.posizione === 'Freezer');
   } else if (filtroAttivo === 'dispensa') {
-    lista = lista.filter(p => p.posizione === 'Dispensa');
+    attivi = attivi.filter(p => p.posizione === 'Dispensa');
+    esauriti = esauriti.filter(p => p.posizione === 'Dispensa');
   }
 
-  if (q) lista = lista.filter(p =>
-    (p.nome||'').toLowerCase().includes(q) ||
-    (p.marca||'').toLowerCase().includes(q) ||
-    (p.posizione||'').toLowerCase().includes(q)
-  );
+  // Ricerca testuale
+  if (q) {
+    attivi = attivi.filter(p => (p.nome||'').toLowerCase().includes(q) || (p.marca||'').toLowerCase().includes(q) || (p.posizione||'').toLowerCase().includes(q));
+    esauriti = esauriti.filter(p => (p.nome||'').toLowerCase().includes(q) || (p.marca||'').toLowerCase().includes(q));
+  }
 
-  if (ord === 'nome') lista.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
-  else if (ord === 'quantita') lista.sort((a,b) => b.quantita - a.quantita);
-  else if (ord === 'scadenza') lista.sort((a,b) => {
+  // Ordinamento attivi
+  if (ord === 'nome') attivi.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+  else if (ord === 'quantita') attivi.sort((a,b) => b.quantita - a.quantita);
+  else if (ord === 'scadenza') attivi.sort((a,b) => {
     if (!a.scadenza && !b.scadenza) return 0;
-    if (!a.scadenza) return 1;
-    if (!b.scadenza) return -1;
+    if (!a.scadenza) return 1; if (!b.scadenza) return -1;
     return new Date(a.scadenza) - new Date(b.scadenza);
   });
+  // esauriti sempre per nome
+  esauriti.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
 
-  renderInventario(lista);
+  renderInventario(attivi, esauriti);
 }
 
 function avviaScannerRicerca() {
@@ -674,11 +731,8 @@ function avviaScannerRicerca() {
 function cercaNellaDispensa(ean) {
   const trovato = prodottiCache.find(p => p.ean === ean);
   showScreen('screen-inventario');
-  if (trovato) {
-    apriDettaglio(trovato.id);
-  } else {
-    toast('Prodotto non trovato in dispensa');
-  }
+  if (trovato) { apriDettaglio(trovato.id); }
+  else { toast('Prodotto non trovato in dispensa'); }
 }
 
 async function consumaRapido(id, qtyAttuali) {
@@ -778,24 +832,26 @@ function esportaCSV() {
   toast('CSV esportato!');
 }
 
-function renderInventario(prodotti) {
+function renderInventario(attivi, esauriti) {
   const oggi = new Date(); oggi.setHours(0,0,0,0);
-  let totale = prodotti.length;
-  let inScadenza = 0; let esauriti = 0;
+  const giorniAlert = parseInt(localStorage.getItem('dispensa_giorni') || '3');
+  let inScadenza = 0;
 
+  // Render prodotti attivi
   let html = '';
-  if (prodotti.length === 0) {
+  if (attivi.length === 0 && esauriti.length === 0) {
     html = `<div class="empty"><div class="empty-icon">🛒</div><div>Nessun prodotto in dispensa.<br>Scansiona il primo!</div></div>`;
+  } else if (attivi.length === 0) {
+    html = `<div class="empty" style="padding:24px 20px;"><div style="font-size:14px;color:var(--muted);">Nessun prodotto disponibile</div></div>`;
   } else {
-    prodotti.forEach(p => {
+    attivi.forEach(p => {
       let dotClass = 'dot-ok', metaText = '', badgeHtml = '';
-      if (p.quantita <= 0) { dotClass = 'dot-out'; esauriti++; }
       if (p.scadenza) {
         const scad = new Date(p.scadenza);
         const giorni = Math.round((scad - oggi) / 86400000);
         if (giorni < 0) { dotClass = 'dot-exp'; metaText = 'Scaduto'; badgeHtml = `<span class="badge badge-exp">Scaduto</span>`; }
         else if (giorni === 0) { dotClass = 'dot-warn'; metaText = 'Scade oggi'; badgeHtml = `<span class="badge badge-warn">Scade oggi</span>`; inScadenza++; }
-        else if (giorni <= 3) { dotClass = 'dot-warn'; metaText = `Scade tra ${giorni}g`; badgeHtml = `<span class="badge badge-warn">In scadenza</span>`; inScadenza++; }
+        else if (giorni <= giorniAlert) { dotClass = 'dot-warn'; metaText = `Scade tra ${giorni}g`; badgeHtml = `<span class="badge badge-warn">In scadenza</span>`; inScadenza++; }
         else { metaText = `Scade ${scad.toLocaleDateString('it-IT', {day:'numeric', month:'short'})}`; }
       }
       html += `<div class="prod-item" onclick="apriDettaglio(${p.id})">
@@ -814,12 +870,50 @@ function renderInventario(prodotti) {
     });
   }
 
-  document.getElementById('lista-prodotti').innerHTML = html;
+  // Sezione esauriti (separata, collassabile)
+  let esauritiHtml = '';
+  if (esauriti.length > 0) {
+    const chevron = esauritiOpen ? 'open' : '';
+    const listStyle = esauritiOpen ? 'open' : '';
+    esauritiHtml = `<div class="esauriti-section">
+      <div class="esauriti-header" onclick="toggleEsauriti()">
+        <span style="font-size:14px;">⬜</span>
+        <span class="esauriti-header-title">Esauriti</span>
+        <span class="esauriti-header-count">${esauriti.length}</span>
+        <span class="esauriti-chevron ${chevron}">›</span>
+      </div>
+      <div class="esauriti-list ${listStyle}" id="esauriti-list-inner">`;
+    esauriti.forEach(p => {
+      esauritiHtml += `<div class="prod-item esaurito" onclick="apriDettaglio(${p.id})">
+        <div class="prod-dot dot-out"></div>
+        <div class="prod-info">
+          <div class="prod-nome esaurito-text">${p.nome}</div>
+          <div class="prod-meta">${p.marca ? p.marca + ' · ' : ''}${p.posizione || 'Dispensa'}</div>
+        </div>
+        <div class="prod-actions" onclick="event.stopPropagation()">
+          <div class="quick-btn" onclick="aggiungiRapido(${p.id},0)">+</div>
+        </div>
+      </div>`;
+    });
+    esauritiHtml += `</div></div>`;
+  }
+
+  document.getElementById('lista-prodotti').innerHTML = html + esauritiHtml;
+
+  // Metrics: totale esclude esauriti
   document.getElementById('metrics').innerHTML = `
-    <div class="metric"><div class="metric-val">${totale}</div><div class="metric-label">Totale</div></div>
+    <div class="metric"><div class="metric-val">${attivi.length}</div><div class="metric-label">In dispensa</div></div>
     <div class="metric"><div class="metric-val" style="color:#EF9F27">${inScadenza}</div><div class="metric-label">In scadenza</div></div>
-    <div class="metric"><div class="metric-val" style="color:#E24B4A">${esauriti}</div><div class="metric-label">Esauriti</div></div>
+    <div class="metric"><div class="metric-val" style="color:var(--gray)">${esauriti.length}</div><div class="metric-label">Esauriti</div></div>
   `;
+}
+
+function toggleEsauriti() {
+  esauritiOpen = !esauritiOpen;
+  const list = document.getElementById('esauriti-list-inner');
+  const chevron = document.querySelector('.esauriti-chevron');
+  if (list) list.classList.toggle('open', esauritiOpen);
+  if (chevron) chevron.classList.toggle('open', esauritiOpen);
 }
 
 function apriDettaglio(id) {
@@ -828,10 +922,13 @@ function apriDettaglio(id) {
   detQtyDelta = 1;
   document.getElementById('det-title').textContent = p.nome;
   const scadFormatted = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'long',year:'numeric'}) : 'Non specificata';
+  const isEsaurito = p.quantita <= 0;
   document.getElementById('det-content').innerHTML = `
     <div class="card card-body">
+      ${p.immagine_url ? `<img src="${p.immagine_url}" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);">` : ''}
       <div style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">${p.nome}</div>
       <div style="font-size: 14px; color: var(--muted); margin-bottom: 20px;">${p.marca || ''} ${p.categoria ? '· ' + p.categoria : ''}</div>
+      ${isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">⬜ Prodotto esaurito — rimane nel database</div>' : ''}
       <table style="width:100%;font-size:14px;border-collapse:collapse;">
         <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'}</td></tr>
         <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Quantità</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.quantita}</td></tr>
@@ -842,21 +939,16 @@ function apriDettaglio(id) {
     ${p.nutriments ? (() => {
       const n = typeof p.nutriments === 'string' ? JSON.parse(p.nutriments) : p.nutriments;
       const righe = [
-        ['Energia', n.energia_kcal, 'kcal'],
-        ['Grassi', n.grassi, 'g'],
-        ['di cui saturi', n.grassi_saturi, 'g'],
-        ['Carboidrati', n.carboidrati, 'g'],
-        ['di cui zuccheri', n.zuccheri, 'g'],
-        ['Fibre', n.fibre, 'g'],
-        ['Proteine', n.proteine, 'g'],
-        ['Sale', n.sale, 'g'],
+        ['Energia', n.energia_kcal, 'kcal'],['Grassi', n.grassi, 'g'],['di cui saturi', n.grassi_saturi, 'g'],
+        ['Carboidrati', n.carboidrati, 'g'],['di cui zuccheri', n.zuccheri, 'g'],['Fibre', n.fibre, 'g'],
+        ['Proteine', n.proteine, 'g'],['Sale', n.sale, 'g'],
       ].filter(r => r[1] != null);
       if (!righe.length) return '';
       const nsColor = {'A':'#1D9E75','B':'#8BC34A','C':'#FFC107','D':'#FF9800','E':'#F44336'};
       return `<div class="card card-body" style="margin-top:8px;">
         <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📊 Valori nutrizionali per 100g</div>
         <table style="width:100%;font-size:13px;border-collapse:collapse;">
-          ${righe.map((r,i) => `<tr><td style="color:var(--muted);padding:6px 0;${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}${r[0].startsWith('di')?'padding-left:12px;':''}">${r[0]}</td><td style="text-align:right;font-weight:${r[0].startsWith('di')?'400':'600'};${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}">${Number(r[1]).toFixed(1)} ${r[2]}</td></tr>`).join('')}
+          ${righe.map((r,i) => `<tr><td style="color:var(--muted);padding:6px 0;${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}${r[0].startsWith('di')?'padding-left:12px;':''} ">${r[0]}</td><td style="text-align:right;font-weight:${r[0].startsWith('di')?'400':'600'};${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}">${Number(r[1]).toFixed(1)} ${r[2]}</td></tr>`).join('')}
         </table>
         ${p.nutriscore ? `<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:${nsColor[p.nutriscore]||'var(--text)'}">● ${p.nutriscore}</strong></div>` : ''}
       </div>`;
@@ -928,11 +1020,8 @@ function avviaScanner() {
     if (result) {
       fermaScanner();
       document.getElementById('scan-status').textContent = 'Codice rilevato!';
-      if (scanMode === 'search') {
-        cercaNellaDispensa(result.getText());
-      } else {
-        await cercaProdotto(result.getText());
-      }
+      if (scanMode === 'search') { cercaNellaDispensa(result.getText()); }
+      else { await cercaProdotto(result.getText()); }
     }
   });
   document.getElementById('scan-status').textContent = scanMode === 'search'
@@ -959,13 +1048,10 @@ async function cercaProdotto(ean) {
 
 function suggerisciDaCategoria(categoria) {
   const cat = (categoria || '').toLowerCase();
-  // Mappatura posizione
   let posizione = 'Dispensa';
   if (/latte|yogurt|formaggio|latticin|burro|panna|affettat|salum|carne|pesce|fresc|verdur|frutta|uov|salsa aperta|succo aperto/.test(cat)) posizione = 'Frigo';
   if (/surgelat|gelat|frozen|ice/.test(cat)) posizione = 'Freezer';
-
-  // Mappatura giorni scadenza suggeriti
-  let giorni = 365; // default dispensa
+  let giorni = 365;
   if (/latte/.test(cat)) giorni = 7;
   else if (/yogurt/.test(cat)) giorni = 14;
   else if (/formaggio|cheese/.test(cat)) giorni = 21;
@@ -979,20 +1065,19 @@ function suggerisciDaCategoria(categoria) {
   else if (/conserv|scatolam|tonno|sughi/.test(cat)) giorni = 730;
   else if (/olio|aceto|condiment/.test(cat)) giorni = 365;
   else if (/bevand|succo|drink/.test(cat)) giorni = 180;
-
   return { posizione, giorni };
 }
 
 function apriConferma(prodotto) {
   prodottoCorrente = prodotto;
   qtyCorrente = 1;
+  fotoBase64 = null;
   document.getElementById('conf-nome').textContent = prodotto.nome || 'Prodotto sconosciuto';
   document.getElementById('conf-marca').textContent = [prodotto.marca, prodotto.categoria].filter(Boolean).join(' · ');
   document.getElementById('conf-nome-edit').value = prodotto.nome || '';
   document.getElementById('conf-qty').textContent = '1';
   document.getElementById('conf-note').value = '';
 
-  // Calcola posizione e scadenza automatica
   const { posizione, giorni } = suggerisciDaCategoria(prodotto.categoria);
   const oggi = new Date();
   oggi.setDate(oggi.getDate() + giorni);
@@ -1002,12 +1087,72 @@ function apriConferma(prodotto) {
   const img = document.getElementById('conf-img');
   if (prodotto.immagine_url) { img.src = prodotto.immagine_url; img.style.display = 'block'; }
   else img.style.display = 'none';
+
+  // Sezione foto: visibile solo se barcode NON trovato
+  const fotoSection = document.getElementById('foto-section');
+  fotoSection.style.display = prodotto.trovato ? 'none' : 'block';
+  // Reset foto
+  document.getElementById('foto-preview').classList.remove('visible');
+  document.getElementById('foto-placeholder').style.display = 'flex';
+  document.getElementById('foto-upload-area').classList.remove('has-photo');
+
   const badge = document.getElementById('found-badge-container');
   badge.innerHTML = prodotto.trovato
     ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posizione === 'Frigo' ? '🧊 Frigo' : posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'} suggerito</div></div>`
-    : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci manualmente</div></div>`;
+    : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci i dettagli e aggiungi foto</div></div>`;
   showScreen('screen-conferma');
 }
+
+// ===== GESTIONE FOTO PRODOTTO =====
+function apriFotoMenu() {
+  // Apre il file picker (support nativo iOS/Android: permette sia fotocamera che galleria)
+  const input = document.getElementById('foto-input');
+  input.setAttribute('capture', 'environment');
+  input.click();
+}
+
+// Handler selezione file
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('foto-input');
+  if (input) {
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      // Ridimensiona a max 600px per ottimizzare il DB
+      fotoBase64 = await ridimensionaFoto(file, 600);
+      const preview = document.getElementById('foto-preview');
+      const placeholder = document.getElementById('foto-placeholder');
+      const area = document.getElementById('foto-upload-area');
+      preview.src = fotoBase64;
+      preview.classList.add('visible');
+      placeholder.style.display = 'none';
+      area.classList.add('has-photo');
+    });
+  }
+});
+
+function ridimensionaFoto(file, maxSize) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+          else { w = Math.round(w * maxSize / h); h = maxSize; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+// ===== FINE FOTO =====
 
 function cambiaQty(delta) {
   qtyCorrente = Math.max(1, qtyCorrente + delta);
@@ -1015,12 +1160,14 @@ function cambiaQty(delta) {
 }
 
 async function salvaInDispensa() {
+  // Se è un prodotto non trovato e l'utente ha scattato una foto, usala come immagine_url
+  const immagineDaSalvare = fotoBase64 || prodottoCorrente.immagine_url || '';
   const payload = {
     ean: prodottoCorrente.ean || '',
     nome: document.getElementById('conf-nome-edit').value || prodottoCorrente.nome || 'Prodotto',
     marca: prodottoCorrente.marca || '',
     categoria: prodottoCorrente.categoria || '',
-    immagine_url: prodottoCorrente.immagine_url || '',
+    immagine_url: immagineDaSalvare,
     quantita: qtyCorrente,
     scadenza: document.getElementById('conf-scadenza').value || null,
     note: document.getElementById('conf-note').value || '',
@@ -1029,24 +1176,21 @@ async function salvaInDispensa() {
     nutriscore: prodottoCorrente.nutriscore || ''
   };
 
-try {
+  try {
     await apiFetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    // Salva in cache locale se ha un EAN reale
-    if (payload.ean && !payload.ean.startsWith('MANUAL-')) {
+    // Salva in cache barcode solo se EAN reale (non manuale) e prodotto aveva dati online
+    if (payload.ean && !payload.ean.startsWith('MANUAL-') && prodottoCorrente.trovato) {
       await apiFetch(`${API_BASE()}/api/barcode-cache`, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
-          ean: payload.ean,
-          nome: payload.nome,
-          marca: payload.marca,
-          categoria: payload.categoria,
-          immagine_url: payload.immagine_url,
-          nutriments: payload.nutriments,
-          nutriscore: payload.nutriscore
+          ean: payload.ean, nome: payload.nome, marca: payload.marca,
+          categoria: payload.categoria, immagine_url: prodottoCorrente.immagine_url || '',
+          nutriments: payload.nutriments, nutriscore: payload.nutriscore
         })
       });
     }
+    fotoBase64 = null;
     toast('Prodotto salvato!');
     showScreen('screen-inventario');
   } catch(e) {
@@ -1056,14 +1200,9 @@ try {
 
 function inserisciManuale() {
   const ean = prompt('Inserisci il codice a barre (EAN) del prodotto:\n(lascia vuoto per inserimento manuale senza barcode)');
-  if (ean === null) return; // utente ha premuto Annulla
-  if (ean.trim() !== '') {
-    // Ha inserito un EAN, cerca su Open Food Facts
-    cercaProdotto(ean.trim());
-  } else {
-    // Nessun EAN, inserimento completamente manuale
-    apriConferma({ trovato: false, ean: 'MANUAL-' + Date.now(), nome: '', marca: '', categoria: '', immagine_url: '' });
-  }
+  if (ean === null) return;
+  if (ean.trim() !== '') { cercaProdotto(ean.trim()); }
+  else { apriConferma({ trovato: false, ean: 'MANUAL-' + Date.now(), nome: '', marca: '', categoria: '', immagine_url: '' }); }
 }
 
 async function caricaListaSpesa() {
@@ -1098,9 +1237,7 @@ function renderListaSpesa(items) {
 
 async function toggleSpesa(id, completato) {
   await apiFetch(`${API_BASE()}/api/lista-spesa/${id}`, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({completato, quantita: 1})
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({completato, quantita: 1})
   });
   caricaListaSpesa();
 }
@@ -1126,13 +1263,8 @@ function aggiungiSpesaManuale() {
   const nome = prompt('Nome del prodotto da aggiungere alla lista:');
   if (!nome || !nome.trim()) return;
   apiFetch(`${API_BASE()}/api/lista-spesa`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({nome: nome.trim(), quantita: 1})
-  }).then(() => {
-    toast('Aggiunto alla lista!');
-    caricaListaSpesa();
-  });
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({nome: nome.trim(), quantita: 1})
+  }).then(() => { toast('Aggiunto alla lista!'); caricaListaSpesa(); });
 }
 
 async function caricaStatistiche() {
@@ -1147,46 +1279,30 @@ async function caricaStatistiche() {
         <div class="metric"><div class="metric-val">${s.totali.acquisti_mese}</div><div class="metric-label">Acquisti questo mese</div></div>
         <div class="metric"><div class="metric-val">${s.totali.eliminati}</div><div class="metric-label">Eliminati</div></div>
       </div>`;
-
     if (s.per_posizione.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📍 Prodotti per posizione</div>`;
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📍 Prodotti per posizione</div>`;
       s.per_posizione.forEach(p => {
-        html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:14px;">
-          <span>${posIcon[p.posizione]||'📦'} ${p.posizione || 'Non specificata'}</span>
-          <strong>${p.n}</strong></div>`;
+        html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:14px;"><span>${posIcon[p.posizione]||'📦'} ${p.posizione || 'Non specificata'}</span><strong>${p.n}</strong></div>`;
       });
       html += `</div>`;
     }
-
     if (s.top_acquistati.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🏆 Più acquistati</div>`;
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🏆 Più acquistati</div>`;
       s.top_acquistati.forEach((p,i) => {
-        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);">
-          <span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span>
-          <div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div>
-          <span style="font-size:13px;color:var(--green);font-weight:600;">×${p.totale}</span></div>`;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--green);font-weight:600;">×${p.totale}</span></div>`;
       });
       html += `</div>`;
     }
-
     if (s.top_consumati.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🔥 Più consumati</div>`;
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🔥 Più consumati</div>`;
       s.top_consumati.forEach((p,i) => {
-        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);">
-          <span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span>
-          <div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div>
-          <span style="font-size:13px;color:var(--amber);font-weight:600;">×${p.totale}</span></div>`;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--amber);font-weight:600;">×${p.totale}</span></div>`;
       });
       html += `</div>`;
     }
-
     if (!s.top_acquistati.length && !s.top_consumati.length) {
       html += `<div class="empty"><div class="empty-icon">📊</div><div>Nessun dato ancora.<br>Le statistiche si accumulano con l'uso!</div></div>`;
     }
-
     document.getElementById('stat-content').innerHTML = html;
   } catch(e) {
     document.getElementById('stat-content').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
@@ -1219,20 +1335,16 @@ function chiudiOCR() {
 }
 
 function preprocessCanvas(canvas) {
-  // Pre-elaborazione: scala 2x + contrasto alto + bianco/nero
   const w = canvas.width, h = canvas.height;
   const scaled = document.createElement('canvas');
   scaled.width = w * 2; scaled.height = h * 2;
   const sCtx = scaled.getContext('2d');
   sCtx.imageSmoothingEnabled = false;
   sCtx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
-
   const imgData = sCtx.getImageData(0, 0, scaled.width, scaled.height);
   const data = imgData.data;
   for (let i = 0; i < data.length; i += 4) {
-    // Luminanza
     const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-    // Contrasto alto + soglia
     const val = lum > 128 ? 255 : 0;
     data[i] = data[i+1] = data[i+2] = val;
   }
@@ -1243,30 +1355,22 @@ function preprocessCanvas(canvas) {
 async function scattaFotoOCR() {
   const video = document.getElementById('ocr-video');
   const canvas = document.getElementById('ocr-canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
   canvas.getContext('2d').drawImage(video, 0, 0);
   document.getElementById('ocr-status').textContent = '🔍 Elaborazione immagine...';
-
   try {
-    // Prova prima con immagine pre-elaborata, poi con originale
     const processed = preprocessCanvas(canvas);
     let text = '';
-
     const r1 = await Tesseract.recognize(processed, 'ita+eng', { logger: () => {},
       tessedit_char_whitelist: '0123456789/-.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz '
     });
     text = r1.data.text;
-
     let data = estraiDataScadenza(text);
-
-    // Se non trova con elaborata, prova con originale
     if (!data) {
       const r2 = await Tesseract.recognize(canvas, 'ita+eng', { logger: () => {} });
       text = r2.data.text;
       data = estraiDataScadenza(text);
     }
-
     if (data) {
       document.getElementById('conf-scadenza').value = data;
       chiudiOCR();
@@ -1274,7 +1378,6 @@ async function scattaFotoOCR() {
     } else {
       const testoLetto = text.replace(/\n/g, ' ').trim().substring(0, 100);
       document.getElementById('ocr-status').textContent = '⚠️ Data non rilevata automaticamente.';
-      // Mostra campo inserimento manuale
       document.getElementById('ocr-testo-letto').textContent = testoLetto ? `Testo letto: "${testoLetto}"` : '';
       document.getElementById('ocr-manuale').style.display = 'block';
     }
@@ -1297,105 +1400,36 @@ function confermaManualeOCR() {
 }
 
 function estraiDataLibera(input) {
-  // Permette inserimento libero dall'utente con qualsiasi separatore
   const t = input.trim().replace(/\s+/g, ' ');
   return estraiDataScadenza(t);
 }
 
 function estraiDataScadenza(testo) {
   if (!testo) return null;
-
-  // Pulizia testo — correggi caratteri OCR comuni
   let t = testo.toUpperCase()
-    .replace(/[Oo]/g, '0')
-    .replace(/[Il\|]/g, '1')
-    .replace(/[Ss]/g, '5')
-    .replace(/[Bb]/g, '8')
-    .replace(/\r/g, ' ')
-    .replace(/\n/g, ' ');
-
-  // Rimuovi prefissi comuni
+    .replace(/[Oo]/g, '0').replace(/[Il\|]/g, '1').replace(/[Ss]/g, '5')
+    .replace(/[Bb]/g, '8').replace(/\r/g, ' ').replace(/\n/g, ' ');
   t = t.replace(/\b(EXP|SCAD|TMC|BB|USE BY|BEST BY|CONSUMARE ENTRO|CONS\.?\s*ENT\.?|LOT|LOTTO|L\.?)\s*/g, ' ');
-
-  // ── PATTERN 1: DDMMYY tutto attaccato (6 cifre es. 090927)
   let m = t.match(/\b(\d{2})(\d{2})(\d{2})\b/);
-  if (m) {
-    const [, g, ms, aa] = m;
-    const a = '20' + aa;
-    const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g));
-    if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
-  }
-
-  // ── PATTERN 2: DDMMYYYY tutto attaccato (8 cifre es. 09092027)
+  if (m) { const [, g, ms, aa] = m; const a = '20' + aa; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
   m = t.match(/\b(\d{2})(\d{2})(\d{4})\b/);
-  if (m) {
-    const [, g, ms, a] = m;
-    const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g));
-    if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
-  }
-
-  // ── PATTERN 3: YYYYMMDD tutto attaccato (es. 20270909)
+  if (m) { const [, g, ms, a] = m; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
   m = t.match(/\b(202\d)(\d{2})(\d{2})\b/);
-  if (m) {
-    const [, a, ms, g] = m;
-    const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g));
-    if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
-  }
-
-  // ── PATTERN 4: DD/MM/YYYY o DD-MM-YYYY o DD.MM.YYYY o DD MM YYYY
+  if (m) { const [, a, ms, g] = m; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
   m = t.match(/\b(\d{1,2})[\s\/\-\.](\d{1,2})[\s\/\-\.](\d{2,4})\b/);
-  if (m) {
-    let [, g, ms, a] = m;
-    if (a.length === 2) a = '20' + a;
-    const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g));
-    if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d);
-  }
-
-  // ── PATTERN 5: YYYY/MM o YYYY-MM o YYYY MM (anno mese invertito)
+  if (m) { let [, g, ms, a] = m; if (a.length === 2) a = '20' + a; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
   m = t.match(/\b(202\d)[\s\/\-\.](\d{1,2})\b/);
-  if (m) {
-    const [, a, ms] = m;
-    const ultimoGiorno = new Date(parseInt(a), parseInt(ms), 0).getDate();
-    const d = new Date(parseInt(a), parseInt(ms)-1, ultimoGiorno);
-    if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
-  }
-
-  // ── PATTERN 6: MM/YYYY o MM-YYYY o MM.YYYY o MM YYYY (solo mese anno)
+  if (m) { const [, a, ms] = m; const ug = new Date(parseInt(a), parseInt(ms), 0).getDate(); const d = new Date(parseInt(a), parseInt(ms)-1, ug); if (isDataValida(d, ug, parseInt(ms))) return formatISO(d); }
   m = t.match(/\b(\d{1,2})[\s\/\-\.](202\d)\b/);
-  if (m) {
-    const [, ms, a] = m;
-    const ultimoGiorno = new Date(parseInt(a), parseInt(ms), 0).getDate();
-    const d = new Date(parseInt(a), parseInt(ms)-1, ultimoGiorno);
-    if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
-  }
-
-  // ── PATTERN 7: Solo anno+mese attaccati YYYYMM (es. 202709)
+  if (m) { const [, ms, a] = m; const ug = new Date(parseInt(a), parseInt(ms), 0).getDate(); const d = new Date(parseInt(a), parseInt(ms)-1, ug); if (isDataValida(d, ug, parseInt(ms))) return formatISO(d); }
   m = t.match(/\b(202\d)(0[1-9]|1[0-2])\b/);
-  if (m) {
-    const [, a, ms] = m;
-    const ultimoGiorno = new Date(parseInt(a), parseInt(ms), 0).getDate();
-    const d = new Date(parseInt(a), parseInt(ms)-1, ultimoGiorno);
-    if (isDataValida(d, ultimoGiorno, parseInt(ms))) return formatISO(d);
-  }
-
-  // ── PATTERN 8: mese testuale IT es. "GEN 2026", "09 GENNAIO 2026"
-  const mesiIT = {
-    GEN:1, FEB:2, MAR:3, APR:4, MAG:5, GIU:6, LUG:7, AGO:8, SET:9, OTT:10, NOV:11, DIC:12,
-    GENNAIO:1, FEBBRAIO:2, MARZO:3, APRILE:4, MAGGIO:5, GIUGNO:6,
-    LUGLIO:7, AGOSTO:8, SETTEMBRE:9, OTTOBRE:10, NOVEMBRE:11, DICEMBRE:12,
-    JAN:1, FEB2:2, MAR2:3, APR2:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV2:11, DEC:12
-  };
+  if (m) { const [, a, ms] = m; const ug = new Date(parseInt(a), parseInt(ms), 0).getDate(); const d = new Date(parseInt(a), parseInt(ms)-1, ug); if (isDataValida(d, ug, parseInt(ms))) return formatISO(d); }
+  const mesiIT = { GEN:1,FEB:2,MAR:3,APR:4,MAG:5,GIU:6,LUG:7,AGO:8,SET:9,OTT:10,NOV:11,DIC:12, GENNAIO:1,FEBBRAIO:2,MARZO:3,APRILE:4,MAGGIO:5,GIUGNO:6,LUGLIO:7,AGOSTO:8,SETTEMBRE:9,OTTOBRE:10,NOVEMBRE:11,DICEMBRE:12, JAN:1,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,DEC:12 };
   for (const [nome, num] of Object.entries(mesiIT)) {
     const re = new RegExp(`\\b(\\d{1,2})?\\s*${nome}\\s*(\\d{4}|\\d{2})\\b`);
     m = t.match(re);
-    if (m) {
-      let a = m[2]; if (a.length === 2) a = '20' + a;
-      const g = m[1] ? parseInt(m[1]) : new Date(parseInt(a), num, 0).getDate();
-      const d = new Date(parseInt(a), num-1, g);
-      if (isDataValida(d, g, num)) return formatISO(d);
-    }
+    if (m) { let a = m[2]; if (a.length === 2) a = '20' + a; const g = m[1] ? parseInt(m[1]) : new Date(parseInt(a), num, 0).getDate(); const d = new Date(parseInt(a), num-1, g); if (isDataValida(d, g, num)) return formatISO(d); }
   }
-
   return null;
 }
 
