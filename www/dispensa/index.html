@@ -1424,7 +1424,7 @@ function estraiDataScadenza(testo) {
   if (m) { const [, ms, a] = m; const ug = new Date(parseInt(a), parseInt(ms), 0).getDate(); const d = new Date(parseInt(a), parseInt(ms)-1, ug); if (isDataValida(d, ug, parseInt(ms))) return formatISO(d); }
   m = t.match(/\b(202\d)(0[1-9]|1[0-2])\b/);
   if (m) { const [, a, ms] = m; const ug = new Date(parseInt(a), parseInt(ms), 0).getDate(); const d = new Date(parseInt(a), parseInt(ms)-1, ug); if (isDataValida(d, ug, parseInt(ms))) return formatISO(d); }
-  const mesiIT = { GEN:1,FEB:2,MAR:3,APR:4,MAG:5,GIU:6,LUG:7,AGO:8,SET:9,OTT:10,NOV:11,DIC:12, GENNAIO:1,FEBBRAIO:2,MARZO:3,APRILE:4,MAGGIO:5,GIUGNO:6,LUGLIO:7,AGOSTO:8,SETTEMBRE:9,OTTOBRE:10,NOVEMBRE:11,DICEMBRE:12, JAN:1,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,DEC:12 };
+  const mesiIT = { GEN:1,FEB:2,MAR:3,APR:4,MAG:5,GIU:6,LUG:7,AGO:8,SET:9,OTT:10,NOV:11,DIC:12, GENNAIO:1,FEBBRAIO:2,MARZO:3,APRILE:4,MAGGIO:5,GIUGNO:6,LUGLIO:7,AGOSTO:8,SETTEMBRE:9,OTTOBRE:10,NOVEMBRE:11,DICEMBRE:12, JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12 };
   for (const [nome, num] of Object.entries(mesiIT)) {
     const re = new RegExp(`\\b(\\d{1,2})?\\s*${nome}\\s*(\\d{4}|\\d{2})\\b`);
     m = t.match(re);
