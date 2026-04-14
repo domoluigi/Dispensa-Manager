@@ -1,7 +1,6 @@
-ARG BUILD_FROM=python:3.11-alpine
-FROM $BUILD_FROM
+FROM python:3.11-alpine
 
-RUN apk add --no-cache python3 py3-pip py3-virtualenv
+RUN apk add --no-cache py3-pip py3-virtualenv
 
 WORKDIR /app
 COPY . /app/
