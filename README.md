@@ -1,6 +1,6 @@
 # 🛒 Dispensa Manager — Home Assistant Add-on
 
-[![Version](https://img.shields.io/badge/version-1.3.3-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
+[![Version](https://img.shields.io/badge/version-1.4.0-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HA](https://img.shields.io/badge/Home%20Assistant-Add--on-blue)](https://www.home-assistant.io/)
 
@@ -12,6 +12,7 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 
 - 📱 **PWA iPhone/Android** — installabile come app, funziona offline
 - 📦 **Scanner barcode** — scansiona i prodotti con la fotocamera (ZXing)
+- 📷 **Foto prodotto** — scatta o scegli una foto per i prodotti senza barcode noto
 - 🗄️ **Posizione automatica** — Frigo 🧊 / Dispensa 🗄️ / Freezer ❄️ suggeriti dalla categoria
 - 📅 **Scadenza suggerita** — calcolata automaticamente dalla categoria del prodotto
 - 🔍 **OCR scadenza** — scansiona la data di scadenza con la fotocamera (Tesseract.js), supporta DD/MM/YYYY, MM/YYYY e mesi in italiano
@@ -19,6 +20,7 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 🏷️ **Nutri-Score** — visualizzato nel dettaglio prodotto
 - 🗃️ **Cache locale** — i prodotti non trovati online vengono salvati per le scansioni future
 - 🔍 **Multi-database** — Open Food Facts + Open Products Facts + Open Beauty Facts
+- ⬜ **Sezione Esauriti** — i prodotti a zero sono separati dall'inventario attivo, con pallino grigio e tab collassabile
 - 🏠 **Sensori Home Assistant** — 3 sensori aggiornati in tempo reale
 - 📲 **Notifiche Telegram** — su scadenza, esaurimento scorte, aggiornamenti
 - 🛒 **Lista della spesa** — automatica quando un prodotto si esaurisce, con invio Telegram
@@ -184,11 +186,37 @@ La PWA è composta da 5 sezioni accessibili dalla barra in basso:
 
 | Schermata | Descrizione |
 |-----------|-------------|
-| 🏠 **Dispensa** | Lista prodotti con metriche (totale, in scadenza, esauriti) |
+| 🏠 **Dispensa** | Lista prodotti con metriche (in dispensa, in scadenza, esauriti) |
 | 📷 **Scansiona** | Scanner barcode con ricerca automatica su Open Food Facts |
 | 🛒 **Spesa** | Lista della spesa con spunta e invio Telegram |
 | 📊 **Statistiche** | Consumi, acquisti, top prodotti, prodotti per posizione |
 | ⚙️ **Impostazioni** | URL backend, token Cloudflare, alert scadenza, tema scuro |
+
+---
+
+## ⬜ Prodotti Esauriti
+
+I prodotti con quantità = 0 non vengono conteggiati nel totale e sono separati dall'inventario principale:
+
+- Appaiono in una **sezione collassabile "Esauriti"** in fondo alla lista, con **pallino grigio**
+- Il contatore **"In dispensa"** mostra solo i prodotti attivi (`quantita > 0`)
+- Toccando un esaurito si apre il dettaglio con un avviso visivo
+- Il tasto **+** accanto a ogni esaurito permette di rifornirlo rapidamente
+- Gli esauriti vengono aggiunti automaticamente alla **lista della spesa**
+- Il sensore HA `sensor.dispensa_totale_prodotti` conta solo i prodotti attivi
+
+---
+
+## 📷 Foto Prodotto
+
+Quando si scansiona un barcode non trovato su Open Food Facts, nella schermata di conferma appare una sezione **Foto prodotto**:
+
+1. Tocca l'area 📷 per aprire la fotocamera o la galleria
+2. Scatta o scegli una foto del prodotto
+3. La foto viene ridimensionata automaticamente (max 600px, JPEG) e salvata nel database
+4. La foto appare nella schermata dettaglio del prodotto
+
+> Per i prodotti trovati online, la foto viene recuperata automaticamente da Open Food Facts — la sezione non è visibile.
 
 ---
 
@@ -198,7 +226,7 @@ La PWA è composta da 5 sezioni accessibili dalla barra in basso:
 
 | Entità | Descrizione |
 |--------|-------------|
-| `sensor.dispensa_totale_prodotti` | Numero totale di prodotti |
+| `sensor.dispensa_totale_prodotti` | Prodotti attivi (`quantita > 0`) |
 | `sensor.dispensa_in_scadenza` | Prodotti in scadenza entro N giorni |
 | `sensor.dispensa_esauriti` | Prodotti con quantità zero |
 
@@ -224,7 +252,7 @@ type: entities
 title: 🛒 Dispensa
 entities:
   - entity: sensor.dispensa_totale_prodotti
-    name: Prodotti totali
+    name: In dispensa
     icon: mdi:package-variant
   - entity: sensor.dispensa_in_scadenza
     name: In scadenza
@@ -257,11 +285,9 @@ title: 📦 Lista Prodotti Dispensa
 **Sync sensori all'avvio di HA:**
 ```yaml
 alias: 🔄 Sync Dispensa all'avvio
-description: Aggiorna i sensori della dispensa quando HA si avvia
 trigger:
   - platform: homeassistant
     event: start
-condition: []
 action:
   - delay:
       seconds: 30
@@ -272,11 +298,9 @@ mode: single
 **Report mattutino su Telegram:**
 ```yaml
 alias: 🌅 Report dispensa mattutino
-description: Ogni mattina alle 8 invia il report dispensa su Telegram
 trigger:
   - platform: time
     at: "08:00:00"
-condition: []
 action:
   - action: rest_command.report_dispensa
 mode: single
@@ -310,7 +334,6 @@ trigger:
   - platform: numeric_state
     entity_id: sensor.dispensa_esauriti
     above: 0
-condition: []
 action:
   - action: notify.alexa_media_NOME_DISPOSITIVO
     data:
@@ -343,11 +366,9 @@ La schermata Statistiche mostra:
 - **Acquisti totali** — numero di prodotti acquistati nel tempo
 - **Consumi totali** — numero di prodotti consumati
 - **Acquisti questo mese** — acquisti nel mese corrente
-- **Prodotti per posizione** — quanti prodotti in Frigo, Dispensa, Freezer
+- **Prodotti per posizione** — quanti prodotti attivi in Frigo, Dispensa, Freezer
 - **Top 5 più acquistati** — prodotti acquistati più frequentemente
 - **Top 5 più consumati** — prodotti consumati più frequentemente
-
-> Le statistiche si accumulano automaticamente ad ogni aggiunta, consumo o eliminazione prodotto.
 
 ---
 
@@ -355,11 +376,12 @@ La schermata Statistiche mostra:
 
 | Metodo | Endpoint | Descrizione |
 |--------|----------|-------------|
-| GET | `/api/prodotti` | Lista tutti i prodotti |
+| GET | `/api/prodotti` | Lista tutti i prodotti (attivi + esauriti) |
 | POST | `/api/prodotti` | Aggiunge un prodotto |
 | PUT | `/api/prodotti/<id>` | Aggiorna un prodotto |
 | DELETE | `/api/prodotti/<id>` | Elimina un prodotto |
 | GET | `/api/prodotti/by-ean/<ean>` | Cerca prodotti duplicati per EAN |
+| GET | `/api/prodotti/esauriti` | Lista solo i prodotti esauriti (`quantita <= 0`) |
 | GET | `/api/barcode/<ean>` | Cerca un prodotto per EAN |
 | POST | `/api/barcode-cache` | Salva in cache locale |
 | DELETE | `/api/barcode-cache/<ean>` | Rimuove dalla cache |
@@ -376,7 +398,7 @@ La schermata Statistiche mostra:
 | GET | `/api/sync-ha` | Aggiorna sensori HA |
 | GET | `/api/config` | Configurazione pubblica (token CF) via ingress |
 | GET | `/api/test-telegram` | Test notifiche Telegram |
-| GET | `/api/health` | Stato del servizio |
+| GET | `/api/health` | Stato del servizio e versione |
 
 ---
 
@@ -386,7 +408,7 @@ L'add-on utilizza SQLite con le seguenti tabelle:
 
 | Tabella | Descrizione |
 |---------|-------------|
-| `prodotti` | Inventario prodotti con EAN, nutriments, posizione, scadenza |
+| `prodotti` | Inventario prodotti con EAN, nutriments, posizione, scadenza, immagine |
 | `barcode_cache` | Cache locale per prodotti non trovati online |
 | `lista_spesa` | Lista della spesa con stato completato |
 | `storico_movimenti` | Log acquisti, consumi ed eliminazioni per le statistiche |
@@ -410,6 +432,7 @@ Dispensa-Manager/
 │       ├── icon-192.png    # Icona app 192×192
 │       └── icon-512.png    # Icona app 512×512
 ├── repository.json         # Custom store HA
+├── CHANGELOG.md
 ├── .gitignore
 └── README.md
 ```
@@ -427,14 +450,22 @@ Dalla schermata di conferma prodotto, accanto al campo data di scadenza è prese
 
 **Formati riconosciuti:**
 - `DD/MM/YYYY`, `DD-MM-YYYY`, `DD.MM.YYYY`
-- `MM/YYYY` → imposta automaticamente l'ultimo giorno del mese (es. `07/2026` → `31/07/2026`)
+- `MM/YYYY` → imposta automaticamente l'ultimo giorno del mese
 - Mesi in italiano: `GEN 2026`, `GENNAIO 2026`, ecc.
-
-> **Nota:** La prima volta Tesseract.js scarica il modello OCR (~5MB). Le volte successive è immediato. Funziona meglio su testi stampati chiari e con buona illuminazione.
 
 ---
 
 ## 📋 Changelog
+
+### v1.4.0 — 2026-04-14
+
+- 📷 **Foto prodotto**: quando il barcode non viene trovato su Open Food Facts, nella schermata di conferma appare una sezione per scattare o scegliere una foto dalla galleria. La foto viene ridimensionata (max 600px, JPEG 82%) e salvata nel database.
+- ⬜ **Tab Esauriti separato**: i prodotti con quantità = 0 appaiono in una sezione collassabile "Esauriti" in fondo alla lista, con pallino grigio. Non sono più mescolati all'inventario principale.
+- 📊 Il contatore **"In dispensa"** esclude i prodotti esauriti (`quantita > 0` only).
+- 🏠 Il sensore HA `sensor.dispensa_totale_prodotti` conta solo i prodotti attivi.
+- 🔗 Nuovo endpoint `GET /api/prodotti/esauriti` per recupero separato.
+- 📦 Le statistiche per posizione contano solo prodotti attivi.
+- 📬 Il report Telegram mostra separatamente attivi e esauriti.
 
 ### v1.3.3
 - ✂️ `pwa_url` accetta solo la base URL (es. `http://192.168.1.5:8123`), il path `/local/dispensa/index.html` è aggiunto automaticamente
@@ -454,36 +485,22 @@ Dalla schermata di conferma prodotto, accanto al campo data di scadenza è prese
 
 ### v1.2.0
 - 🚇 Ingress HA abilitato (accesso HTTPS nativo senza configurazione extra)
-- 🏠 Icona panel HA `mdi:fridge-outline`
 
 ### v1.1.0
 - 🔍 Endpoint `/api/prodotti/by-ean/<ean>` per rilevare duplicati
-- 🔔 Endpoint `/api/alerts` — alert dettagliati su Telegram (scadenze ed esauriti)
+- 🔔 Endpoint `/api/alerts` — alert dettagliati su Telegram
 - 📥 Endpoint `/api/export-csv` — esporta inventario in CSV
 
 ### v1.0.2
 - 🔍 OCR scadenza automatica con fotocamera (Tesseract.js)
-- 📅 Supporto formato MM/YYYY → ultimo giorno del mese automatico
-- 🗓️ Riconoscimento mesi in italiano (GEN, FEB, MAR, ecc.)
+- 📅 Supporto formato MM/YYYY, mesi in italiano
 
 ### v1.0.1
-- 📊 Statistiche consumi (acquisti, consumi, top prodotti, per posizione)
-- 🛒 Lista della spesa automatica con invio Telegram
-- 🍽️ Valori nutrizionali e Nutri-Score da Open Food Facts
-- 🗃️ Cache barcode locale per prodotti non trovati online
-- 🔔 Integrazione Alexa Media Player per annunci vocali
-- 📍 Posizione automatica (Frigo/Dispensa/Freezer) dalla categoria
-- 📅 Scadenza suggerita automaticamente dalla categoria
-- 🔍 Multi-database (Food + Products + Beauty Facts)
-- 🏷️ Supporto più chat ID Telegram separati da virgola
-- 🗑️ Endpoint pulizia cache barcode
+- 📊 Statistiche consumi, lista della spesa, valori nutrizionali, Nutri-Score
+- 🗃️ Cache barcode locale, integrazione Alexa, posizione automatica
 
 ### v1.0.0
-- 🎉 Release iniziale
-- Scanner barcode con ZXing
-- Integrazione Open Food Facts
-- Sensori Home Assistant
-- Notifiche Telegram base
+- 🎉 Release iniziale — scanner barcode, Open Food Facts, sensori HA, Telegram
 
 ---
 
