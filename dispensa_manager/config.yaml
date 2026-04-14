@@ -1,5 +1,5 @@
 name: "Dispensa Manager"
-version: "1.4.3"
+version: "1.4.4"
 slug: "dispensa_manager"
 description: "Gestione dispensa con scanner barcode, OCR scadenze e notifiche Telegram"
 arch:
@@ -10,6 +10,10 @@ boot: auto
 ingress: true
 ingress_port: 5000
 webui: "http://[HOST]:[PORT:5000]/"
+ports:
+  5000/tcp: 5000
+ports_description:
+  5000/tcp: "Flask API backend"
 map:
   - config:rw
   - data:rw
