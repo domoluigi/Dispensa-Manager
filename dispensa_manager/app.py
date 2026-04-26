@@ -176,9 +176,7 @@ def aggiorna_sensori_ha():
     opts = get_options()
     giorni_soglia = opts.get("giorni_alert_scadenza", 3)
 
-    # Attivi (quantita > 0) per totale e in_scadenza
     attivi = [p for p in tutti if p["quantita"] > 0]
-    # Esauriti (quantita <= 0)
     esauriti_list = [p for p in tutti if p["quantita"] <= 0]
 
     in_scadenza = []
@@ -191,7 +189,6 @@ def aggiorna_sensori_ha():
             except:
                 pass
 
-    # Aggiungi esauriti alla lista spesa
     for p in esauriti_list:
         aggiungi_a_lista_spesa(p["nome"], p["ean"], p["marca"] or "")
 
@@ -199,7 +196,6 @@ def aggiorna_sensori_ha():
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json"
     }
-    # totale = solo prodotti attivi
     stati = {
         "sensor.dispensa_totale_prodotti": {
             "state": len(attivi),
@@ -239,7 +235,7 @@ def invia_notifica_azione(testo):
 
 @app.route("/api/barcode/<ean>", methods=["GET"])
 def cerca_barcode(ean):
-    headers = {"User-Agent": "DispensaManager/1.4.0"}
+    headers = {"User-Agent": "DispensaManager/1.4.6"}
     conn = get_db()
     cached = conn.execute("SELECT * FROM barcode_cache WHERE ean = ?", (ean,)).fetchone()
     conn.close()
@@ -304,7 +300,6 @@ def prodotti_by_ean(ean):
 
 @app.route("/api/prodotti/esauriti", methods=["GET"])
 def lista_esauriti():
-    """Restituisce solo i prodotti con quantita <= 0 (archivio esauriti)."""
     conn = get_db()
     prodotti = conn.execute(
         "SELECT * FROM prodotti WHERE quantita <= 0 ORDER BY nome ASC"
@@ -441,11 +436,9 @@ def aggiungi_prodotto():
     data = request.json
     conn = get_db()
 
-    # Gestione immagine: se è un data-URL base64 la salviamo direttamente
     immagine_url = data.get("immagine_url", "")
-    # Tronchiamo le immagini base64 molto grandi a 500KB per sicurezza DB
     if immagine_url and immagine_url.startswith("data:") and len(immagine_url) > 600000:
-        immagine_url = ""  # scarta immagini troppo grandi
+        immagine_url = ""
 
     conn.execute("""
         INSERT INTO prodotti (ean, nome, marca, categoria, immagine_url, quantita, scadenza, note, nutriments, nutriscore, posizione)
@@ -541,7 +534,7 @@ def get_public_config():
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "version": "1.4.0", "timestamp": datetime.now().isoformat()})
+    return jsonify({"status": "ok", "version": "1.4.6", "timestamp": datetime.now().isoformat()})
 
 @app.route("/api/test-telegram", methods=["GET"])
 def test_telegram():
@@ -751,5 +744,5 @@ def sync_ha():
 if __name__ == "__main__":
     sync_frontend()
     init_db()
-    print("Dispensa Manager v1.4.0 avviato su porta 5000")
+    print("Dispensa Manager v1.4.6 avviato su porta 5000", flush=True)
     app.run(host="0.0.0.0", port=5000, debug=False)
