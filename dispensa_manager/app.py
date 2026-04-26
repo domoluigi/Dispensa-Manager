@@ -10,6 +10,37 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, make_response, redirect
 from flask_cors import CORS
 
+# ---------------------------------------------------------------------------
+# Sync automatico dei file frontend: ad ogni avvio l'add-on scarica i file
+# da GitHub Raw e li copia in /config/www/dispensa/ solo se sono cambiati.
+# Questo garantisce che ogni aggiornamento del repo si rifletta subito
+# sull'interfaccia web senza intervento manuale.
+# ---------------------------------------------------------------------------
+_GITHUB_RAW = 'https://raw.githubusercontent.com/domoluigi/Dispensa-Manager/main/www/dispensa/'
+_FRONTEND_FILES = ['index.html', 'manifest.json', 'sw.js', 'icon-192.png', 'icon-512.png']
+_WWW_DST = '/config/www/dispensa'
+
+def sync_frontend():
+    os.makedirs(_WWW_DST, exist_ok=True)
+    for fname in _FRONTEND_FILES:
+        try:
+            r = requests.get(_GITHUB_RAW + fname, timeout=15)
+            if r.status_code != 200:
+                print(f"[sync] {fname}: HTTP {r.status_code}, saltato", flush=True)
+                continue
+            fpath = os.path.join(_WWW_DST, fname)
+            existing = open(fpath, 'rb').read() if os.path.exists(fpath) else None
+            if existing != r.content:
+                with open(fpath, 'wb') as f:
+                    f.write(r.content)
+                print(f"[sync] {fname} aggiornato", flush=True)
+            else:
+                print(f"[sync] {fname} già aggiornato", flush=True)
+        except Exception as e:
+            print(f"[sync] {fname} errore: {e}", flush=True)
+
+# ---------------------------------------------------------------------------
+
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type", "x-jarvis-token"], "methods": ["GET","POST","PUT","DELETE","OPTIONS"]}})
 
@@ -595,7 +626,7 @@ def export_csv():
         ])
 
     output.seek(0)
-    response = make_response('\ufeff' + output.getvalue())
+    response = make_response('﻿' + output.getvalue())
     response.headers['Content-Type'] = 'text/csv; charset=utf-8'
     response.headers['Content-Disposition'] = f'attachment; filename=dispensa_{datetime.now().strftime("%Y%m%d")}.csv'
     return response
@@ -718,6 +749,7 @@ def sync_ha():
         return jsonify({"ok": False, "errore": str(e)}), 500
 
 if __name__ == "__main__":
+    sync_frontend()
     init_db()
     print("Dispensa Manager v1.4.0 avviato su porta 5000")
     app.run(host="0.0.0.0", port=5000, debug=False)
