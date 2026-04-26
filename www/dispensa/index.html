@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
+<meta name="app-version" content="1.4.6">
 <title>Dispensa</title>
 <link rel="manifest" href="/local/dispensa/manifest.json">
 <link rel="apple-touch-icon" href="/local/dispensa/icon-192.png">
@@ -209,9 +210,30 @@
   .toggle.on { background: var(--green); }
   .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: white; top: 3px; left: 3px; transition: transform 0.2s; }
   .toggle.on::after { transform: translateX(18px); }
+
+  /* Update banner */
+  #update-banner {
+    display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: #BA7517; color: #fff;
+    align-items: center; gap: 10px; font-size: 14px; font-weight: 500;
+    padding: calc(var(--safe-top) + 10px) 16px 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  #update-banner.visible { display: flex; }
+  #update-banner button {
+    margin-left: auto; background: rgba(255,255,255,0.25); border: none;
+    color: #fff; padding: 6px 14px; border-radius: 14px; font-size: 13px;
+    font-weight: 600; cursor: pointer; flex-shrink: 0; white-space: nowrap;
+  }
 </style>
 </head>
 <body>
+
+<!-- Update banner -->
+<div id="update-banner">
+  <span id="update-msg">🔄 Aggiornamento disponibile</span>
+  <button onclick="applicaAggiornamento()">Aggiorna ora</button>
+</div>
 
 <!-- SCREEN: Inventario -->
 <div class="screen active" id="screen-inventario">
@@ -569,8 +591,78 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
-<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js">
+// ---- Controllo aggiornamenti ----
+const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0';
+
+async function checkForUpdates() {
+  try {
+    const r = await fetch(API_BASE() + '/api/health', { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.version && data.version !== APP_VERSION) {
+      document.getElementById('update-msg').textContent = `🔄 Versione ${data.version} disponibile`;
+      document.getElementById('update-banner').classList.add('visible');
+    }
+  } catch (e) {}
+}
+
+async function applicaAggiornamento() {
+  document.getElementById('update-msg').textContent = '⏳ Aggiornamento in corso...';
+  document.querySelector('#update-banner button').disabled = true;
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  }
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+  }
+  location.reload(true);
+}
+
+// Controlla all avvio, ogni 5 minuti, e quando l app torna in primo piano
+checkForUpdates();
+setInterval(checkForUpdates, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdates(); });
+// ---- Fine controllo aggiornamenti ----
+</script>
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js">
+// ---- Controllo aggiornamenti ----
+const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0';
+
+async function checkForUpdates() {
+  try {
+    const r = await fetch(API_BASE() + '/api/health', { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.version && data.version !== APP_VERSION) {
+      document.getElementById('update-msg').textContent = `🔄 Versione ${data.version} disponibile`;
+      document.getElementById('update-banner').classList.add('visible');
+    }
+  } catch (e) {}
+}
+
+async function applicaAggiornamento() {
+  document.getElementById('update-msg').textContent = '⏳ Aggiornamento in corso...';
+  document.querySelector('#update-banner button').disabled = true;
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  }
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+  }
+  location.reload(true);
+}
+
+// Controlla all avvio, ogni 5 minuti, e quando l app torna in primo piano
+checkForUpdates();
+setInterval(checkForUpdates, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdates(); });
+// ---- Fine controllo aggiornamenti ----
+</script>
 <script>
 const API_BASE = () => localStorage.getItem('dispensa_url') || 'https://dispensa-api.hmdomowizards.it';
 const INGRESS_BASE = '/api/hassio_ingress/iU3KAIJIup-On5d1BHN_AuyoEAUM8ey4-5zabeXWn9k';
@@ -1486,6 +1578,41 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/local/dispensa/sw.js')
     .catch(err => console.warn('SW non registrato:', err));
 }
+
+// ---- Controllo aggiornamenti ----
+const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0';
+
+async function checkForUpdates() {
+  try {
+    const r = await fetch(API_BASE() + '/api/health', { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.version && data.version !== APP_VERSION) {
+      document.getElementById('update-msg').textContent = `🔄 Versione ${data.version} disponibile`;
+      document.getElementById('update-banner').classList.add('visible');
+    }
+  } catch (e) {}
+}
+
+async function applicaAggiornamento() {
+  document.getElementById('update-msg').textContent = '⏳ Aggiornamento in corso...';
+  document.querySelector('#update-banner button').disabled = true;
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  }
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+  }
+  location.reload(true);
+}
+
+// Controlla all avvio, ogni 5 minuti, e quando l app torna in primo piano
+checkForUpdates();
+setInterval(checkForUpdates, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdates(); });
+// ---- Fine controllo aggiornamenti ----
 </script>
 </body>
 </html>
