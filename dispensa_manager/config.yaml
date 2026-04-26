@@ -1,5 +1,5 @@
 name: "Dispensa Manager"
-version: "1.4.6"
+version: "1.4.7"
 slug: "dispensa_manager"
 description: "Gestione dispensa con scanner barcode, OCR scadenze e notifiche Telegram"
 arch:
