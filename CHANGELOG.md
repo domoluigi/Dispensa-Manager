@@ -5,6 +5,13 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [1.4.6] — 2026-04-26
+
+### Aggiunto
+- **Filtro "Scaduti"** nella filter-row dell'inventario: nuovo chip 🔴 che mostra solo i prodotti con data di scadenza già passata (giorni < 0), distinto dal filtro "In scadenza" che mostra i prodotti in scadenza entro la soglia configurata.
+
+---
+
 ## [1.4.5] — 2026-04-26
 
 ### Aggiunto
