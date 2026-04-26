@@ -5,6 +5,15 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [1.4.7] — 2026-04-26
+
+### Aggiunto
+- **Banner aggiornamento disponibile**: quando il backend viene aggiornato a una versione superiore a quella caricata sul telefono, appare automaticamente un banner arancione in cima all'app con il numero della nuova versione.
+- **Pulsante "Aggiorna ora"**: svuota tutte le cache del service worker, deregistra il SW e forza il ricaricamento completo dell'app dalla rete. Garantisce che la versione più recente venga caricata immediatamente senza dover chiudere e riaprire manualmente l'app.
+- Il controllo versione avviene all'avvio, ogni 5 minuti in background e ogni volta che l'app torna in primo piano (`visibilitychange`).
+
+---
+
 ## [1.4.6] — 2026-04-26
 
 ### Aggiunto
