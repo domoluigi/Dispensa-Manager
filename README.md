@@ -1,6 +1,6 @@
 # 🛒 Dispensa Manager — Home Assistant Add-on
 
-[![Version](https://img.shields.io/badge/version-1.4.0-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
+[![Version](https://img.shields.io/badge/version-1.4.6-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HA](https://img.shields.io/badge/Home%20Assistant-Add--on-blue)](https://www.home-assistant.io/)
 
@@ -21,6 +21,9 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 🗃️ **Cache locale** — i prodotti non trovati online vengono salvati per le scansioni future
 - 🔍 **Multi-database** — Open Food Facts + Open Products Facts + Open Beauty Facts
 - ⬜ **Sezione Esauriti** — i prodotti a zero sono separati dall'inventario attivo, con pallino grigio e tab collassabile
+- ⏰ **Filtro In scadenza** — mostra solo i prodotti in scadenza entro la soglia configurata
+- 🔴 **Filtro Scaduti** — mostra solo i prodotti con data di scadenza già passata
+- 🔄 **Sync automatico frontend** — ad ogni avvio/aggiornamento dell'add-on i file della PWA si aggiornano automaticamente, senza intervento manuale
 - 🏠 **Sensori Home Assistant** — 3 sensori aggiornati in tempo reale
 - 📲 **Notifiche Telegram** — su scadenza, esaurimento scorte, aggiornamenti
 - 🛒 **Lista della spesa** — automatica quando un prodotto si esaurisce, con invio Telegram
@@ -36,7 +39,6 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 ## 📋 Requisiti
 
 - Home Assistant OS o Supervised
-- Add-on **File Editor** o **Studio Code Server** (per copiare i file PWA)
 - Bot Telegram (opzionale, per le notifiche)
 - Alexa Media Player (opzionale, per gli annunci vocali)
 
@@ -58,9 +60,9 @@ Clicca **Aggiungi** → **Chiudi**.
 
 Cerca **Dispensa Manager** nell'Add-on Store → **Installa**.
 
-### 3. Copia la PWA
+### 3. Avvia l'add-on
 
-Copia la cartella `www/dispensa/` in `/config/www/dispensa/` sul tuo Home Assistant.
+Clicca **Avvia**: i file della PWA vengono copiati automaticamente in `/config/www/dispensa/` al primo avvio. Non è necessario alcun intervento manuale. Ad ogni aggiornamento dell'add-on, i file si aggiornano da soli.
 
 ### 4. Configura l'add-on
 
@@ -83,11 +85,7 @@ pwa_url: "http://IP_HOME_ASSISTANT:8123"  # opzionale, solo base URL — vedi so
 >
 > Se configurato, il pulsante **"Apri interfaccia utente web"** nell'add-on aprirà direttamente la PWA. Non viene mai incluso nel codice sorgente per preservare la privacy.
 
-### 5. Avvia l'add-on
-
-Clicca **Avvia** e verifica i log.
-
-### 6. Accedi alla PWA
+### 5. Accedi alla PWA
 
 **Opzione A — dal pannello HA:**
 Configura `pwa_url` nelle opzioni dell'add-on (passaggio 4), poi clicca **"Apri interfaccia utente web"** nella pagina dell'add-on.
@@ -192,6 +190,19 @@ La PWA è composta da 5 sezioni accessibili dalla barra in basso:
 | 📊 **Statistiche** | Consumi, acquisti, top prodotti, prodotti per posizione |
 | ⚙️ **Impostazioni** | URL backend, token Cloudflare, alert scadenza, tema scuro |
 
+### Filtri inventario
+
+Nella schermata Dispensa sono disponibili i seguenti filtri rapidi:
+
+| Filtro | Descrizione |
+|--------|-------------|
+| **Tutti** | Tutti i prodotti attivi |
+| ⏰ **In scadenza** | Prodotti che scadono entro la soglia configurata (default 3 giorni) |
+| 🔴 **Scaduti** | Prodotti con data di scadenza già passata |
+| 🧊 **Frigo** | Solo prodotti in posizione Frigo |
+| ❄️ **Freezer** | Solo prodotti in posizione Freezer |
+| 🗄️ **Dispensa** | Solo prodotti in posizione Dispensa |
+
 ---
 
 ## ⬜ Prodotti Esauriti
@@ -217,6 +228,17 @@ Quando si scansiona un barcode non trovato su Open Food Facts, nella schermata d
 4. La foto appare nella schermata dettaglio del prodotto
 
 > Per i prodotti trovati online, la foto viene recuperata automaticamente da Open Food Facts — la sezione non è visibile.
+
+---
+
+## 🔄 Aggiornamenti automatici della PWA
+
+Dalla versione **1.4.5**, i file della PWA (`index.html`, `manifest.json`, `sw.js`, icone) vengono gestiti completamente dall'add-on:
+
+- Ad ogni avvio, `app.py` scarica i file aggiornati da GitHub e li copia in `/config/www/dispensa/`
+- I file vengono aggiornati solo se il contenuto è effettivamente cambiato
+- Non è più necessario copiare manualmente nulla dopo un aggiornamento
+- Il service worker usa strategia **network-first** per `index.html`: ogni apertura carica sempre la versione più recente dal server, con cache usata solo come fallback offline
 
 ---
 
@@ -422,12 +444,12 @@ Dispensa-Manager/
 ├── dispensa_manager/       # Add-on HAOS
 │   ├── Dockerfile
 │   ├── config.yaml
-│   ├── app.py              # Backend Flask
+│   ├── app.py              # Backend Flask (include sync automatico PWA)
 │   └── requirements.txt
 ├── www/
 │   └── dispensa/
 │       ├── index.html      # PWA frontend
-│       ├── sw.js           # Service Worker (offline + cache)
+│       ├── sw.js           # Service Worker (network-first per index.html)
 │       ├── manifest.json   # Web App Manifest (installazione PWA)
 │       ├── icon-192.png    # Icona app 192×192
 │       └── icon-512.png    # Icona app 512×512
@@ -456,6 +478,15 @@ Dalla schermata di conferma prodotto, accanto al campo data di scadenza è prese
 ---
 
 ## 📋 Changelog
+
+### v1.4.6 — 2026-04-26
+
+- 🔴 **Filtro Scaduti**: nuovo chip nella filter-row dell'inventario che mostra solo i prodotti con data di scadenza già passata, distinto dal filtro "In scadenza" (prodotti ancora in scadenza entro la soglia).
+
+### v1.4.5 — 2026-04-26
+
+- 🔄 **Sync automatico frontend**: ad ogni avvio dell'add-on, i file della PWA vengono scaricati da GitHub e copiati automaticamente in `/config/www/dispensa/`. Non è più necessario copiare manualmente nulla dopo un aggiornamento.
+- 🛠️ **Fix Service Worker**: strategia network-first per `index.html` — ogni apertura carica sempre la versione aggiornata dal server, eliminando il problema di cache stale dopo gli aggiornamenti.
 
 ### v1.4.0 — 2026-04-14
 
