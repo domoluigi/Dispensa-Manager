@@ -230,6 +230,7 @@
     <div class="filter-row">
       <div class="chip active" data-filtro="tutti" onclick="setFiltro('tutti')">Tutti</div>
       <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
+      <div class="chip" data-filtro="scaduti" onclick="setFiltro('scaduti')">🔴 Scaduti</div>
       <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧊 Frigo</div>
       <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Freezer</div>
       <div class="chip" data-filtro="dispensa" onclick="setFiltro('dispensa')">🗄️ Dispensa</div>
@@ -690,6 +691,13 @@ function applicaFiltroSort() {
       if (!p.scadenza) return false;
       const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000);
       return gg >= 0 && gg <= giorniAlert;
+    });
+    esauriti = [];
+  } else if (filtroAttivo === 'scaduti') {
+    attivi = attivi.filter(p => {
+      if (!p.scadenza) return false;
+      const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000);
+      return gg < 0;
     });
     esauriti = [];
   } else if (filtroAttivo === 'frigo') {
