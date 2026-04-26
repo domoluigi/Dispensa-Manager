@@ -5,6 +5,17 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [1.4.5] — 2026-04-26
+
+### Aggiunto
+- **Sync automatico frontend**: ad ogni avvio dell'add-on, `app.py` scarica automaticamente i file dell'interfaccia (`index.html`, `manifest.json`, `sw.js`, icone) da GitHub Raw e li copia in `/config/www/dispensa/`, aggiornando solo i file effettivamente cambiati. Elimina la necessità di copiare manualmente i file dopo ogni aggiornamento.
+
+### Corretto
+- **Service Worker — strategia network-first per `index.html`**: il SW non mette più in cache statica la pagina principale. Ogni apertura dell'app scarica sempre la versione aggiornata dal server, con la cache usata solo come fallback offline. Risolve il problema di versioni stale dopo gli aggiornamenti.
+- Versione cache SW aggiornata da `dispensa-v2` a `dispensa-v3` per forzare il clear della vecchia cache sui dispositivi già installati.
+
+---
+
 ## [1.4.0] — 2026-04-14
 
 ### Aggiunto
