@@ -1,7 +1,7 @@
-const CACHE = 'dispensa-v2';
+const CACHE = 'dispensa-v3';
+
+// Solo librerie CDN con versione fissa nell'URL — queste non cambiano mai
 const STATIC_ASSETS = [
-  '/local/dispensa/',
-  '/local/dispensa/index.html',
   'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
   'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js',
 ];
@@ -9,7 +9,6 @@ const STATIC_ASSETS = [
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c => {
-      // addAll with individual try/catch so CDN failures don't break the SW
       return Promise.allSettled(STATIC_ASSETS.map(url => c.add(url).catch(() => {})));
     })
   );
@@ -28,7 +27,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // API calls: network first, cache fallback (per uso offline)
+  // API GET prodotti: network first, cache fallback offline
   if (url.includes('/api/prodotti') && e.request.method === 'GET') {
     e.respondWith(
       fetch(e.request)
@@ -42,12 +41,26 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Altre API: network only (scritture non vanno messe in cache)
+  // Altre API: network only (scritture non in cache)
   if (url.includes('/api/')) {
     return;
   }
 
-  // Asset statici: cache first, poi rete
+  // index.html e root dispensa: network first — sempre aggiornato, cache solo offline
+  if (url.includes('index.html') || url.includes('/local/dispensa/')) {
+    e.respondWith(
+      fetch(e.request)
+        .then(r => {
+          const clone = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return r;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // CDN libraries con versione fissa: cache first (non cambiano mai)
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request))
   );
