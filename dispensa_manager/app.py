@@ -235,7 +235,7 @@ def invia_notifica_azione(testo):
 
 @app.route("/api/barcode/<ean>", methods=["GET"])
 def cerca_barcode(ean):
-    headers = {"User-Agent": "DispensaManager/1.4.6"}
+    headers = {"User-Agent": "DispensaManager/1.4.7"}
     conn = get_db()
     cached = conn.execute("SELECT * FROM barcode_cache WHERE ean = ?", (ean,)).fetchone()
     conn.close()
@@ -534,7 +534,7 @@ def get_public_config():
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "version": "1.4.6", "timestamp": datetime.now().isoformat()})
+    return jsonify({"status": "ok", "version": "1.4.7", "timestamp": datetime.now().isoformat()})
 
 @app.route("/api/test-telegram", methods=["GET"])
 def test_telegram():
@@ -744,5 +744,5 @@ def sync_ha():
 if __name__ == "__main__":
     sync_frontend()
     init_db()
-    print("Dispensa Manager v1.4.6 avviato su porta 5000", flush=True)
+    print("Dispensa Manager v1.4.7 avviato su porta 5000", flush=True)
     app.run(host="0.0.0.0", port=5000, debug=False)
