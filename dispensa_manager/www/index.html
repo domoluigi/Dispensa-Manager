@@ -7,7 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
-<meta name="app-version" content="1.5.4">
+<meta name="app-version" content="1.5.5">
+<meta name="cf-token" content="">
+<meta name="cf-url" content="">
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -658,10 +660,10 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 // ---- Fine controllo aggiornamenti ----
 </script>
 <script>
-const API_BASE = () => window.location.pathname.replace(/\/+$/g, '');
+const API_BASE = () => { const u = document.querySelector('meta[name="cf-url"]')?.content || ''; return u || window.location.pathname.replace(/\/+$/g, ''); };
 
 
-function getCfToken() { return ''; }
+function getCfToken() { return document.querySelector('meta[name="cf-token"]')?.content || ''; }
 
 function apiFetch(url, opts = {}) {
   const token = getCfToken();
