@@ -1,4 +1,4 @@
-﻿import csv
+﻿﻿import csv
 import io
 import json
 import os
@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_cors import CORS
 
-APP_VERSION = "1.5.4"
+APP_VERSION = "1.5.5"
 DB_PATH = "/config/dispensa.db"
 OPTIONS_PATH = "/data/options.json"
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
@@ -39,6 +39,8 @@ def get_options():
         "telegram_chat_id": "",
         "giorni_alert_scadenza": 3,
         "soglia_scorte_minime": 1,
+        "cloudflare_url": "",
+        "cloudflare_token": "",
     }
 
 app = Flask(__name__)
@@ -56,9 +58,21 @@ def after_request(response):
 # ---------------------------------------------------------------------------
 @app.route('/')
 def index():
-    resp = send_from_directory(WWW_DIR, 'index.html')
-    resp.headers['Cache-Control'] = 'no-cache'
-    return resp
+    opts = get_options()
+    cf_token = opts.get('cloudflare_token', '')
+    cf_url = opts.get('cloudflare_url', '').rstrip('/')
+    try:
+        with open(os.path.join(WWW_DIR, 'index.html'), 'r', encoding='utf-8') as fh:
+            html = fh.read()
+        html = html.replace('<meta name="cf-token" content="">', '<meta name="cf-token" content="' + cf_token + '">')
+        html = html.replace('<meta name="cf-url" content="">', '<meta name="cf-url" content="' + cf_url + '">')
+        resp = make_response(html)
+        resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+        resp.headers['Cache-Control'] = 'no-cache'
+        return resp
+    except Exception as e:
+        print(f'Errore index: {e}')
+        return send_from_directory(WWW_DIR, 'index.html')
 
 @app.route('/sw.js')
 def service_worker():
