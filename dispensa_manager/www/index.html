@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
-<meta name="app-version" content="1.5.3">
+<meta name="app-version" content="1.5.4">
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -306,7 +306,9 @@
       <div class="scan-overlay"><div class="scan-frame"><span></span><div class="scan-line"></div></div></div>
     </div>
     <div style="margin-top: 16px; text-align: center; font-size: 14px; color: var(--muted);" id="scan-status">Inquadra il barcode del prodotto</div>
+    <input type="file" id="barcode-file-input" accept="image/*" capture="environment" style="display:none" onchange="scansionaFoto(this)">
     <div style="margin-top: 20px;">
+      <button id="scan-foto-btn" class="btn btn-primary" style="display:none;margin-bottom:10px;" onclick="avviaFotoScan()">Scatta foto barcode</button>
       <button class="btn btn-secondary" onclick="inserisciManuale()">Inserisci manualmente</button>
     </div>
   </div>
@@ -510,7 +512,7 @@
       <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">Dati</div>
       <button class="btn btn-secondary" onclick="esportaCSV()">📥 Esporta inventario CSV</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.5.3</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.5.4</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -1098,6 +1100,17 @@ async function eliminaProdotto(id) {
 
 function avviaScanner() {
   if (codeReader) return;
+  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (!hasCamera) {
+  document.getElementById('video-container').style.display = 'none';
+  document.getElementById('scan-foto-btn').style.display = 'block';
+  document.getElementById('scan-status').textContent = scanMode === 'search'
+    ? 'Scatta una foto del barcode per cercarlo'
+    : 'Scatta una foto del barcode per aggiungerlo';
+    return;
+  }
+  document.getElementById('video-container').style.display = '';
+  document.getElementById('scan-foto-btn').style.display = 'none';
   document.getElementById('scan-status').textContent = 'Avvio fotocamera...';
   codeReader = new ZXing.BrowserMultiFormatReader();
   codeReader.decodeFromVideoDevice(null, 'video', async (result, err) => {
@@ -1117,6 +1130,36 @@ function fermaScanner() {
   if (codeReader) { codeReader.reset(); codeReader = null; }
   const video = document.getElementById('video');
   if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+  document.getElementById('video-container').style.display = '';
+  document.getElementById('scan-foto-btn').style.display = 'none';
+}
+
+function avviaFotoScan() {
+  document.getElementById('barcode-file-input').click();
+}
+
+async function scansionaFoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const btn = document.getElementById('scan-foto-btn');
+  const status = document.getElementById('scan-status');
+  status.textContent = 'Analisi barcode in corso...';
+  btn.disabled = true;
+  const imgUrl = URL.createObjectURL(file);
+  try {
+    const reader = new ZXing.BrowserMultiFormatReader();
+    const result = await reader.decodeFromImageUrl(imgUrl);
+    status.textContent = 'Codice rilevato!';
+    if (scanMode === 'search') { cercaNellaDispensa(result.getText()); }
+    else { await cercaProdotto(result.getText()); }
+  } catch(e) {
+    status.textContent = 'Barcode non riconosciuto. Usa una foto nitida e ben illuminata.';
+    btn.disabled = false;
+    toast('Barcode non riconosciuto, riprova');
+  } finally {
+    URL.revokeObjectURL(imgUrl);
+  }
 }
 
 async function cercaProdotto(ean) {
