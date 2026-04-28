@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -7,10 +7,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
-<meta name="app-version" content="1.4.6">
+<meta name="app-version" content="1.5.0">
 <title>Dispensa</title>
-<link rel="manifest" href="/local/dispensa/manifest.json">
-<link rel="apple-touch-icon" href="/local/dispensa/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -179,7 +179,7 @@
   .spesa-item:last-child { border-bottom: none; }
   .spesa-check { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.15s; }
   .spesa-check.done { background: var(--green); border-color: var(--green); }
-  .spesa-check.done::after { content: '✓'; color: white; font-size: 13px; font-weight: 700; }
+  .spesa-check.done::after { content: 'âœ“'; color: white; font-size: 13px; font-weight: 700; }
   .spesa-nome { flex: 1; font-size: 15px; font-weight: 500; }
   .spesa-nome.done { text-decoration: line-through; color: var(--hint); }
   .spesa-del { font-size: 18px; color: var(--hint); cursor: pointer; padding: 4px; }
@@ -231,7 +231,7 @@
 
 <!-- Update banner -->
 <div id="update-banner">
-  <span id="update-msg">🔄 Aggiornamento disponibile</span>
+  <span id="update-msg">ðŸ”„ Aggiornamento disponibile</span>
   <button onclick="applicaAggiornamento()">Aggiorna ora</button>
 </div>
 
@@ -251,19 +251,19 @@
     </div>
     <div class="filter-row">
       <div class="chip active" data-filtro="tutti" onclick="setFiltro('tutti')">Tutti</div>
-      <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
-      <div class="chip" data-filtro="scaduti" onclick="setFiltro('scaduti')">🔴 Scaduti</div>
-      <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧊 Frigo</div>
-      <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Freezer</div>
-      <div class="chip" data-filtro="dispensa" onclick="setFiltro('dispensa')">🗄️ Dispensa</div>
+      <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">â° In scadenza</div>
+      <div class="chip" data-filtro="scaduti" onclick="setFiltro('scaduti')">ðŸ”´ Scaduti</div>
+      <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">ðŸ§Š Frigo</div>
+      <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">â„ï¸ Freezer</div>
+      <div class="chip" data-filtro="dispensa" onclick="setFiltro('dispensa')">ðŸ—„ï¸ Dispensa</div>
     </div>
     <div class="sort-bar">
       <span class="sort-label">Ordina:</span>
       <select id="sort-select" onchange="applicaFiltroSort()">
         <option value="inserimento">Inserimento</option>
         <option value="scadenza">Scadenza</option>
-        <option value="nome">Nome A→Z</option>
-        <option value="quantita">Quantità</option>
+        <option value="nome">Nome Aâ†’Z</option>
+        <option value="quantita">QuantitÃ </option>
       </select>
     </div>
     <div class="card" id="lista-container">
@@ -297,7 +297,7 @@
 <!-- SCREEN: Scanner -->
 <div class="screen" id="screen-scan">
   <div class="topbar">
-    <div class="topbar-back" onclick="showScreen('screen-inventario')">✕</div>
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">âœ•</div>
     <div class="topbar-title">Scansiona</div>
   </div>
   <div class="content">
@@ -315,7 +315,7 @@
 <!-- SCREEN: Conferma prodotto -->
 <div class="screen" id="screen-conferma">
   <div class="topbar">
-    <div class="topbar-back" onclick="showScreen('screen-scan')">‹ Indietro</div>
+    <div class="topbar-back" onclick="showScreen('screen-scan')">â€¹ Indietro</div>
     <div class="topbar-title">Conferma prodotto</div>
   </div>
   <div class="content">
@@ -339,7 +339,7 @@
         <div class="foto-upload-area" id="foto-upload-area" onclick="apriFotoMenu()">
           <img id="foto-preview" class="foto-preview" src="" alt="Anteprima foto">
           <div id="foto-placeholder" style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-            <span style="font-size:28px;">📷</span>
+            <span style="font-size:28px;">ðŸ“·</span>
             <div class="foto-label">Scatta o scegli una foto del prodotto</div>
           </div>
         </div>
@@ -347,9 +347,9 @@
       </div>
 
       <div class="field">
-        <label>Quantità</label>
+        <label>QuantitÃ </label>
         <div class="qty-row">
-          <div class="qty-btn" onclick="cambiaQty(-1)">−</div>
+          <div class="qty-btn" onclick="cambiaQty(-1)">âˆ’</div>
           <div class="qty-val" id="conf-qty">1</div>
           <div class="qty-btn" onclick="cambiaQty(1)">+</div>
         </div>
@@ -358,7 +358,7 @@
         <label>Data di scadenza</label>
         <div style="display:flex;gap:8px;align-items:center;">
           <input type="date" id="conf-scadenza" style="flex:1;">
-          <button onclick="avviaOCRScadenza()" style="padding:10px 14px;border-radius:12px;border:0.5px solid var(--border);background:var(--bg);font-size:20px;cursor:pointer;flex-shrink:0;" title="Scansiona scadenza">📷</button>
+          <button onclick="avviaOCRScadenza()" style="padding:10px 14px;border-radius:12px;border:0.5px solid var(--border);background:var(--bg);font-size:20px;cursor:pointer;flex-shrink:0;" title="Scansiona scadenza">ðŸ“·</button>
         </div>
       </div>
 
@@ -375,24 +375,24 @@
         <div id="ocr-testo-letto" style="color:rgba(255,255,255,0.5);margin-top:6px;font-size:11px;text-align:center;padding:0 20px;"></div>
         <div id="ocr-manuale" style="display:none;margin-top:12px;width:90%;max-width:400px;">
           <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:6px;text-align:center;">Inserisci la data manualmente:</div>
-          <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:8px;text-align:center;">es. 09/09/27 · 09/2027 · 2027/09 · 090927 · SET 2027</div>
+          <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:8px;text-align:center;">es. 09/09/27 Â· 09/2027 Â· 2027/09 Â· 090927 Â· SET 2027</div>
           <div style="display:flex;gap:8px;">
             <input id="ocr-input-manuale" type="text" placeholder="es. 09/09/27" style="flex:1;padding:12px;border-radius:12px;border:none;font-size:16px;background:rgba(255,255,255,0.15);color:white;">
-            <button onclick="confermaManualeOCR()" style="padding:12px 16px;border-radius:12px;background:var(--green);color:white;font-size:15px;font-weight:600;border:none;cursor:pointer;">✓</button>
+            <button onclick="confermaManualeOCR()" style="padding:12px 16px;border-radius:12px;background:var(--green);color:white;font-size:15px;font-weight:600;border:none;cursor:pointer;">âœ“</button>
           </div>
         </div>
         <div style="display:flex;gap:12px;margin-top:16px;">
-          <button onclick="scattaFotoOCR()" style="padding:14px 28px;border-radius:14px;background:var(--green);color:white;font-size:16px;font-weight:600;border:none;cursor:pointer;">📸 Scatta</button>
-          <button onclick="chiudiOCR()" style="padding:14px 28px;border-radius:14px;background:rgba(255,255,255,0.2);color:white;font-size:16px;border:none;cursor:pointer;">✕ Annulla</button>
+          <button onclick="scattaFotoOCR()" style="padding:14px 28px;border-radius:14px;background:var(--green);color:white;font-size:16px;font-weight:600;border:none;cursor:pointer;">ðŸ“¸ Scatta</button>
+          <button onclick="chiudiOCR()" style="padding:14px 28px;border-radius:14px;background:rgba(255,255,255,0.2);color:white;font-size:16px;border:none;cursor:pointer;">âœ• Annulla</button>
         </div>
       </div>
 
       <div class="field">
         <label>Posizione</label>
         <select id="conf-posizione">
-          <option value="Dispensa">🗄️ Dispensa</option>
-          <option value="Frigo">🧊 Frigo</option>
-          <option value="Freezer">❄️ Freezer</option>
+          <option value="Dispensa">ðŸ—„ï¸ Dispensa</option>
+          <option value="Frigo">ðŸ§Š Frigo</option>
+          <option value="Freezer">â„ï¸ Freezer</option>
         </select>
       </div>
       <div class="field">
@@ -407,7 +407,7 @@
 <!-- SCREEN: Dettaglio prodotto -->
 <div class="screen" id="screen-dettaglio">
   <div class="topbar">
-    <div class="topbar-back" onclick="showScreen('screen-inventario')">‹</div>
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">â€¹</div>
     <div class="topbar-title" id="det-title">Prodotto</div>
   </div>
   <div class="content" id="det-content"></div>
@@ -416,15 +416,15 @@
 <!-- SCREEN: Lista Spesa -->
 <div class="screen" id="screen-spesa">
   <div class="topbar">
-    <div class="topbar-title">🛒 Lista della Spesa</div>
+    <div class="topbar-title">ðŸ›’ Lista della Spesa</div>
     <div class="topbar-action" onclick="aggiungiSpesaManuale()">+ Aggiungi</div>
   </div>
   <div class="content">
     <div class="card" id="spesa-container">
       <div id="lista-spesa"><div class="empty"><div class="spinner"></div></div></div>
     </div>
-    <button class="btn btn-primary" onclick="inviaListaSpesaTelegram()" style="margin-bottom:10px;">📤 Invia su Telegram</button>
-    <button class="btn btn-secondary" onclick="svuotaCompletati()">🗑️ Rimuovi completati</button>
+    <button class="btn btn-primary" onclick="inviaListaSpesaTelegram()" style="margin-bottom:10px;">ðŸ“¤ Invia su Telegram</button>
+    <button class="btn btn-secondary" onclick="svuotaCompletati()">ðŸ—‘ï¸ Rimuovi completati</button>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -453,7 +453,7 @@
 <!-- SCREEN: Statistiche -->
 <div class="screen" id="screen-statistiche">
   <div class="topbar">
-    <div class="topbar-title">📊 Statistiche</div>
+    <div class="topbar-title">ðŸ“Š Statistiche</div>
   </div>
   <div class="content" id="stat-content">
     <div class="empty"><div class="spinner"></div></div>
@@ -516,7 +516,7 @@
     </div>
     <div class="card card-body" style="margin-top:12px;">
       <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">Dati</div>
-      <button class="btn btn-secondary" onclick="esportaCSV()">📥 Esporta inventario CSV</button>
+      <button class="btn btn-secondary" onclick="esportaCSV()">ðŸ“¥ Esporta inventario CSV</button>
     </div>
     <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v1.4.6</div>
   </div>
@@ -547,7 +547,7 @@
 <!-- SCREEN: Modifica prodotto -->
 <div class="screen" id="screen-modifica">
   <div class="topbar">
-    <div class="topbar-back" onclick="showScreen('screen-inventario')">‹</div>
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">â€¹</div>
     <div class="topbar-title">Modifica prodotto</div>
   </div>
   <div class="content">
@@ -561,9 +561,9 @@
         <input type="text" id="mod-marca">
       </div>
       <div class="field">
-        <label>Quantità</label>
+        <label>QuantitÃ </label>
         <div class="qty-row">
-          <div class="qty-btn" onclick="cambiaQtyMod(-1)">−</div>
+          <div class="qty-btn" onclick="cambiaQtyMod(-1)">âˆ’</div>
           <div class="qty-val" id="mod-qty-val">1</div>
           <div class="qty-btn" onclick="cambiaQtyMod(1)">+</div>
         </div>
@@ -575,9 +575,9 @@
       <div class="field">
         <label>Posizione</label>
         <select id="mod-posizione">
-          <option value="Dispensa">🗄️ Dispensa</option>
-          <option value="Frigo">🧊 Frigo</option>
-          <option value="Freezer">❄️ Freezer</option>
+          <option value="Dispensa">ðŸ—„ï¸ Dispensa</option>
+          <option value="Frigo">ðŸ§Š Frigo</option>
+          <option value="Freezer">â„ï¸ Freezer</option>
         </select>
       </div>
       <div class="field">
@@ -601,14 +601,14 @@ async function checkForUpdates() {
     if (!r.ok) return;
     const data = await r.json();
     if (data.version && data.version !== APP_VERSION) {
-      document.getElementById('update-msg').textContent = `🔄 Versione ${data.version} disponibile`;
+      document.getElementById('update-msg').textContent = `ðŸ”„ Versione ${data.version} disponibile`;
       document.getElementById('update-banner').classList.add('visible');
     }
   } catch (e) {}
 }
 
 async function applicaAggiornamento() {
-  document.getElementById('update-msg').textContent = '⏳ Aggiornamento in corso...';
+  document.getElementById('update-msg').textContent = 'â³ Aggiornamento in corso...';
   document.querySelector('#update-banner button').disabled = true;
   if ('caches' in window) {
     const keys = await caches.keys();
@@ -637,14 +637,14 @@ async function checkForUpdates() {
     if (!r.ok) return;
     const data = await r.json();
     if (data.version && data.version !== APP_VERSION) {
-      document.getElementById('update-msg').textContent = `🔄 Versione ${data.version} disponibile`;
+      document.getElementById('update-msg').textContent = `ðŸ”„ Versione ${data.version} disponibile`;
       document.getElementById('update-banner').classList.add('visible');
     }
   } catch (e) {}
 }
 
 async function applicaAggiornamento() {
-  document.getElementById('update-msg').textContent = '⏳ Aggiornamento in corso...';
+  document.getElementById('update-msg').textContent = 'â³ Aggiornamento in corso...';
   document.querySelector('#update-banner button').disabled = true;
   if ('caches' in window) {
     const keys = await caches.keys();
@@ -664,10 +664,10 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 // ---- Fine controllo aggiornamenti ----
 </script>
 <script>
-const API_BASE = () => localStorage.getItem('dispensa_url') || 'https://dispensa-api.hmdomowizards.it';
-const INGRESS_BASE = '/api/hassio_ingress/iU3KAIJIup-On5d1BHN_AuyoEAUM8ey4-5zabeXWn9k';
+const API_BASE = () => window.location.pathname.replace(/\/+/g, '');
 
-function getCfToken() { return localStorage.getItem('dispensa_cf_token') || ''; }
+
+function getCfToken() { return ''; }
 
 function apiFetch(url, opts = {}) {
   const token = getCfToken();
@@ -675,10 +675,7 @@ function apiFetch(url, opts = {}) {
   return fetch(url, opts);
 }
 
-async function initCfToken() {
-  if (getCfToken()) return;
-  try {
-    const r = await fetch(`${INGRESS_BASE}/api/config`);
+async function initCfToken() {}/api/config`);
     const d = await r.json();
     if (d.cloudflare_token) localStorage.setItem('dispensa_cf_token', d.cloudflare_token);
   } catch(e) {}
@@ -747,7 +744,7 @@ async function _eseguiUndo() {
   const t = document.getElementById('toast');
   t.classList.remove('show', 'with-undo');
   await fn();
-  toast('Annullato ✓');
+  toast('Annullato âœ“');
 }
 
 async function caricaInventario() {
@@ -756,7 +753,7 @@ async function caricaInventario() {
     prodottiCache = await r.json();
     applicaFiltroSort();
   } catch(e) {
-    document.getElementById('lista-prodotti').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.<br>Controlla le impostazioni.</div></div>`;
+    document.getElementById('lista-prodotti').innerHTML = `<div class="empty"><div class="empty-icon">âš ï¸</div><div>Backend non raggiungibile.<br>Controlla le impostazioni.</div></div>`;
   }
 }
 
@@ -841,7 +838,7 @@ async function consumaRapido(id, qtyAttuali) {
   const p = prodottiCache.find(x => x.id === id);
   if (p) p.quantita = nuova;
   applicaFiltroSort();
-  toastUndo('−1', async () => {
+  toastUndo('âˆ’1', async () => {
     await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
     const p2 = prodottiCache.find(x => x.id === id);
     if (p2) p2.quantita = qtyAttuali;
@@ -918,7 +915,7 @@ function toggleDarkMode() {
 
 function esportaCSV() {
   if (!prodottiCache.length) { toast('Nessun prodotto da esportare'); return; }
-  const cols = ['ID','Nome','Marca','Categoria','Quantità','Scadenza','Posizione','EAN','Note'];
+  const cols = ['ID','Nome','Marca','Categoria','QuantitÃ ','Scadenza','Posizione','EAN','Note'];
   const righe = prodottiCache.map(p => [
     p.id, p.nome, p.marca||'', p.categoria||'', p.quantita,
     p.scadenza||'', p.posizione||'', p.ean||'', (p.note||'').replace(/"/g,"'")
@@ -940,7 +937,7 @@ function renderInventario(attivi, esauriti) {
   // Render prodotti attivi
   let html = '';
   if (attivi.length === 0 && esauriti.length === 0) {
-    html = `<div class="empty"><div class="empty-icon">🛒</div><div>Nessun prodotto in dispensa.<br>Scansiona il primo!</div></div>`;
+    html = `<div class="empty"><div class="empty-icon">ðŸ›’</div><div>Nessun prodotto in dispensa.<br>Scansiona il primo!</div></div>`;
   } else if (attivi.length === 0) {
     html = `<div class="empty" style="padding:24px 20px;"><div style="font-size:14px;color:var(--muted);">Nessun prodotto disponibile</div></div>`;
   } else {
@@ -958,12 +955,12 @@ function renderInventario(attivi, esauriti) {
         <div class="prod-dot ${dotClass}"></div>
         <div class="prod-info">
           <div class="prod-nome">${p.nome}</div>
-          <div class="prod-meta">${p.marca ? p.marca + ' · ' : ''}${p.posizione ? p.posizione + (metaText ? ' · ' : '') : ''}${metaText}</div>
+          <div class="prod-meta">${p.marca ? p.marca + ' Â· ' : ''}${p.posizione ? p.posizione + (metaText ? ' Â· ' : '') : ''}${metaText}</div>
           ${badgeHtml}
         </div>
         <div class="prod-actions" onclick="event.stopPropagation()">
-          <div class="quick-btn" onclick="consumaRapido(${p.id},${p.quantita})">−</div>
-          <div class="prod-qty">×${p.quantita}</div>
+          <div class="quick-btn" onclick="consumaRapido(${p.id},${p.quantita})">âˆ’</div>
+          <div class="prod-qty">Ã—${p.quantita}</div>
           <div class="quick-btn" onclick="aggiungiRapido(${p.id},${p.quantita})">+</div>
         </div>
       </div>`;
@@ -977,10 +974,10 @@ function renderInventario(attivi, esauriti) {
     const listStyle = esauritiOpen ? 'open' : '';
     esauritiHtml = `<div class="esauriti-section">
       <div class="esauriti-header" onclick="toggleEsauriti()">
-        <span style="font-size:14px;">⬜</span>
+        <span style="font-size:14px;">â¬œ</span>
         <span class="esauriti-header-title">Esauriti</span>
         <span class="esauriti-header-count">${esauriti.length}</span>
-        <span class="esauriti-chevron ${chevron}">›</span>
+        <span class="esauriti-chevron ${chevron}">â€º</span>
       </div>
       <div class="esauriti-list ${listStyle}" id="esauriti-list-inner">`;
     esauriti.forEach(p => {
@@ -988,7 +985,7 @@ function renderInventario(attivi, esauriti) {
         <div class="prod-dot dot-out"></div>
         <div class="prod-info">
           <div class="prod-nome esaurito-text">${p.nome}</div>
-          <div class="prod-meta">${p.marca ? p.marca + ' · ' : ''}${p.posizione || 'Dispensa'}</div>
+          <div class="prod-meta">${p.marca ? p.marca + ' Â· ' : ''}${p.posizione || 'Dispensa'}</div>
         </div>
         <div class="prod-actions" onclick="event.stopPropagation()">
           <div class="quick-btn" onclick="aggiungiRapido(${p.id},0)">+</div>
@@ -1027,11 +1024,11 @@ function apriDettaglio(id) {
     <div class="card card-body">
       ${p.immagine_url ? `<img src="${p.immagine_url}" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);">` : ''}
       <div style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">${p.nome}</div>
-      <div style="font-size: 14px; color: var(--muted); margin-bottom: 20px;">${p.marca || ''} ${p.categoria ? '· ' + p.categoria : ''}</div>
-      ${isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">⬜ Prodotto esaurito — rimane nel database</div>' : ''}
+      <div style="font-size: 14px; color: var(--muted); margin-bottom: 20px;">${p.marca || ''} ${p.categoria ? 'Â· ' + p.categoria : ''}</div>
+      ${isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">â¬œ Prodotto esaurito â€” rimane nel database</div>' : ''}
       <table style="width:100%;font-size:14px;border-collapse:collapse;">
-        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'}</td></tr>
-        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Quantità</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.quantita}</td></tr>
+        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.posizione === 'Frigo' ? 'ðŸ§Š Frigo' : p.posizione === 'Freezer' ? 'â„ï¸ Freezer' : 'ðŸ—„ï¸ Dispensa'}</td></tr>
+        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">QuantitÃ </td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.quantita}</td></tr>
         <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Scadenza</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${scadFormatted}</td></tr>
         <tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">${p.ean}</td></tr>
       </table>
@@ -1046,28 +1043,28 @@ function apriDettaglio(id) {
       if (!righe.length) return '';
       const nsColor = {'A':'#1D9E75','B':'#8BC34A','C':'#FFC107','D':'#FF9800','E':'#F44336'};
       return `<div class="card card-body" style="margin-top:8px;">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📊 Valori nutrizionali per 100g</div>
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">ðŸ“Š Valori nutrizionali per 100g</div>
         <table style="width:100%;font-size:13px;border-collapse:collapse;">
           ${righe.map((r,i) => `<tr><td style="color:var(--muted);padding:6px 0;${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}${r[0].startsWith('di')?'padding-left:12px;':''} ">${r[0]}</td><td style="text-align:right;font-weight:${r[0].startsWith('di')?'400':'600'};${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}">${Number(r[1]).toFixed(1)} ${r[2]}</td></tr>`).join('')}
         </table>
-        ${p.nutriscore ? `<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:${nsColor[p.nutriscore]||'var(--text)'}">● ${p.nutriscore}</strong></div>` : ''}
+        ${p.nutriscore ? `<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:${nsColor[p.nutriscore]||'var(--text)'}">â— ${p.nutriscore}</strong></div>` : ''}
       </div>`;
     })() : ''}
     <div class="card card-body" style="margin-top:8px;">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">QuantitÃ  da aggiornare</div>
       <div class="qty-row" style="margin-bottom:12px;">
-        <div class="qty-btn" onclick="cambiaQtyDet(-1)">−</div>
+        <div class="qty-btn" onclick="cambiaQtyDet(-1)">âˆ’</div>
         <div class="qty-val" id="det-qty-delta">1</div>
         <div class="qty-btn" onclick="cambiaQtyDet(1)">+</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <button class="btn btn-secondary" onclick="consumaProdotto(${p.id},${p.quantita})">− Consuma</button>
+        <button class="btn btn-secondary" onclick="consumaProdotto(${p.id},${p.quantita})">âˆ’ Consuma</button>
         <button class="btn btn-secondary" onclick="aggiungiQty(${p.id},${p.quantita})">+ Aggiungi</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
-      <button class="btn btn-secondary" onclick="apriModifica(${p.id})">✏️ Modifica</button>
-      <button class="btn btn-danger" onclick="eliminaProdotto(${p.id})">🗑️ Elimina</button>
+      <button class="btn btn-secondary" onclick="apriModifica(${p.id})">âœï¸ Modifica</button>
+      <button class="btn btn-danger" onclick="eliminaProdotto(${p.id})">ðŸ—‘ï¸ Elimina</button>
     </div>
   `;
   showScreen('screen-dettaglio');
@@ -1084,7 +1081,7 @@ async function consumaProdotto(id, qtyAttuali) {
   const nuova = Math.max(0, qtyAttuali - delta);
   await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
   showScreen('screen-inventario');
-  toastUndo(`−${delta}`, async () => {
+  toastUndo(`âˆ’${delta}`, async () => {
     await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
     const p = prodottiCache.find(x => x.id === id);
     if (p) p.quantita = qtyAttuali;
@@ -1173,7 +1170,7 @@ function apriConferma(prodotto) {
   qtyCorrente = 1;
   fotoBase64 = null;
   document.getElementById('conf-nome').textContent = prodotto.nome || 'Prodotto sconosciuto';
-  document.getElementById('conf-marca').textContent = [prodotto.marca, prodotto.categoria].filter(Boolean).join(' · ');
+  document.getElementById('conf-marca').textContent = [prodotto.marca, prodotto.categoria].filter(Boolean).join(' Â· ');
   document.getElementById('conf-nome-edit').value = prodotto.nome || '';
   document.getElementById('conf-qty').textContent = '1';
   document.getElementById('conf-note').value = '';
@@ -1198,8 +1195,8 @@ function apriConferma(prodotto) {
 
   const badge = document.getElementById('found-badge-container');
   badge.innerHTML = prodotto.trovato
-    ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posizione === 'Frigo' ? '🧊 Frigo' : posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'} suggerito</div></div>`
-    : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci i dettagli e aggiungi foto</div></div>`;
+    ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts Â· ${posizione === 'Frigo' ? 'ðŸ§Š Frigo' : posizione === 'Freezer' ? 'â„ï¸ Freezer' : 'ðŸ—„ï¸ Dispensa'} suggerito</div></div>`
+    : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato â€” inserisci i dettagli e aggiungi foto</div></div>`;
   showScreen('screen-conferma');
 }
 
@@ -1260,7 +1257,7 @@ function cambiaQty(delta) {
 }
 
 async function salvaInDispensa() {
-  // Se è un prodotto non trovato e l'utente ha scattato una foto, usala come immagine_url
+  // Se Ã¨ un prodotto non trovato e l'utente ha scattato una foto, usala come immagine_url
   const immagineDaSalvare = fotoBase64 || prodottoCorrente.immagine_url || '';
   const payload = {
     ean: prodottoCorrente.ean || '',
@@ -1311,13 +1308,13 @@ async function caricaListaSpesa() {
     const items = await r.json();
     renderListaSpesa(items);
   } catch(e) {
-    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
+    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">âš ï¸</div><div>Backend non raggiungibile.</div></div>`;
   }
 }
 
 function renderListaSpesa(items) {
   if (!items.length) {
-    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">🛒</div><div>Lista spesa vuota!<br>I prodotti esauriti appariranno qui.</div></div>`;
+    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">ðŸ›’</div><div>Lista spesa vuota!<br>I prodotti esauriti appariranno qui.</div></div>`;
     return;
   }
   let html = '';
@@ -1329,7 +1326,7 @@ function renderListaSpesa(items) {
         <div class="spesa-nome ${done ? 'done' : ''}">${item.nome}</div>
         ${item.marca ? `<div style="font-size:12px;color:var(--muted);">${item.marca}</div>` : ''}
       </div>
-      <div class="spesa-del" onclick="eliminaSpesa(${item.id})">✕</div>
+      <div class="spesa-del" onclick="eliminaSpesa(${item.id})">âœ•</div>
     </div>`;
   });
   document.getElementById('lista-spesa').innerHTML = html;
@@ -1356,7 +1353,7 @@ async function svuotaCompletati() {
 async function inviaListaSpesaTelegram() {
   const r = await apiFetch(`${API_BASE()}/api/lista-spesa/invia-telegram`);
   const data = await r.json();
-  toast(data.ok ? '📤 Lista inviata su Telegram!' : '⚠️ ' + (data.errore || 'Errore'));
+  toast(data.ok ? 'ðŸ“¤ Lista inviata su Telegram!' : 'âš ï¸ ' + (data.errore || 'Errore'));
 }
 
 function aggiungiSpesaManuale() {
@@ -1371,7 +1368,7 @@ async function caricaStatistiche() {
   try {
     const r = await apiFetch(`${API_BASE()}/api/statistiche`);
     const s = await r.json();
-    const posIcon = {'Frigo':'🧊','Freezer':'❄️','Dispensa':'🗄️'};
+    const posIcon = {'Frigo':'ðŸ§Š','Freezer':'â„ï¸','Dispensa':'ðŸ—„ï¸'};
     let html = `
       <div class="metric-row" style="grid-template-columns:repeat(2,1fr);">
         <div class="metric"><div class="metric-val">${s.totali.acquisti}</div><div class="metric-label">Acquisti totali</div></div>
@@ -1380,32 +1377,32 @@ async function caricaStatistiche() {
         <div class="metric"><div class="metric-val">${s.totali.eliminati}</div><div class="metric-label">Eliminati</div></div>
       </div>`;
     if (s.per_posizione.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📍 Prodotti per posizione</div>`;
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">ðŸ“ Prodotti per posizione</div>`;
       s.per_posizione.forEach(p => {
-        html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:14px;"><span>${posIcon[p.posizione]||'📦'} ${p.posizione || 'Non specificata'}</span><strong>${p.n}</strong></div>`;
+        html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:14px;"><span>${posIcon[p.posizione]||'ðŸ“¦'} ${p.posizione || 'Non specificata'}</span><strong>${p.n}</strong></div>`;
       });
       html += `</div>`;
     }
     if (s.top_acquistati.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🏆 Più acquistati</div>`;
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">ðŸ† PiÃ¹ acquistati</div>`;
       s.top_acquistati.forEach((p,i) => {
-        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--green);font-weight:600;">×${p.totale}</span></div>`;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--green);font-weight:600;">Ã—${p.totale}</span></div>`;
       });
       html += `</div>`;
     }
     if (s.top_consumati.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🔥 Più consumati</div>`;
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">ðŸ”¥ PiÃ¹ consumati</div>`;
       s.top_consumati.forEach((p,i) => {
-        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--amber);font-weight:600;">×${p.totale}</span></div>`;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--amber);font-weight:600;">Ã—${p.totale}</span></div>`;
       });
       html += `</div>`;
     }
     if (!s.top_acquistati.length && !s.top_consumati.length) {
-      html += `<div class="empty"><div class="empty-icon">📊</div><div>Nessun dato ancora.<br>Le statistiche si accumulano con l'uso!</div></div>`;
+      html += `<div class="empty"><div class="empty-icon">ðŸ“Š</div><div>Nessun dato ancora.<br>Le statistiche si accumulano con l'uso!</div></div>`;
     }
     document.getElementById('stat-content').innerHTML = html;
   } catch(e) {
-    document.getElementById('stat-content').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
+    document.getElementById('stat-content').innerHTML = `<div class="empty"><div class="empty-icon">âš ï¸</div><div>Backend non raggiungibile.</div></div>`;
   }
 }
 
@@ -1457,7 +1454,7 @@ async function scattaFotoOCR() {
   const canvas = document.getElementById('ocr-canvas');
   canvas.width = video.videoWidth; canvas.height = video.videoHeight;
   canvas.getContext('2d').drawImage(video, 0, 0);
-  document.getElementById('ocr-status').textContent = '🔍 Elaborazione immagine...';
+  document.getElementById('ocr-status').textContent = 'ðŸ” Elaborazione immagine...';
   try {
     const processed = preprocessCanvas(canvas);
     let text = '';
@@ -1474,15 +1471,15 @@ async function scattaFotoOCR() {
     if (data) {
       document.getElementById('conf-scadenza').value = data;
       chiudiOCR();
-      toast('✅ Scadenza rilevata: ' + formatDataIT(data));
+      toast('âœ… Scadenza rilevata: ' + formatDataIT(data));
     } else {
       const testoLetto = text.replace(/\n/g, ' ').trim().substring(0, 100);
-      document.getElementById('ocr-status').textContent = '⚠️ Data non rilevata automaticamente.';
+      document.getElementById('ocr-status').textContent = 'âš ï¸ Data non rilevata automaticamente.';
       document.getElementById('ocr-testo-letto').textContent = testoLetto ? `Testo letto: "${testoLetto}"` : '';
       document.getElementById('ocr-manuale').style.display = 'block';
     }
   } catch(e) {
-    document.getElementById('ocr-status').textContent = '⚠️ Errore OCR. Inserisci manualmente.';
+    document.getElementById('ocr-status').textContent = 'âš ï¸ Errore OCR. Inserisci manualmente.';
     document.getElementById('ocr-manuale').style.display = 'block';
   }
 }
@@ -1493,9 +1490,9 @@ function confermaManualeOCR() {
   if (data) {
     document.getElementById('conf-scadenza').value = data;
     chiudiOCR();
-    toast('✅ Scadenza impostata: ' + formatDataIT(data));
+    toast('âœ… Scadenza impostata: ' + formatDataIT(data));
   } else {
-    document.getElementById('ocr-status').textContent = '⚠️ Formato non riconosciuto. Prova: GG/MM/AAAA o MM/AAAA o AAAA/MM';
+    document.getElementById('ocr-status').textContent = 'âš ï¸ Formato non riconosciuto. Prova: GG/MM/AAAA o MM/AAAA o AAAA/MM';
   }
 }
 
@@ -1575,7 +1572,7 @@ initDarkMode();
 initCfToken().then(() => caricaInventario());
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/local/dispensa/sw.js')
+  navigator.serviceWorker.register('sw.js')
     .catch(err => console.warn('SW non registrato:', err));
 }
 
@@ -1588,14 +1585,14 @@ async function checkForUpdates() {
     if (!r.ok) return;
     const data = await r.json();
     if (data.version && data.version !== APP_VERSION) {
-      document.getElementById('update-msg').textContent = `🔄 Versione ${data.version} disponibile`;
+      document.getElementById('update-msg').textContent = `ðŸ”„ Versione ${data.version} disponibile`;
       document.getElementById('update-banner').classList.add('visible');
     }
   } catch (e) {}
 }
 
 async function applicaAggiornamento() {
-  document.getElementById('update-msg').textContent = '⏳ Aggiornamento in corso...';
+  document.getElementById('update-msg').textContent = 'â³ Aggiornamento in corso...';
   document.querySelector('#update-banner button').disabled = true;
   if ('caches' in window) {
     const keys = await caches.keys();
