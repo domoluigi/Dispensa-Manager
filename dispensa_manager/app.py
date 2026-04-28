@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_cors import CORS
 
-APP_VERSION = "1.5.5"
+APP_VERSION = "1.5.6"
 DB_PATH = "/config/dispensa.db"
 OPTIONS_PATH = "/data/options.json"
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
