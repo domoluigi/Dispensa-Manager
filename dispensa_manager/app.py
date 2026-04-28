@@ -1,76 +1,72 @@
-import base64
 import csv
 import io
 import json
 import os
-import re
 import sqlite3
+import threading
 import requests
-from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, make_response, redirect
+from datetime import datetime
+from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_cors import CORS
 
-# ---------------------------------------------------------------------------
-# Sync automatico dei file frontend: ad ogni avvio l'add-on scarica i file
-# da GitHub Raw e li copia in /config/www/dispensa/ solo se sono cambiati.
-# Questo garantisce che ogni aggiornamento del repo si rifletta subito
-# sull'interfaccia web senza intervento manuale.
-# ---------------------------------------------------------------------------
-_GITHUB_RAW = 'https://raw.githubusercontent.com/domoluigi/Dispensa-Manager/main/www/dispensa/'
-_FRONTEND_FILES = ['index.html', 'manifest.json', 'sw.js', 'icon-192.png', 'icon-512.png']
-_WWW_DST = '/config/www/dispensa'
+APP_VERSION = "1.5.0"
+DB_PATH = "/config/dispensa.db"
+OPTIONS_PATH = "/data/options.json"
+HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
+HA_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
+WWW_DIR = os.path.join(os.path.dirname(__file__), 'www')
 
-def sync_frontend():
-    os.makedirs(_WWW_DST, exist_ok=True)
-    for fname in _FRONTEND_FILES:
-        try:
-            r = requests.get(_GITHUB_RAW + fname, timeout=15)
-            if r.status_code != 200:
-                print(f"[sync] {fname}: HTTP {r.status_code}, saltato", flush=True)
-                continue
-            fpath = os.path.join(_WWW_DST, fname)
-            existing = open(fpath, 'rb').read() if os.path.exists(fpath) else None
-            if existing != r.content:
-                with open(fpath, 'wb') as f:
-                    f.write(r.content)
-                print(f"[sync] {fname} aggiornato", flush=True)
-            else:
-                print(f"[sync] {fname} già aggiornato", flush=True)
-        except Exception as e:
-            print(f"[sync] {fname} errore: {e}", flush=True)
+print(f"SUPERVISOR_TOKEN presente: {bool(os.environ.get('SUPERVISOR_TOKEN'))}", flush=True)
 
 # ---------------------------------------------------------------------------
+# Options cache — rilettura dal disco solo se il file è cambiato
+# ---------------------------------------------------------------------------
+_options_cache = None
+_options_mtime = 0
+
+def get_options():
+    global _options_cache, _options_mtime
+    try:
+        mtime = os.path.getmtime(OPTIONS_PATH)
+        if mtime != _options_mtime:
+            with open(OPTIONS_PATH) as f:
+                _options_cache = json.load(f)
+            _options_mtime = mtime
+    except Exception:
+        pass
+    return _options_cache or {
+        "telegram_token": "",
+        "telegram_chat_id": "",
+        "giorni_alert_scadenza": 3,
+        "soglia_scorte_minime": 1,
+    }
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type", "x-jarvis-token"], "methods": ["GET","POST","PUT","DELETE","OPTIONS"]}})
+CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type"], "methods": ["GET","POST","PUT","DELETE","OPTIONS"]}})
 
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, x-jarvis-token')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
     response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
     return response
 
+# ---------------------------------------------------------------------------
+# Frontend statico servito da Flask
+# ---------------------------------------------------------------------------
 @app.route('/')
 def index():
-    base_url = get_options().get('pwa_url', '').rstrip('/')
-    if base_url:
-        return redirect(base_url + '/local/dispensa/index.html')
-    return jsonify({"status": "Dispensa Manager running", "info": "Configura pwa_url nelle opzioni addon per aprire la PWA da qui"}), 200
+    return send_from_directory(WWW_DIR, 'index.html')
 
-HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
-HA_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
-print(f"SUPERVISOR_TOKEN presente: {bool(os.environ.get('SUPERVISOR_TOKEN'))}", flush=True)
-print(f"Token in uso: {'SUPERVISOR' if os.environ.get('SUPERVISOR_TOKEN') else 'LONG-LIVED'}", flush=True)
-DB_PATH = "/config/dispensa.db"
+@app.route('/sw.js')
+def service_worker():
+    resp = send_from_directory(WWW_DIR, 'sw.js')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    return resp
 
-OPTIONS_PATH = "/data/options.json"
-def get_options():
-    try:
-        with open(OPTIONS_PATH) as f:
-            return json.load(f)
-    except:
-        return {"telegram_token": "", "telegram_chat_id": "", "giorni_alert_scadenza": 3, "soglia_scorte_minime": 1}
+@app.route('/<path:filename>')
+def static_files(filename):
+    return send_from_directory(WWW_DIR, filename)
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -125,7 +121,6 @@ def init_db():
         )
     """)
     conn.commit()
-    # Migrazione DB
     for alter in [
         "ALTER TABLE prodotti ADD COLUMN nutriments TEXT",
         "ALTER TABLE prodotti ADD COLUMN nutriscore TEXT",
@@ -135,8 +130,10 @@ def init_db():
     ]:
         try:
             c.execute(alter)
-        except:
+        except Exception:
             pass
+    c.execute("CREATE INDEX IF NOT EXISTS idx_prodotti_scadenza ON prodotti(scadenza)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_prodotti_ean ON prodotti(ean)")
     conn.commit()
     conn.close()
 
@@ -186,7 +183,7 @@ def aggiorna_sensori_ha():
                 scad = datetime.strptime(p["scadenza"], "%Y-%m-%d").date()
                 if (scad - oggi).days <= giorni_soglia:
                     in_scadenza.append({"nome": p["nome"], "scadenza": p["scadenza"], "giorni": (scad - oggi).days})
-            except:
+            except Exception:
                 pass
 
     for p in esauriti_list:
@@ -216,6 +213,9 @@ def aggiorna_sensori_ha():
         except Exception as e:
             print(f"Errore aggiornamento HA {entity_id}: {e}")
 
+def _aggiorna_sensori_async():
+    threading.Thread(target=aggiorna_sensori_ha, daemon=True).start()
+
 def invia_notifica_azione(testo):
     opts = get_options()
     token = opts.get("telegram_token", "")
@@ -235,7 +235,7 @@ def invia_notifica_azione(testo):
 
 @app.route("/api/barcode/<ean>", methods=["GET"])
 def cerca_barcode(ean):
-    headers = {"User-Agent": "DispensaManager/1.4.7"}
+    headers = {"User-Agent": f"DispensaManager/{APP_VERSION}"}
     conn = get_db()
     cached = conn.execute("SELECT * FROM barcode_cache WHERE ean = ?", (ean,)).fetchone()
     conn.close()
@@ -244,7 +244,7 @@ def cerca_barcode(ean):
         if cached["nutriments"]:
             try:
                 nutriments_cached = json.loads(cached["nutriments"])
-            except:
+            except Exception:
                 nutriments_cached = None
         return jsonify({
             "trovato": True, "fonte": "cache_locale", "ean": ean,
@@ -283,7 +283,7 @@ def cerca_barcode(ean):
                         "sale": nutriments.get("salt_100g"),
                     }
                 })
-        except:
+        except Exception:
             continue
 
     return jsonify({"trovato": False, "ean": ean, "nome": "", "marca": "", "categoria": "", "immagine_url": "", "nutriscore": "", "nutriments": {}})
@@ -364,11 +364,11 @@ def invia_lista_spesa_telegram():
     if not items:
         return jsonify({"ok": False, "errore": "Lista spesa vuota"})
 
-    msg = f"🛒 *Lista della Spesa*\n_{datetime.now().strftime('%d/%m/%Y %H:%M')}_\n\n"
+    msg = f"\U0001f6d2 *Lista della Spesa*\n_{datetime.now().strftime('%d/%m/%Y %H:%M')}_\n\n"
     for item in items:
         msg += f"  ☐ {item['nome']}"
         if item['quantita'] > 1:
-            msg += f" ×{item['quantita']}"
+            msg += f" \xd7{item['quantita']}"
         if item['marca']:
             msg += f" _{item['marca']}_"
         msg += "\n"
@@ -419,14 +419,14 @@ def lista_prodotti():
             try:
                 scad = datetime.strptime(d["scadenza"], "%Y-%m-%d").date()
                 d["giorni_alla_scadenza"] = (scad - oggi).days
-            except:
+            except Exception:
                 d["giorni_alla_scadenza"] = None
         else:
             d["giorni_alla_scadenza"] = None
         if d.get("nutriments") and isinstance(d["nutriments"], str):
             try:
                 d["nutriments"] = json.loads(d["nutriments"])
-            except:
+            except Exception:
                 d["nutriments"] = None
         result.append(d)
     return jsonify(result)
@@ -454,15 +454,15 @@ def aggiungi_prodotto():
     conn.close()
     log_movimento(nome=data.get("nome", "Prodotto"), tipo="acquisto", ean=data.get("ean", ""),
         marca=data.get("marca", ""), categoria=data.get("categoria", ""), quantita=data.get("quantita", 1))
-    aggiorna_sensori_ha()
+    _aggiorna_sensori_async()
 
     nome = data.get("nome", "Prodotto")
     qty = data.get("quantita", 1)
     pos = data.get("posizione", "Dispensa")
-    pos_icon = {"Frigo": "🧊", "Freezer": "❄️", "Dispensa": "🗄️"}.get(pos, "📦")
+    pos_icon = {"Frigo": "\U0001f9ca", "Freezer": "❄️", "Dispensa": "\U0001f5c4️"}.get(pos, "\U0001f4e6")
     scad = data.get("scadenza")
-    scad_str = f"\n📅 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}" if scad else ""
-    invia_notifica_azione(f"➕ *Aggiunto in dispensa*\n\n*{nome}* ×{qty}\n{pos_icon} {pos}{scad_str}")
+    scad_str = f"\n\U0001f4c5 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}" if scad else ""
+    invia_notifica_azione(f"➕ *Aggiunto in dispensa*\n\n*{nome}* \xd7{qty}\n{pos_icon} {pos}{scad_str}")
 
     return jsonify({"ok": True}), 201
 
@@ -487,13 +487,13 @@ def aggiorna_prodotto(id):
         log_movimento(nome=p["nome"], tipo="consumo", ean=p["ean"] or "",
             marca=p["marca"] or "", categoria=p["categoria"] or "",
             quantita=p["quantita"] - data["quantita"])
-    aggiorna_sensori_ha()
+    _aggiorna_sensori_async()
 
     if p:
         nome = data.get("nome", p["nome"])
         cambiamenti = []
         if "quantita" in data and data["quantita"] != p["quantita"]:
-            cambiamenti.append(f"Quantità: {p['quantita']} → {data['quantita']}")
+            cambiamenti.append(f"Quantit\xe0: {p['quantita']} → {data['quantita']}")
         if "scadenza" in data and data["scadenza"] != p["scadenza"]:
             def fmt(s): return datetime.strptime(s, "%Y-%m-%d").strftime("%d/%m/%Y") if s else "—"
             cambiamenti.append(f"Scadenza: {fmt(p['scadenza'])} → {fmt(data['scadenza'])}")
@@ -522,19 +522,14 @@ def elimina_prodotto(id):
         log_movimento(nome=p["nome"], tipo="eliminato", ean=p["ean"] or "",
             marca=p["marca"] or "", categoria=p["categoria"] or "", quantita=p["quantita"])
         pos = p["posizione"] or "Dispensa"
-        pos_icon = {"Frigo": "🧊", "Freezer": "❄️", "Dispensa": "🗄️"}.get(pos, "📦")
-        invia_notifica_azione(f"🗑️ *Eliminato dalla dispensa*\n\n*{p['nome']}*\n{pos_icon} {pos}")
-    aggiorna_sensori_ha()
+        pos_icon = {"Frigo": "\U0001f9ca", "Freezer": "❄️", "Dispensa": "\U0001f5c4️"}.get(pos, "\U0001f4e6")
+        invia_notifica_azione(f"\U0001f5d1️ *Eliminato dalla dispensa*\n\n*{p['nome']}*\n{pos_icon} {pos}")
+    _aggiorna_sensori_async()
     return jsonify({"ok": True})
-
-@app.route("/api/config", methods=["GET"])
-def get_public_config():
-    opts = get_options()
-    return jsonify({"cloudflare_token": opts.get("cloudflare_token", "")})
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "version": "1.4.7", "timestamp": datetime.now().isoformat()})
+    return jsonify({"status": "ok", "version": APP_VERSION, "timestamp": datetime.now().isoformat()})
 
 @app.route("/api/test-telegram", methods=["GET"])
 def test_telegram():
@@ -544,7 +539,7 @@ def test_telegram():
     if not token or not chat_id_raw:
         return jsonify({"ok": False, "errore": "Token o chat_id non configurati"})
     chat_ids = [c.strip() for c in str(chat_id_raw).split(",") if c.strip()]
-    msg = "🧪 *Test Dispensa Manager*\n\nLe notifiche Telegram funzionano correttamente! ✅"
+    msg = "\U0001f9ea *Test Dispensa Manager*\n\nLe notifiche Telegram funzionano correttamente! ✅"
     risultati = []
     for cid in chat_ids:
         try:
@@ -577,17 +572,17 @@ def invia_alerts():
                 giorni = (scad - oggi).days
                 if giorni <= giorni_soglia:
                     in_scadenza.append({"nome": p["nome"], "giorni": giorni})
-            except:
+            except Exception:
                 pass
 
     if not in_scadenza and not esauriti:
         return jsonify({"ok": True, "notifica_inviata": False, "motivo": "Nessun alert da inviare"})
 
-    msg = f"🔔 *Alert Dispensa*\n_{datetime.now().strftime('%d/%m/%Y')}_\n\n"
+    msg = f"\U0001f514 *Alert Dispensa*\n_{datetime.now().strftime('%d/%m/%Y')}_\n\n"
     if in_scadenza:
         msg += "⚠️ *In scadenza:*\n"
         for p in in_scadenza:
-            if p["giorni"] < 0: label = "già scaduto!"
+            if p["giorni"] < 0: label = "gi\xe0 scaduto!"
             elif p["giorni"] == 0: label = "scade oggi!"
             elif p["giorni"] == 1: label = "scade domani"
             else: label = f"tra {p['giorni']} giorni"
@@ -599,7 +594,7 @@ def invia_alerts():
             msg += f"  • {nome}\n"
 
     invia_notifica_azione(msg)
-    aggiorna_sensori_ha()
+    _aggiorna_sensori_async()
     return jsonify({"ok": True, "notifica_inviata": True, "in_scadenza": len(in_scadenza), "esauriti": len(esauriti)})
 
 @app.route("/api/export-csv", methods=["GET"])
@@ -610,7 +605,7 @@ def export_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Nome', 'Marca', 'Categoria', 'Quantità', 'Scadenza', 'Posizione', 'EAN', 'Note', 'Data inserimento'])
+    writer.writerow(['ID', 'Nome', 'Marca', 'Categoria', 'Quantit\xe0', 'Scadenza', 'Posizione', 'EAN', 'Note', 'Data inserimento'])
     for p in prodotti:
         writer.writerow([
             p['id'], p['nome'], p['marca'] or '', p['categoria'] or '',
@@ -655,13 +650,13 @@ def report_dispensa():
                     in_scadenza.append({"nome": p["nome"], "giorni": giorni, "quantita": p["quantita"]})
                 else:
                     ok_list.append(p)
-            except:
+            except Exception:
                 ok_list.append(p)
         else:
             ok_list.append(p)
 
     attivi = len([p for p in prodotti if p["quantita"] > 0])
-    msg = f"📦 *Report Dispensa*\n_{datetime.now().strftime('%d/%m/%Y %H:%M')}_\n\n"
+    msg = f"\U0001f4e6 *Report Dispensa*\n_{datetime.now().strftime('%d/%m/%Y %H:%M')}_\n\n"
     msg += f"*Prodotti in dispensa: {attivi}*"
     if esauriti:
         msg += f" _(+ {len(esauriti)} esauriti)_"
@@ -673,7 +668,7 @@ def report_dispensa():
             elif p["giorni"] == 0: label = "scade oggi!"
             elif p["giorni"] == 1: label = "scade domani"
             else: label = f"tra {p['giorni']} giorni"
-            msg += f"  • {p['nome']} ×{p['quantita']} — _{label}_\n"
+            msg += f"  • {p['nome']} \xd7{p['quantita']} — _{label}_\n"
         msg += "\n"
     if esauriti:
         msg += "❌ *Esauriti:*\n"
@@ -683,7 +678,7 @@ def report_dispensa():
     if ok_list:
         msg += "✅ *In dispensa:*\n"
         for p in ok_list:
-            msg += f"  • {p['nome']} ×{p['quantita']}\n"
+            msg += f"  • {p['nome']} \xd7{p['quantita']}\n"
 
     for cid in chat_ids:
         try:
@@ -742,7 +737,6 @@ def sync_ha():
         return jsonify({"ok": False, "errore": str(e)}), 500
 
 if __name__ == "__main__":
-    sync_frontend()
     init_db()
-    print("Dispensa Manager v1.4.7 avviato su porta 5000", flush=True)
+    print(f"Dispensa Manager v{APP_VERSION} avviato su porta 5000", flush=True)
     app.run(host="0.0.0.0", port=5000, debug=False)

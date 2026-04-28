@@ -1,5 +1,5 @@
 name: "Dispensa Manager"
-version: "1.4.7"
+version: "1.5.0"
 slug: "dispensa_manager"
 description: "Gestione dispensa con scanner barcode, OCR scadenze e notifiche Telegram"
 arch:
@@ -9,11 +9,10 @@ startup: application
 boot: auto
 ingress: true
 ingress_port: 5000
-webui: "http://[HOST]:[PORT:5000]/"
 ports:
   5000/tcp: 5000
 ports_description:
-  5000/tcp: "Flask API backend"
+  5000/tcp: "Flask API + frontend"
 map:
   - config:rw
   - data:rw
@@ -23,12 +22,8 @@ options:
   telegram_chat_id: ""
   giorni_alert_scadenza: 3
   soglia_scorte_minime: 1
-  cloudflare_token: ""
-  pwa_url: ""
 schema:
   telegram_token: str
   telegram_chat_id: str
   giorni_alert_scadenza: int
   soglia_scorte_minime: int
-  cloudflare_token: str
-  pwa_url: str
