@@ -1,4 +1,4 @@
-import csv
+﻿import csv
 import io
 import json
 import os
@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_cors import CORS
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.5.1"
 DB_PATH = "/config/dispensa.db"
 OPTIONS_PATH = "/data/options.json"
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
@@ -56,20 +56,27 @@ def after_request(response):
 # ---------------------------------------------------------------------------
 @app.route('/')
 def index():
-    return send_from_directory(WWW_DIR, 'index.html')
+    resp = send_from_directory(WWW_DIR, 'index.html')
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
 
 @app.route('/sw.js')
 def service_worker():
     resp = send_from_directory(WWW_DIR, 'sw.js')
     resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
     return resp
 
 @app.route('/<path:filename>')
 def static_files(filename):
-    return send_from_directory(WWW_DIR, filename)
+    resp = send_from_directory(WWW_DIR, filename)
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS prodotti (
@@ -215,6 +222,9 @@ def aggiorna_sensori_ha():
 
 def _aggiorna_sensori_async():
     threading.Thread(target=aggiorna_sensori_ha, daemon=True).start()
+
+def _invia_notifica_async(testo):
+    threading.Thread(target=invia_notifica_azione, args=(testo,), daemon=True).start()
 
 def invia_notifica_azione(testo):
     opts = get_options()
@@ -462,7 +472,7 @@ def aggiungi_prodotto():
     pos_icon = {"Frigo": "\U0001f9ca", "Freezer": "❄️", "Dispensa": "\U0001f5c4️"}.get(pos, "\U0001f4e6")
     scad = data.get("scadenza")
     scad_str = f"\n\U0001f4c5 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}" if scad else ""
-    invia_notifica_azione(f"➕ *Aggiunto in dispensa*\n\n*{nome}* \xd7{qty}\n{pos_icon} {pos}{scad_str}")
+    _invia_notifica_async(f"➕ *Aggiunto in dispensa*\n\n*{nome}* \xd7{qty}\n{pos_icon} {pos}{scad_str}")
 
     return jsonify({"ok": True}), 201
 
@@ -507,7 +517,7 @@ def aggiorna_prodotto(id):
             cambiamenti.append("Note aggiornate")
         if cambiamenti:
             corpo = "\n".join(f"• {c}" for c in cambiamenti)
-            invia_notifica_azione(f"✏️ *Modificato: {nome}*\n\n{corpo}")
+            _invia_notifica_async(f"✏️ *Modificato: {nome}*\n\n{corpo}")
 
     return jsonify({"ok": True})
 
@@ -523,7 +533,7 @@ def elimina_prodotto(id):
             marca=p["marca"] or "", categoria=p["categoria"] or "", quantita=p["quantita"])
         pos = p["posizione"] or "Dispensa"
         pos_icon = {"Frigo": "\U0001f9ca", "Freezer": "❄️", "Dispensa": "\U0001f5c4️"}.get(pos, "\U0001f4e6")
-        invia_notifica_azione(f"\U0001f5d1️ *Eliminato dalla dispensa*\n\n*{p['nome']}*\n{pos_icon} {pos}")
+        _invia_notifica_async(f"\U0001f5d1️ *Eliminato dalla dispensa*\n\n*{p['nome']}*\n{pos_icon} {pos}")
     _aggiorna_sensori_async()
     return jsonify({"ok": True})
 
@@ -593,7 +603,7 @@ def invia_alerts():
         for nome in esauriti:
             msg += f"  • {nome}\n"
 
-    invia_notifica_azione(msg)
+    _invia_notifica_async(msg)
     _aggiorna_sensori_async()
     return jsonify({"ok": True, "notifica_inviata": True, "in_scadenza": len(in_scadenza), "esauriti": len(esauriti)})
 
@@ -740,3 +750,4 @@ if __name__ == "__main__":
     init_db()
     print(f"Dispensa Manager v{APP_VERSION} avviato su porta 5000", flush=True)
     app.run(host="0.0.0.0", port=5000, debug=False)
+
