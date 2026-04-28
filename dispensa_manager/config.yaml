@@ -1,5 +1,5 @@
-name: "Dispensa Manager"
-version: "1.5.0"
+﻿name: "Dispensa Manager"
+version: "1.5.1"
 slug: "dispensa_manager"
 description: "Gestione dispensa con scanner barcode, OCR scadenze e notifiche Telegram"
 arch:
@@ -9,6 +9,8 @@ startup: application
 boot: auto
 ingress: true
 ingress_port: 5000
+panel_icon: mdi:fridge-outline
+panel_title: Dispensa
 ports:
   5000/tcp: 5000
 ports_description:
@@ -27,3 +29,4 @@ schema:
   telegram_chat_id: str
   giorni_alert_scadenza: int
   soglia_scorte_minime: int
+
