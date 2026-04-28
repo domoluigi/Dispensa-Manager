@@ -1,4 +1,4 @@
-﻿﻿import csv
+import csv
 import io
 import json
 import os
@@ -764,4 +764,3 @@ if __name__ == "__main__":
     init_db()
     print(f"Dispensa Manager v{APP_VERSION} avviato su porta 5000", flush=True)
     app.run(host="0.0.0.0", port=5000, debug=False)
-
