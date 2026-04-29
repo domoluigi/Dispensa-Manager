@@ -1,6 +1,6 @@
 # 🛒 Dispensa Manager — Home Assistant Add-on
 
-[![Version](https://img.shields.io/badge/version-1.4.6-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
+[![Version](https://img.shields.io/badge/version-1.5.9-green)](https://github.com/domoluigi/Dispensa-Manager/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HA](https://img.shields.io/badge/Home%20Assistant-Add--on-blue)](https://www.home-assistant.io/)
 
@@ -23,7 +23,7 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - ⬜ **Sezione Esauriti** — i prodotti a zero sono separati dall'inventario attivo, con pallino grigio e tab collassabile
 - ⏰ **Filtro In scadenza** — mostra solo i prodotti in scadenza entro la soglia configurata
 - 🔴 **Filtro Scaduti** — mostra solo i prodotti con data di scadenza già passata
-- 🔄 **Sync automatico frontend** — ad ogni avvio/aggiornamento dell'add-on i file della PWA si aggiornano automaticamente, senza intervento manuale
+- 🔄 **Frontend integrato nell'add-on** — la PWA è parte del container, si aggiorna automaticamente ad ogni update dell'add-on senza intervento manuale
 - 🏠 **Sensori Home Assistant** — 3 sensori aggiornati in tempo reale
 - 📲 **Notifiche Telegram** — su scadenza, esaurimento scorte, aggiornamenti
 - 🛒 **Lista della spesa** — automatica quando un prodotto si esaurisce, con invio Telegram
@@ -62,7 +62,7 @@ Cerca **Dispensa Manager** nell'Add-on Store → **Installa**.
 
 ### 3. Avvia l'add-on
 
-Clicca **Avvia**: i file della PWA vengono copiati automaticamente in `/config/www/dispensa/` al primo avvio. Non è necessario alcun intervento manuale. Ad ogni aggiornamento dell'add-on, i file si aggiornano da soli.
+Clicca **Avvia**: il backend Flask parte immediatamente e serve il frontend integrato. Non è necessario copiare file o configurare percorsi aggiuntivi.
 
 ### 4. Configura l'add-on
 
@@ -74,29 +74,22 @@ telegram_chat_id: "IL_TUO_CHAT_ID"       # opzionale, supporta più ID separati 
 giorni_alert_scadenza: 3                  # giorni prima della scadenza per l'alert
 soglia_scorte_minime: 1                   # quantità minima prima di aggiungere alla lista spesa
 cloudflare_token: ""                      # opzionale, vedi sezione Cloudflare
-pwa_url: "http://IP_HOME_ASSISTANT:8123"  # opzionale, solo base URL — vedi sotto
 ```
 
 > **Nota:** `telegram_chat_id` supporta più ID separati da virgola es. `123456,789012`
 
-> **Nota:** `pwa_url` è la **base URL** del tuo Home Assistant — solo host e porta, senza percorso. Il path `/local/dispensa/index.html` viene aggiunto automaticamente. Esempi:
-> - locale: `http://192.168.1.5:8123`
-> - esterno: `https://tuodominio.it`
->
-> Se configurato, il pulsante **"Apri interfaccia utente web"** nell'add-on aprirà direttamente la PWA. Non viene mai incluso nel codice sorgente per preservare la privacy.
-
 ### 5. Accedi alla PWA
 
-**Opzione A — dal pannello HA:**
-Configura `pwa_url` nelle opzioni dell'add-on (passaggio 4), poi clicca **"Apri interfaccia utente web"** nella pagina dell'add-on.
+**Opzione A — dal pannello HA (consigliato):**
+Clicca **"Apri interfaccia utente web"** nella pagina dell'add-on — apre la PWA direttamente via ingress HA.
 
-**Opzione B — direttamente dal browser:**
+**Opzione B — accesso diretto:**
 ```
-http://IP_HOME_ASSISTANT:8123/local/dispensa/index.html
+http://IP_HOME_ASSISTANT:5000/
 ```
 
 Su iPhone puoi installarla come app: **Condividi** → **Aggiungi a schermata Home**.
-Su Android: Chrome → menu ⋮ → **Installa app**.
+Su Android: Chrome → **Installa app** (dal menu ⋮ o dal banner automatico).
 
 ---
 
@@ -111,7 +104,7 @@ Telefono (HTTPS)
     ↓
 Cloudflare Tunnel
     ├── tuodominio.it → HA :8123  (dashboard)
-    └── dispensa-api.tuodominio.it → HA :5000  (backend Flask)
+    └── dispensa-api.tuodominio.it → HA :5000  (PWA + backend Flask)
 ```
 
 ### 1. Aggiungi un hostname nel tunnel
@@ -129,20 +122,21 @@ Nel dashboard Cloudflare → **Zero Trust** → **Networks** → **Tunnels** →
 
 Crea due regole in **Security** → **WAF** → **Custom Rules**:
 
-**Regola 1 — Skip antibot per richieste autenticate** (azione: Skip, priorità: First)
+**Regola 1 — Skip antibot per richieste API autenticate** (azione: Skip, priorità: First)
 ```
-(http.request.uri.path contains "/api/") and
+(starts_with(http.request.uri.path, "/api/")) and
 (http.request.headers["x-jarvis-token"][0] eq "IL_TUO_TOKEN_SEGRETO")
 ```
 
-**Regola 2 — Blocca accesso non autenticato al backend** (azione: Block, priorità: Last)
+**Regola 2 — Blocca accesso non autenticato alle API** (azione: Block, priorità: Last)
 ```
 (http.host eq "dispensa-api.tuodominio.it") and
 not (http.request.headers["x-jarvis-token"][0] eq "IL_TUO_TOKEN_SEGRETO") and
-not (http.request.method eq "OPTIONS")
+not (http.request.method eq "OPTIONS") and
+starts_with(http.request.uri.path, "/api/")
 ```
 
-> La regola 2 deve essere **Last** — la regola 1 scatta prima per le richieste autenticate; i preflight CORS (`OPTIONS`) passano sempre perché necessari al browser.
+> La regola 2 deve essere **Last** — la regola 1 scatta prima per le richieste autenticate; i preflight CORS (`OPTIONS`) passano sempre perché necessari al browser. Il frontend (`/`) è accessibile liberamente.
 
 ### 3. Configura l'add-on
 
@@ -163,7 +157,7 @@ Il token viene salvato in localStorage e aggiunto automaticamente a ogni chiamat
 ### 5. Installa come app
 
 Con l'accesso HTTPS il service worker si attiva correttamente e la PWA è installabile come app nativa:
-- **Android**: Chrome → menu ⋮ → **Installa app**
+- **Android**: Chrome → **Installa app** (menu ⋮ o banner automatico)
 - **iPhone**: Safari → Condividi → **Aggiungi a schermata Home**
 
 ---
@@ -231,14 +225,14 @@ Quando si scansiona un barcode non trovato su Open Food Facts, nella schermata d
 
 ---
 
-## 🔄 Aggiornamenti automatici della PWA
+## 🔄 Aggiornamenti della PWA
 
-Dalla versione **1.4.5**, i file della PWA (`index.html`, `manifest.json`, `sw.js`, icone) vengono gestiti completamente dall'add-on:
+Dalla versione **1.5.0**, il frontend è integrato direttamente nel container dell'add-on (`dispensa_manager/www/`):
 
-- Ad ogni avvio, `app.py` scarica i file aggiornati da GitHub e li copia in `/config/www/dispensa/`
-- I file vengono aggiornati solo se il contenuto è effettivamente cambiato
-- Non è più necessario copiare manualmente nulla dopo un aggiornamento
-- Il service worker usa strategia **network-first** per `index.html`: ogni apertura carica sempre la versione più recente dal server, con cache usata solo come fallback offline
+- Non esiste più alcuna copia in `/config/www/dispensa/` — Flask serve il frontend direttamente
+- Per aggiornare l'interfaccia: **aggiorna l'add-on in HA → Riavvia** — il nuovo frontend è già incluso nel container
+- Il service worker usa strategia **network-first** per `index.html`: ogni apertura scarica sempre la versione aggiornata dal server, con la cache usata solo come fallback offline
+- Quando il backend rileva una versione superiore rispetto al client, appare un **banner arancione "Aggiornamento disponibile"** — clicca **Aggiorna ora** per svuotare la cache e ricaricare immediatamente la versione più recente
 
 ---
 
@@ -295,7 +289,7 @@ entities:
 
 ```yaml
 type: iframe
-url: http://IP_HOME_ASSISTANT:8123/local/dispensa/index.html
+url: http://IP_HOME_ASSISTANT:5000/
 aspect_ratio: 75%
 title: 📦 Lista Prodotti Dispensa
 ```
@@ -441,19 +435,20 @@ L'add-on utilizza SQLite con le seguenti tabelle:
 
 ```
 Dispensa-Manager/
-├── dispensa_manager/       # Add-on HAOS
+├── dispensa_manager/           # Add-on HAOS
 │   ├── Dockerfile
 │   ├── config.yaml
-│   ├── app.py              # Backend Flask (include sync automatico PWA)
-│   └── requirements.txt
-├── www/
-│   └── dispensa/
-│       ├── index.html      # PWA frontend
-│       ├── sw.js           # Service Worker (network-first per index.html)
-│       ├── manifest.json   # Web App Manifest (installazione PWA)
-│       ├── icon-192.png    # Icona app 192×192
-│       └── icon-512.png    # Icona app 512×512
-├── repository.json         # Custom store HA
+│   ├── app.py                  # Backend Flask
+│   ├── requirements.txt
+│   └── www/                    # Frontend PWA (servito direttamente da Flask)
+│       ├── index.html          # App principale
+│       ├── sw.js               # Service Worker (network-first + /api/ passthrough)
+│       ├── manifest.json       # Web App Manifest (id, screenshots, icone)
+│       ├── icon-192.png        # Icona app 192×192
+│       ├── icon-512.png        # Icona app 512×512
+│       ├── screenshot-narrow.png  # Screenshot mobile 390×844 (install dialog)
+│       └── screenshot-wide.png    # Screenshot desktop 1280×800 (install dialog)
+├── repository.json             # Custom store HA
 ├── CHANGELOG.md
 ├── .gitignore
 └── README.md
@@ -479,59 +474,67 @@ Dalla schermata di conferma prodotto, accanto al campo data di scadenza è prese
 
 ## 📋 Changelog
 
+### v1.5.9 — 2026-04-29
+
+- 📸 **Screenshot PWA**: aggiunti screenshot mobile (390×844) e desktop (1280×800) per il dialogo "Installa app" di Chrome 119+ su Android.
+- 🔧 **Manifest**: campo `id` aggiunto, `start_url` e `scope` resi assoluti.
+
+### v1.5.8 — 2026-04-28
+
+- 🔁 **SW pass-through `/api/`**: il service worker non intercetta le chiamate API (compatibilità WAF Cloudflare).
+- 🎨 **Manifest icone**: entry `any` e `maskable` separati per piena conformità PWA.
+
+### v1.5.7 — 2026-04-28
+
+- 🛠️ **Fix visualizzazione versione** nel frontend (regex Flask).
+
+### v1.5.6 — 2026-04-28
+
+- 🔃 **Force re-fetch**: query-string versione sulle risorse statiche per bypassare la cache del browser.
+
+### v1.5.5 — 2026-04-27
+
+- 🛠️ **Fix BOM (U+FEFF)** nei file Python e fix parsing `cloudflare_url`.
+
+### v1.5.0 — 2026-04-27
+
+- 🏗️ **Nuova architettura**: Flask serve il frontend direttamente da `dispensa_manager/www/`. Eliminato sync verso `/config/www/dispensa/`. Rimossa opzione `pwa_url`.
+
+### v1.4.7 — 2026-04-26
+
+- 🔔 **Banner aggiornamento disponibile** + pulsante **Aggiorna ora** per aggiornare la PWA senza riavviare manualmente.
+
 ### v1.4.6 — 2026-04-26
 
-- 🔴 **Filtro Scaduti**: nuovo chip nella filter-row dell'inventario che mostra solo i prodotti con data di scadenza già passata, distinto dal filtro "In scadenza" (prodotti ancora in scadenza entro la soglia).
+- 🔴 **Filtro Scaduti**: chip nella filter-row per mostrare solo i prodotti con data di scadenza già passata.
 
 ### v1.4.5 — 2026-04-26
 
-- 🔄 **Sync automatico frontend**: ad ogni avvio dell'add-on, i file della PWA vengono scaricati da GitHub e copiati automaticamente in `/config/www/dispensa/`. Non è più necessario copiare manualmente nulla dopo un aggiornamento.
-- 🛠️ **Fix Service Worker**: strategia network-first per `index.html` — ogni apertura carica sempre la versione aggiornata dal server, eliminando il problema di cache stale dopo gli aggiornamenti.
+- 🔄 **Sync automatico frontend** (poi sostituito in v1.5.0): i file PWA venivano scaricati da GitHub e copiati in `/config/www/dispensa/` ad ogni avvio.
+- 🛠️ **Fix Service Worker**: strategia network-first per `index.html`.
 
 ### v1.4.0 — 2026-04-14
 
-- 📷 **Foto prodotto**: quando il barcode non viene trovato su Open Food Facts, nella schermata di conferma appare una sezione per scattare o scegliere una foto dalla galleria. La foto viene ridimensionata (max 600px, JPEG 82%) e salvata nel database.
-- ⬜ **Tab Esauriti separato**: i prodotti con quantità = 0 appaiono in una sezione collassabile "Esauriti" in fondo alla lista, con pallino grigio. Non sono più mescolati all'inventario principale.
-- 📊 Il contatore **"In dispensa"** esclude i prodotti esauriti (`quantita > 0` only).
-- 🏠 Il sensore HA `sensor.dispensa_totale_prodotti` conta solo i prodotti attivi.
-- 🔗 Nuovo endpoint `GET /api/prodotti/esauriti` per recupero separato.
-- 📦 Le statistiche per posizione contano solo prodotti attivi.
-- 📬 Il report Telegram mostra separatamente attivi e esauriti.
+- 📷 **Foto prodotto**: scatta o scegli una foto per i prodotti senza barcode noto.
+- ⬜ **Tab Esauriti separato**: sezione collassabile con pallino grigio, separata dall'inventario principale.
+- 📊 Contatore e sensori escludono i prodotti esauriti.
 
-### v1.3.3
-- ✂️ `pwa_url` accetta solo la base URL (es. `http://192.168.1.5:8123`), il path `/local/dispensa/index.html` è aggiunto automaticamente
-
-### v1.3.2
-- 🔗 Opzione `pwa_url` nelle configurazioni addon — il pulsante "Apri interfaccia utente web" apre la PWA direttamente dal pannello HA
-- 🔒 L'URL della PWA rimane locale e non è mai incluso nel codice sorgente
-
-### v1.3.1
-- 🛠️ Fix ingress HA: aggiunta route `/` nel backend Flask (prima restituiva 404)
+### v1.3.x
+- ✂️ `pwa_url` (base URL, path aggiunto automaticamente)
+- 🔗 Opzione `pwa_url` per il pulsante "Apri interfaccia utente web"
+- 🛠️ Fix ingress HA (route `/`)
 
 ### v1.3.0
-- 🌐 Token Cloudflare configurabile nelle opzioni addon (non più nel sorgente)
-- 🔒 Endpoint `/api/config` per recupero automatico token via ingress HA
-- ⚙️ Campo Token Cloudflare nelle impostazioni PWA
-- 🔧 CORS: aggiunto `x-jarvis-token` negli header permessi
+- 🌐 Token Cloudflare nelle opzioni addon, endpoint `/api/config`
 
 ### v1.2.0
-- 🚇 Ingress HA abilitato (accesso HTTPS nativo senza configurazione extra)
+- 🚇 Ingress HA abilitato
 
 ### v1.1.0
-- 🔍 Endpoint `/api/prodotti/by-ean/<ean>` per rilevare duplicati
-- 🔔 Endpoint `/api/alerts` — alert dettagliati su Telegram
-- 📥 Endpoint `/api/export-csv` — esporta inventario in CSV
+- 🔍 `/api/prodotti/by-ean`, `/api/alerts`, `/api/export-csv`
 
-### v1.0.2
-- 🔍 OCR scadenza automatica con fotocamera (Tesseract.js)
-- 📅 Supporto formato MM/YYYY, mesi in italiano
-
-### v1.0.1
-- 📊 Statistiche consumi, lista della spesa, valori nutrizionali, Nutri-Score
-- 🗃️ Cache barcode locale, integrazione Alexa, posizione automatica
-
-### v1.0.0
-- 🎉 Release iniziale — scanner barcode, Open Food Facts, sensori HA, Telegram
+### v1.0.x
+- 🎉 Release iniziale — scanner barcode, Open Food Facts, sensori HA, Telegram, OCR scadenza, statistiche
 
 ---
 
