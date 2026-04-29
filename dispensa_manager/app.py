@@ -69,6 +69,7 @@ def index():
         html = html.replace('<meta name="cf-token" content="">', '<meta name="cf-token" content="' + cf_token + '">')
         html = html.replace('<meta name="cf-url" content="">', '<meta name="cf-url" content="' + cf_url + '">')
         html = re.sub(r'<meta name="app-version" content="[^"]*">', f'<meta name="app-version" content="{APP_VERSION}">', html)
+        html = re.sub(r'Dispensa Manager v\d+\.\d+\.\d+', f'Dispensa Manager v{APP_VERSION}', html)
         resp = make_response(html)
         resp.headers['Content-Type'] = 'text/html; charset=utf-8'
         resp.headers['Cache-Control'] = 'no-cache'
