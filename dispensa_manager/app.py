@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import os
+import re
 import sqlite3
 import threading
 import requests
@@ -9,7 +10,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_cors import CORS
 
-APP_VERSION = "1.5.6"
+APP_VERSION = "1.5.7"
 DB_PATH = "/config/dispensa.db"
 OPTIONS_PATH = "/data/options.json"
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
@@ -62,10 +63,12 @@ def index():
     cf_token = opts.get('cloudflare_token', '')
     cf_url = opts.get('cloudflare_url', '').rstrip('/')
     try:
-        with open(os.path.join(WWW_DIR, 'index.html'), 'r', encoding='utf-8') as fh:
+        # utf-8-sig strip automaticamente il BOM se presente
+        with open(os.path.join(WWW_DIR, 'index.html'), 'r', encoding='utf-8-sig') as fh:
             html = fh.read()
         html = html.replace('<meta name="cf-token" content="">', '<meta name="cf-token" content="' + cf_token + '">')
         html = html.replace('<meta name="cf-url" content="">', '<meta name="cf-url" content="' + cf_url + '">')
+        html = re.sub(r'<meta name="app-version" content="[^"]*">', f'<meta name="app-version" content="{APP_VERSION}">', html)
         resp = make_response(html)
         resp.headers['Content-Type'] = 'text/html; charset=utf-8'
         resp.headers['Cache-Control'] = 'no-cache'
