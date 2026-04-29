@@ -5,6 +5,59 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [1.5.9] — 2026-04-29
+
+### Aggiunto
+- **Screenshot PWA**: aggiunti `screenshot-narrow.png` (390×844) e `screenshot-wide.png` (1280×800), richiesti da Chrome 119+ per mostrare il dialogo "Installa app" su Android al posto del semplice "Aggiungi a schermata Home".
+
+### Modificato
+- **Web App Manifest**: aggiunto campo `id: "/"` (raccomandato da Chrome 113+ per identità stabile dell'app); `start_url` e `scope` cambiati da percorsi relativi (`"./"`) ad assoluti (`"/"`) per piena conformità PWA.
+
+---
+
+## [1.5.8] — 2026-04-28
+
+### Modificato
+- **Service Worker**: aggiunto pass-through per le richieste `/api/` — il SW non intercetta le chiamate API, evitando conflitti con la WAF Cloudflare che richiedeva header specifici su tutte le richieste in cache.
+- **Web App Manifest**: gli icon entry sono stati sdoppiati — ogni icona ha ora due entry separati con `purpose: "any"` e `purpose: "maskable"` rispettivamente, per piena conformità PWA.
+
+---
+
+## [1.5.7] — 2026-04-28
+
+### Corretto
+- **Visualizzazione versione nel frontend**: fix nella sostituzione regex in Flask che causava la visualizzazione di una versione errata nell'interfaccia.
+
+---
+
+## [1.5.6] — 2026-04-28
+
+### Aggiunto
+- **Meccanismo force re-fetch**: le risorse statiche (JS, CSS) includono ora un query-string con il numero di versione, bypassando la cache del browser ad ogni aggiornamento dell'add-on.
+
+---
+
+## [1.5.5] — 2026-04-27
+
+### Corretto
+- **BOM (U+FEFF)**: rimosso carattere BOM invisibile all'inizio di alcuni file Python che causava errori di parsing al caricamento dell'add-on.
+- **`cloudflare_url`**: fix nel parsing dell'opzione di configurazione che impediva il corretto rilevamento dell'URL esterno.
+
+---
+
+## [1.5.0] — 2026-04-27
+
+### Modificato (breaking)
+- **Architettura frontend**: Flask serve ora il frontend direttamente dalla cartella `dispensa_manager/www/`. Eliminato il meccanismo di sync automatico verso `/config/www/dispensa/` introdotto in v1.4.5. Il frontend è parte integrante del container dell'add-on e non richiede più accesso in scrittura a `/config/`.
+- **Rimossa opzione `pwa_url`**: non è più necessaria — la PWA è accessibile direttamente tramite il pulsante "Apri interfaccia utente web" in HA (ingress) oppure all'indirizzo `http://IP:5000/`.
+
+### Rimosso
+- Cartella `www/dispensa/` dal repository (codice legacy).
+- Opzione di configurazione `pwa_url` da `config.yaml`.
+- Logica di sync GitHub → `/config/www/dispensa/` da `app.py`.
+
+---
+
 ## [1.4.7] — 2026-04-26
 
 ### Aggiunto
@@ -24,7 +77,7 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 ## [1.4.5] — 2026-04-26
 
 ### Aggiunto
-- **Sync automatico frontend**: ad ogni avvio dell'add-on, `app.py` scarica automaticamente i file dell'interfaccia (`index.html`, `manifest.json`, `sw.js`, icone) da GitHub Raw e li copia in `/config/www/dispensa/`, aggiornando solo i file effettivamente cambiati. Elimina la necessità di copiare manualmente i file dopo ogni aggiornamento.
+- **Sync automatico frontend**: ad ogni avvio dell'add-on, `app.py` scaricava automaticamente i file dell'interfaccia (`index.html`, `manifest.json`, `sw.js`, icone) da GitHub Raw e li copiava in `/config/www/dispensa/`, aggiornando solo i file effettivamente cambiati. (Sostituito in v1.5.0 dall'architettura con Flask che serve direttamente il frontend.)
 
 ### Corretto
 - **Service Worker — strategia network-first per `index.html`**: il SW non mette più in cache statica la pagina principale. Ogni apertura dell'app scarica sempre la versione aggiornata dal server, con la cache usata solo come fallback offline. Risolve il problema di versioni stale dopo gli aggiornamenti.
@@ -51,7 +104,7 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 ## [1.3.3] — 2026-03-01
 
 ### Modificato
-- `pwa_url` accetta solo la base URL; il path `/local/dispensa/index.html` viene aggiunto automaticamente da `app.py`.
+- `pwa_url` accettava solo la base URL; il path `/local/dispensa/index.html` veniva aggiunto automaticamente da `app.py`.
 
 ---
 
