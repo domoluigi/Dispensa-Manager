@@ -1,9 +1,10 @@
 {
+  "id": "/",
   "name": "Dispensa Manager",
   "short_name": "Dispensa",
   "description": "Gestione inventario dispensa con barcode scanner",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#F7F6F2",
@@ -33,6 +34,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "./screenshot-narrow.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dispensa Manager - Vista inventario"
+    },
+    {
+      "src": "./screenshot-wide.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Dispensa Manager - Vista desktop"
     }
   ]
 }
