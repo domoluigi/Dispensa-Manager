@@ -10,7 +10,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_cors import CORS
 
-APP_VERSION = "1.5.7"
+APP_VERSION = "1.5.8"
 DB_PATH = "/config/dispensa.db"
 OPTIONS_PATH = "/data/options.json"
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
@@ -638,7 +638,7 @@ def export_csv():
         writer.writerow([
             p['id'], p['nome'], p['marca'] or '', p['categoria'] or '',
             p['quantita'], p['scadenza'] or '', p['posizione'] or '',
-            p['ean'] or '', p['note'] or '', p['data_inserimento'] or ''
+            p['ean'] or '', p['data_inserimento'] or ''
         ])
 
     output.seek(0)
