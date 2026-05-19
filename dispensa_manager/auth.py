@@ -36,11 +36,13 @@ def is_ip_banned(conn, ip: str) -> bool:
 
 
 def record_attempt(conn, ip: str, username: str, success: bool):
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
     with conn:
         conn.execute(
             "INSERT INTO login_attempts (ip, username, success) VALUES (?, ?, ?)",
             (ip, username, int(success)),
         )
+        conn.execute("DELETE FROM login_attempts WHERE attempted_at < ?", (cutoff,))
     if not success:
         _maybe_ban(conn, ip)
 

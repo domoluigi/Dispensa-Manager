@@ -5,8 +5,8 @@ from datetime import timedelta
 from flask import Flask, jsonify, make_response, send_from_directory, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from database import APP_VERSION
 
-APP_VERSION = "2.0.0"
 WWW_DIR = os.path.join(os.path.dirname(__file__), "www")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

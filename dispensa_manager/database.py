@@ -217,7 +217,7 @@ def get_setting(conn, key: str, default: str = "") -> str:
 
 def set_setting(conn, key: str, value: str):
     conn.execute(
-        "INSERT OR REPLACE INTO app_settings (key, value, updated_at) "
-        "VALUES (?, ?, CURRENT_TIMESTAMP)",
+        "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP",
         (key, value),
     )
