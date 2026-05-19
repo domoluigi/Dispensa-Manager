@@ -290,7 +290,7 @@
     </div>
     <div class="login-field">
       <label>Password</label>
-      <input type="password" id="login-password" placeholder="������" autocomplete="current-password">
+      <input type="password" id="login-password" placeholder="••••••" autocomplete="current-password">
     </div>
     <button class="login-btn" onclick="doLogin()">Accedi</button>
     <div class="login-error" id="login-error"></div>
@@ -580,40 +580,40 @@
         <button class="toggle" id="dark-toggle" onclick="toggleDarkMode()"></button>
       </div>
     </div>
-    <div class=�card card-body� style=�margin-top:12px;�>
-      <div style=�font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);�>Dati</div>
-      <button class=�btn btn-secondary� onclick=�esportaCSV()�>📥 Esporta inventario CSV</button>
+    <div class="card card-body" style="margin-top:12px;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">Dati</div>
+      <button class="btn btn-secondary" onclick="esportaCSV()">📥 Esporta inventario CSV</button>
     </div>
-    <div class=�card card-body� style=�margin-top:12px;�>
-      <div style=�font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);�>Account</div>
-      <div style=�font-size:14px;color:var(--text);margin-bottom:12px;�>Connesso come: <strong id=�current-username�>�</strong></div>
-      <button class=�btn btn-secondary� onclick=�doLogout()� style=�color:var(--red);�>🚪 Esci (logout)</button>
+    <div class="card card-body" style="margin-top:12px;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">Account</div>
+      <div style="font-size:14px;color:var(--text);margin-bottom:12px;">Connesso come: <strong id="current-username">"</strong></div>
+      <button class="btn btn-secondary" onclick="doLogout()" style="color:var(--red);">🚪 Esci (logout)</button>
     </div>
-    <div style=�text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);�>Dispensa Manager v2.0.0</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.1</div>
   </div>
-  <div class=�tab-bar�>
-    <div class=�tab� onclick=�showTab('inventario')�>
-      <svg viewBox=�0 0 24 24�><path d=�M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z�/><polyline points=�9 22 9 12 15 12 15 22�/></svg>
+  <div class="tab-bar">
+    <div class="tab" onclick="showTab('inventario')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       <span>Dispensa</span>
     </div>
-    <div class=�tab� onclick=�showTab('scan')�>
-      <svg viewBox=�0 0 24 24�><rect x=�3� y=�3� width=�18� height=�18� rx=�2�/><line x1=�7� y1=�8� x2=�7� y2=�16�/><line x1=�10� y1=�8� x2=�10� y2=�16�/><line x1=�14� y1=�8� x2=�14� y2=�16�/><line x1=�17� y1=�8� x2=�17� y2=�16�/></svg>
+    <div class="tab" onclick="showTab('scan')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/></svg>
       <span>Scansiona</span>
     </div>
-    <div class=�tab� onclick=�showTab('spesa')�>
-      <svg viewBox=�0 0 24 24�><path d=�M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z�/><line x1=�3� y1=�6� x2=�21� y2=�6�/><path d=�M16 10a4 4 0 01-8 0�/></svg>
+    <div class="tab" onclick="showTab('spesa')">
+      <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
       <span>Spesa</span>
     </div>
-    <div class=�tab� onclick=�showTab('statistiche')�>
-      <svg viewBox=�0 0 24 24�><line x1=�18� y1=�20� x2=�18� y2=�10�/><line x1=�12� y1=�20� x2=�12� y2=�4�/><line x1=�6� y1=�20� x2=�6� y2=�14�/></svg>
+    <div class="tab" onclick="showTab('statistiche')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       <span>Statistiche</span>
     </div>
-    <div class=�tab active� onclick=�showTab('impostazioni')�>
-      <svg viewBox=�0 0 24 24�><circle cx=�12� cy=�12� r=�3�/><path d=�M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z�/></svg>
+    <div class="tab active" onclick="showTab('impostazioni')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span>Impostazioni</span>
     </div>
-    <div class=�tab tab-admin� onclick=�showTab('admin')�>
-      <svg viewBox=�0 0 24 24�><path d=�M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2�/><circle cx=�9� cy=�7� r=�4�/><path d=�M23 21v-2a4 4 0 00-3-3.87�/><path d=�M16 3.13a4 4 0 010 7.75�/></svg>
+    <div class="tab tab-admin" onclick="showTab('admin')">
+      <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
       <span>Admin</span>
     </div>
   </div>
@@ -805,7 +805,7 @@ async function apiFetch(url, opts = {}) {
     if (r.status === 401) {
       clearAuth();
       showLoginOverlay();
-      throw new Error('Sessione scaduta � effettua nuovamente il login');
+      throw new Error('Sessione scaduta – effettua nuovamente il login');
     }
   }
   return r;
@@ -829,7 +829,7 @@ async function doLogin() {
     hideLoginOverlay();
     applyUserUI();
     caricaInventario();
-  } catch (e) { errEl.textContent = 'Errore di rete � riprova'; }
+  } catch (e) { errEl.textContent = 'Errore di rete – riprova'; }
 }
 
 function showLoginOverlay() {
@@ -872,7 +872,7 @@ async function initAuth() {
       applyUserUI();
       return;
     }
-    // Token scaduto � prova refresh
+    // Token scaduto – prova refresh
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       hideLoginOverlay();
@@ -882,7 +882,7 @@ async function initAuth() {
       showLoginOverlay();
     }
   } catch {
-    // Rete non disponibile ma token presente � lascia passare
+    // Rete non disponibile ma token presente – lascia passare
     hideLoginOverlay();
     applyUserUI();
   }
@@ -1990,7 +1990,7 @@ async function caricaIPBans() {
     <div class="ip-ban-row">
       <div style="flex:1;min-width:0;">
         <div class="ip-ban-ip">${b.ip}</div>
-        <div class="ip-ban-info">${b.failed_attempts} tentativi falliti � ${new Date(b.banned_at).toLocaleString('it-IT')}</div>
+        <div class="ip-ban-info">${b.failed_attempts} tentativi falliti – ${new Date(b.banned_at).toLocaleString('it-IT')}</div>
         ${b.reason ? `<div class="ip-ban-info">${b.reason}</div>` : ''}
       </div>
       <button class="btn-sm btn-sm-green" onclick="unbanIP('${b.ip}')">Sblocca</button>
@@ -2060,7 +2060,7 @@ async function banIP() {
       </div>
       <div class="field">
         <label>Password (min 6 caratteri)</label>
-        <input type="password" id="new-password" placeholder="������">
+        <input type="password" id="new-password" placeholder="••••••">
       </div>
       <div class="setting-row" style="margin-bottom:12px;">
         <span style="font-size:15px;">Amministratore</span>
@@ -2116,7 +2116,7 @@ async function banIP() {
     <div class="modal-title">Modifica: <span id="edit-user-username"></span></div>
     <div class="field">
       <label>Nuova password <span style="color:var(--muted);font-weight:400">(vuoto = non cambiare)</span></label>
-      <input type="password" id="edit-user-password" placeholder="������">
+      <input type="password" id="edit-user-password" placeholder="••••••">
     </div>
     <div class="setting-row" style="margin-bottom:10px;">
       <span style="font-size:15px;">Amministratore</span>

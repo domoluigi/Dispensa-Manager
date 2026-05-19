@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 SCHEMA_VERSION = 3
 
 
@@ -149,7 +149,7 @@ def init_db():
         );
     """)
 
-    # ── DML seed / migrazioni — transazionali ────────────────────────────
+    # ── DML seed / migrazioni — transazionali ────────────────────────────────
     current = _get_schema_version(conn)
 
     if current < 2:
