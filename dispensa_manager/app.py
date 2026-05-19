@@ -65,7 +65,7 @@ def create_app():
 
     CORS(app, resources={r"/api/*": {
         "origins": "*",
-        "allow_headers": ["Content-Type", "Authorization", "x-jarvis-token"],
+        "allow_headers": ["Content-Type", "Authorization"],
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }})
 
@@ -92,13 +92,11 @@ def create_app():
     def index():
         from database import get_db, get_setting
         conn = get_db()
-        cf_token = get_setting(conn, "cloudflare_token")
         cf_url = get_setting(conn, "cloudflare_url").rstrip("/")
         conn.close()
         try:
             with open(os.path.join(WWW_DIR, "index.html"), "r", encoding="utf-8-sig") as fh:
                 html = fh.read()
-            html = html.replace('<meta name="cf-token" content="">', f'<meta name="cf-token" content="{cf_token}">')
             html = html.replace('<meta name="cf-url" content="">', f'<meta name="cf-url" content="{cf_url}">')
             html = re.sub(r'<meta name="app-version" content="[^"]*">', f'<meta name="app-version" content="{APP_VERSION}">', html)
             html = re.sub(r"Dispensa Manager v\d+\.\d+\.\d+", f"Dispensa Manager v{APP_VERSION}", html)

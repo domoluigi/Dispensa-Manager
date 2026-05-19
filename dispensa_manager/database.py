@@ -152,8 +152,6 @@ def _seed_defaults(conn):
          "Chat ID Telegram per notifiche"),
         ("cloudflare_url", ha_opts.get("cloudflare_url", ""),
          "URL esterno Cloudflare (es. https://dispensa-api.esempio.it)"),
-        ("cloudflare_token", ha_opts.get("cloudflare_token", ""),
-         "Token WAF Cloudflare (x-jarvis-token)"),
     ]
     for key, value, desc in defaults:
         conn.execute(

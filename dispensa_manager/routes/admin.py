@@ -118,7 +118,7 @@ def update_settings():
     ALLOWED_KEYS = {
         "giorni_alert_scadenza", "soglia_scorte_minime",
         "telegram_token", "telegram_chat_id",
-        "cloudflare_url", "cloudflare_token",
+        "cloudflare_url",
     }
     invalid = set(data.keys()) - ALLOWED_KEYS
     if invalid:
