@@ -36,7 +36,7 @@ def is_ip_banned(conn, ip: str) -> bool:
 
 
 def record_attempt(conn, ip: str, username: str, success: bool):
-    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
     with conn:
         conn.execute(
             "INSERT INTO login_attempts (ip, username, success) VALUES (?, ?, ?)",
@@ -48,7 +48,7 @@ def record_attempt(conn, ip: str, username: str, success: bool):
 
 
 def _maybe_ban(conn, ip: str):
-    window_start = (datetime.utcnow() - timedelta(minutes=BAN_WINDOW_MINUTES)).isoformat()
+    window_start = (datetime.utcnow() - timedelta(minutes=BAN_WINDOW_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
     row = conn.execute(
         "SELECT COUNT(*) as n FROM login_attempts "
         "WHERE ip=? AND success=0 AND attempted_at>=?",

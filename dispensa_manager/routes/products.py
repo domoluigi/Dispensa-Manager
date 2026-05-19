@@ -339,7 +339,7 @@ def aggiungi_prodotto():
         f"\n\U0001f4c5 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}"
         if scad else ""
     )
-    _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{nome}* \xd7{qty}\n{_pos_icon(pos)} {pos}{scad_str}")
+    _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{nome}* ×{qty}\n{_pos_icon(pos)} {pos}{scad_str}")
 
     return jsonify({"ok": True}), 201
 
@@ -352,6 +352,8 @@ def aggiorna_prodotto(id):
     conn = get_db()
     try:
         p = conn.execute("SELECT * FROM prodotti WHERE id=?", (id,)).fetchone()
+        if not p:
+            return jsonify({"error": "Prodotto non trovato"}), 404
         fields, values = [], []
         for campo in ["nome", "marca", "quantita", "scadenza", "note", "posizione"]:
             if campo in data:
@@ -416,7 +418,7 @@ def elimina_prodotto(id):
     return jsonify({"ok": True})
 
 
-# ── Export / Statistiche ───────────────────────────────────
+# ── Export / Statistiche ─────────────────────────────────────────
 
 @bp.get("/api/export-csv")
 @jwt_required()
@@ -460,11 +462,11 @@ def statistiche():
         ).fetchone()["n"]
         top_acquistati = conn.execute(
             "SELECT nome, marca, SUM(quantita) as totale FROM storico_movimenti WHERE tipo='acquisto' "
-            "GROUP BY ean ORDER BY totale DESC LIMIT 5"
+            "GROUP BY ean, nome, marca ORDER BY totale DESC LIMIT 5"
         ).fetchall()
         top_consumati = conn.execute(
             "SELECT nome, marca, SUM(quantita) as totale FROM storico_movimenti WHERE tipo='consumo' "
-            "GROUP BY ean ORDER BY totale DESC LIMIT 5"
+            "GROUP BY ean, nome, marca ORDER BY totale DESC LIMIT 5"
         ).fetchall()
         per_posizione = conn.execute(
             "SELECT posizione, COUNT(*) as n FROM prodotti WHERE quantita>0 GROUP BY posizione"
@@ -480,7 +482,7 @@ def statistiche():
         conn.close()
 
 
-# ── Alerts / Sync HA ─────────────────────────────────────────
+# ── Alerts / Sync HA ─────────────────────────────────────────────
 
 @bp.get("/api/alerts")
 @jwt_required()
@@ -616,7 +618,7 @@ def report_dispensa():
             elif p["giorni"] == 0: lbl = "scade oggi!"
             elif p["giorni"] == 1: lbl = "scade domani"
             else: lbl = f"tra {p['giorni']} giorni"
-            msg += f"  • {p['nome']} \xd7{p['quantita']} — _{lbl}_\n"
+            msg += f"  • {p['nome']} ×{p['quantita']} — _{lbl}_\n"
         msg += "\n"
     if esauriti:
         msg += "❌ *Esauriti:*\n"
@@ -626,7 +628,7 @@ def report_dispensa():
     if ok_list:
         msg += "✅ *In dispensa:*\n"
         for p in ok_list:
-            msg += f"  • {p['nome']} \xd7{p['quantita']}\n"
+            msg += f"  • {p['nome']} ×{p['quantita']}\n"
 
     _async(invia_telegram, msg)
     return jsonify({"ok": True, "totale": attivi})
