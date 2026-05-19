@@ -259,6 +259,17 @@
   .setting-input { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; background: var(--bg); color: var(--text); outline: none; margin-bottom: 10px; }
   .setting-input:focus { border-color: var(--green); }
   .btn-danger { background: var(--red-l); color: var(--red); border: none; border-radius: 10px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+  /* ── Modals ── */
+  .modal-overlay { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.hidden { display: none; }
+  .modal-box { background: var(--card); border-radius: 16px; padding: 20px; width: 100%; max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,.25); }
+  .modal-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+  /* ── IP Ban ── */
+  .ip-ban-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); gap: 10px; }
+  .ip-ban-row:last-child { border-bottom: none; }
+  .ip-ban-ip { flex: 1; font-size: 14px; font-family: monospace; font-weight: 500; }
+  .ip-ban-info { font-size: 12px; color: var(--muted); }
   .btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; border: none; cursor: pointer; font-weight: 500; }
   .btn-sm-green { background: var(--green-l); color: var(--green-d); }
   .btn-sm-red { background: var(--red-l); color: var(--red); }
@@ -1853,7 +1864,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 
 // ── Admin panel ───────────────────────────────────────────────────────────────
 async function caricaAdmin() {
-  await Promise.all([caricaUtenti(), caricaImpostazioniAdmin()]);
+  await Promise.all([caricaUtenti(), caricaImpostazioniAdmin(), caricaIPBans()]);
 }
 
 async function caricaUtenti() {
@@ -1921,31 +1932,102 @@ async function creaUtente() {
   }
 }
 
-async function editUser(id, username, isAdmin, isActive) {
-  const newPwd = prompt(`Nuova password per "${username}" (lascia vuoto per non cambiare):`);
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+let _editUserId = null;
+function editUser(id, username, isAdmin, isActive) {
+  _editUserId = id;
+  document.getElementById('edit-user-username').textContent = username;
+  document.getElementById('edit-user-password').value = '';
+  document.getElementById('edit-user-is-admin').checked = !!isAdmin;
+  document.getElementById('edit-user-is-active').checked = !!isActive;
+  openModal('modal-edit-user');
+}
+async function submitEditUser() {
   const payload = {};
-  if (newPwd !== null && newPwd.length > 0) {
-    if (newPwd.length < 6) { toast('Password di almeno 6 caratteri'); return; }
-    payload.password = newPwd;
+  const pwd = document.getElementById('edit-user-password').value;
+  if (pwd.length > 0) {
+    if (pwd.length < 6) { toast('Password di almeno 6 caratteri'); return; }
+    payload.password = pwd;
   }
-  // Toggle admin
-  const makeAdmin = confirm(`Rendere "${username}" amministratore? (OK=sì, Annulla=no)`);
-  payload.is_admin = makeAdmin;
-  payload.is_active = isActive;
-  const r = await apiFetch(`${API_BASE()}/api/admin/users/${id}`, {
+  payload.is_admin = document.getElementById('edit-user-is-admin').checked;
+  payload.is_active = document.getElementById('edit-user-is-active').checked;
+  const r = await apiFetch(`${API_BASE()}/api/admin/users/${_editUserId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
+  closeModal('modal-edit-user');
   if (r.ok) { toast('Utente aggiornato'); caricaUtenti(); }
   else toast('Errore aggiornamento');
 }
 
-async function deleteUser(id, username) {
-  if (!confirm(`Eliminare definitivamente l'utente "${username}"?`)) return;
-  const r = await apiFetch(`${API_BASE()}/api/admin/users/${id}`, { method: 'DELETE' });
-  if (r.ok) { toast(`Utente ${username} eliminato`); caricaUtenti(); }
-  else { const d = await r.json(); toast(d.error || 'Errore eliminazione'); }
+function deleteUser(id, username) {
+  document.getElementById('modal-confirm-title').textContent = 'Elimina utente';
+  document.getElementById('modal-confirm-msg').textContent = `Eliminare definitivamente l'utente "${username}"?`;
+  const btn = document.getElementById('modal-confirm-ok');
+  btn.className = 'btn btn-danger';
+  btn.textContent = 'Elimina';
+  btn.onclick = async () => {
+    closeModal('modal-confirm');
+    const r = await apiFetch(`${API_BASE()}/api/admin/users/${id}`, { method: 'DELETE' });
+    if (r.ok) { toast(`Utente ${username} eliminato`); caricaUtenti(); }
+    else { const d = await r.json(); toast(d.error || 'Errore eliminazione'); }
+  };
+  openModal('modal-confirm');
+}
+
+async function caricaIPBans() {
+  const r = await apiFetch(`${API_BASE()}/api/admin/ip-bans`);
+  const bans = await r.json();
+  const el = document.getElementById('admin-ip-bans-list');
+  if (!bans.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:8px 0;">Nessun IP bannato</div>';
+    return;
+  }
+  el.innerHTML = bans.map(b => `
+    <div class="ip-ban-row">
+      <div style="flex:1;min-width:0;">
+        <div class="ip-ban-ip">${b.ip}</div>
+        <div class="ip-ban-info">${b.failed_attempts} tentativi falliti · ${new Date(b.banned_at).toLocaleString('it-IT')}</div>
+        ${b.reason ? `<div class="ip-ban-info">${b.reason}</div>` : ''}
+      </div>
+      <button class="btn-sm btn-sm-green" onclick="unbanIP('${b.ip}')">Sblocca</button>
+    </div>`).join('');
+}
+
+function unbanIP(ip) {
+  document.getElementById('modal-confirm-title').textContent = 'Sblocca IP';
+  document.getElementById('modal-confirm-msg').textContent = `Sbloccare "${ip}" e cancellare i tentativi registrati?`;
+  const btn = document.getElementById('modal-confirm-ok');
+  btn.className = 'btn btn-primary';
+  btn.textContent = 'Sblocca';
+  btn.onclick = async () => {
+    closeModal('modal-confirm');
+    const r = await apiFetch(`${API_BASE()}/api/admin/ip-bans/${encodeURIComponent(ip)}`, { method: 'DELETE' });
+    if (r.ok) { toast(`IP ${ip} sbloccato`); caricaIPBans(); }
+    else toast('Errore sblocco IP');
+  };
+  openModal('modal-confirm');
+}
+
+async function banIP() {
+  const ip = document.getElementById('ban-ip-input').value.trim();
+  if (!ip) { toast('Inserisci un IP'); return; }
+  const r = await apiFetch(`${API_BASE()}/api/admin/ip-bans`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ip })
+  });
+  if (r.ok) {
+    toast(`IP ${ip} bannato`);
+    document.getElementById('ban-ip-input').value = '';
+    caricaIPBans();
+  } else {
+    const d = await r.json();
+    toast(d.error || 'Errore ban IP');
+  }
 }
 // ── Fine Admin panel ──────────────────────────────────────────────────────────
 </script>
@@ -1986,6 +2068,19 @@ async function deleteUser(id, username) {
       </div>
       <button class="btn btn-primary" onclick="creaUtente()">Crea utente</button>
     </div>
+
+    <!-- IP Bannati -->
+    <div class="card card-body admin-section">
+      <div class="admin-section-title">IP Bannati</div>
+      <div id="admin-ip-bans-list"><div class="empty"><div class="spinner"></div></div></div>
+      <div class="field" style="margin-top:12px;">
+        <label>Banna IP manualmente</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="ban-ip-input" placeholder="es. 192.168.1.100" style="flex:1" autocapitalize="none" autocorrect="off">
+          <button class="btn btn-danger" onclick="banIP()">Banna</button>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -2011,6 +2106,41 @@ async function deleteUser(id, username) {
     <div class="tab tab-admin active" onclick="showTab('admin')">
       <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
       <span>Admin</span>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: modifica utente -->
+<div class="modal-overlay hidden" id="modal-edit-user">
+  <div class="modal-box">
+    <div class="modal-title">Modifica: <span id="edit-user-username"></span></div>
+    <div class="field">
+      <label>Nuova password <span style="color:var(--muted);font-weight:400">(vuoto = non cambiare)</span></label>
+      <input type="password" id="edit-user-password" placeholder="••••••">
+    </div>
+    <div class="setting-row" style="margin-bottom:10px;">
+      <span style="font-size:15px;">Amministratore</span>
+      <input type="checkbox" id="edit-user-is-admin" style="width:20px;height:20px;accent-color:var(--green);">
+    </div>
+    <div class="setting-row" style="margin-bottom:16px;">
+      <span style="font-size:15px;">Account attivo</span>
+      <input type="checkbox" id="edit-user-is-active" style="width:20px;height:20px;accent-color:var(--green);">
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" style="flex:1" onclick="submitEditUser()">Salva</button>
+      <button class="btn" style="flex:1" onclick="closeModal('modal-edit-user')">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: conferma generica -->
+<div class="modal-overlay hidden" id="modal-confirm">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-confirm-title">Conferma</div>
+    <div id="modal-confirm-msg" style="color:var(--muted);font-size:14px;margin-bottom:20px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-danger" style="flex:1" id="modal-confirm-ok">Conferma</button>
+      <button class="btn" style="flex:1" onclick="closeModal('modal-confirm')">Annulla</button>
     </div>
   </div>
 </div>
