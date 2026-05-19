@@ -1,4 +1,4 @@
-const CACHE = 'dispensa-v5';
+const CACHE = 'dispensa-v6';
 
 const STATIC_ASSETS = [
   'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
@@ -25,13 +25,10 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // Tutte le chiamate API passano direttamente alla rete senza caching
-  // (necessario per compatibilita' con il token Cloudflare WAF)
   if (url.includes('/api/')) {
     return;
   }
 
-  // App shell (index.html): network-first con fallback cache per offline
   if (url.endsWith('/') || url.includes('index.html')) {
     e.respondWith(
       fetch(e.request)
@@ -45,7 +42,6 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Asset statici (icone, manifest, librerie): cache-first
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request))
   );

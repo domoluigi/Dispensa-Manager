@@ -1,35 +1,34 @@
-name: "Dispensa Manager"
-version: "1.5.11"
-slug: "dispensa_manager"
-description: "Gestione dispensa con scanner barcode, OCR scadenze e notifiche Telegram"
+name: Dispensa Manager
+version: "2.0.0"
+slug: dispensa_manager
+description: Gestione dispensa con barcode scanner, scadenze, lista spesa e autenticazione utenti.
+url: https://github.com/domoluigi/Dispensa-Manager
 arch:
   - aarch64
   - amd64
+init: false
 startup: application
 boot: auto
+
+ports:
+  5000/tcp: 5000
+ports_description:
+  5000/tcp: Flask API e frontend
+
 ingress: true
 ingress_port: 5000
 panel_icon: mdi:fridge-outline
 panel_title: Dispensa
-ports:
-  5000/tcp: 5000
-ports_description:
-  5000/tcp: "Flask API + frontend"
+
 map:
   - config:rw
   - data:rw
-host_network: false
+
 options:
-  telegram_token: ""
-  telegram_chat_id: ""
-  giorni_alert_scadenza: 3
-  soglia_scorte_minime: 1
-  cloudflare_url: ""
-  cloudflare_token: ""
+  jwt_secret_key: ""
+
 schema:
-  telegram_token: str
-  telegram_chat_id: str
-  giorni_alert_scadenza: int
-  soglia_scorte_minime: int
-  cloudflare_url: str
-  cloudflare_token: str
+  jwt_secret_key: str
+
+# Nota: le impostazioni operative (Telegram, Cloudflare, alert)
+# si configurano dal pannello Admin dell'app dopo il primo login.
