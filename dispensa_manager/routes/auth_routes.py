@@ -8,13 +8,14 @@ from flask_jwt_extended import (
 )
 from datetime import datetime
 from database import get_db
-from auth import check_password
+from auth import check_password, get_client_ip, is_ip_banned, record_attempt
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 
 @bp.post("/login")
 def login():
+    ip = get_client_ip()
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
@@ -24,12 +25,18 @@ def login():
 
     conn = get_db()
     try:
+        if is_ip_banned(conn, ip):
+            return jsonify({"error": "Accesso bloccato. Contatta l'amministratore."}), 429
+
         user = conn.execute(
             "SELECT * FROM users WHERE username=? AND is_active=1", (username,)
         ).fetchone()
 
         if not user or not check_password(password, user["password_hash"]):
+            record_attempt(conn, ip, username, success=False)
             return jsonify({"error": "Credenziali non valide"}), 401
+
+        record_attempt(conn, ip, username, success=True)
 
         additional_claims = {"is_admin": bool(user["is_admin"])}
         access_token = create_access_token(identity=str(user["id"]), additional_claims=additional_claims)

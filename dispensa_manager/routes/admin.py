@@ -5,6 +5,8 @@ from auth import admin_required, hash_password
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
 
+# ── Utenti ────────────────────────────────────────────
+
 @bp.get("/users")
 @admin_required
 def list_users():
@@ -95,13 +97,16 @@ def delete_user(user_id):
         conn.close()
 
 
+# ── Impostazioni ─────────────────────────────────────────────
+
 @bp.get("/settings")
 @admin_required
 def get_all_settings():
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT key, value, description, updated_at FROM app_settings WHERE key != 'schema_version' ORDER BY key"
+            "SELECT key, value, description, updated_at FROM app_settings "
+            "WHERE key NOT IN ('schema_version', 'jwt_secret_key') ORDER BY key"
         ).fetchall()
         return jsonify([dict(r) for r in rows])
     finally:
@@ -130,5 +135,56 @@ def update_settings():
             for key, value in data.items():
                 set_setting(conn, key, str(value))
         return jsonify({"ok": True, "updated": list(data.keys())})
+    finally:
+        conn.close()
+
+
+# ── IP Ban ───────────────────────────────────────────────
+
+@bp.get("/ip-bans")
+@admin_required
+def list_ip_bans():
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT b.ip, b.banned_at, b.reason,
+                   (SELECT COUNT(*) FROM login_attempts WHERE ip=b.ip AND success=0) AS failed_attempts,
+                   (SELECT MAX(attempted_at) FROM login_attempts WHERE ip=b.ip AND success=0) AS last_attempt
+            FROM ip_bans b ORDER BY b.banned_at DESC
+        """).fetchall()
+        return jsonify([dict(r) for r in rows])
+    finally:
+        conn.close()
+
+
+@bp.post("/ip-bans")
+@admin_required
+def ban_ip():
+    data = request.get_json(silent=True) or {}
+    ip = (data.get("ip") or "").strip()
+    reason = (data.get("reason") or "Ban manuale da admin").strip()
+    if not ip:
+        return jsonify({"error": "IP richiesto"}), 400
+    conn = get_db()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO ip_bans (ip, reason) VALUES (?, ?)",
+                (ip, reason),
+            )
+        return jsonify({"ok": True}), 201
+    finally:
+        conn.close()
+
+
+@bp.delete("/ip-bans/<path:ip>")
+@admin_required
+def unban_ip(ip):
+    conn = get_db()
+    try:
+        with conn:
+            conn.execute("DELETE FROM ip_bans WHERE ip=?", (ip,))
+            conn.execute("DELETE FROM login_attempts WHERE ip=?", (ip,))
+        return jsonify({"ok": True})
     finally:
         conn.close()
