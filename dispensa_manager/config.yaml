@@ -1,5 +1,5 @@
 name: Dispensa Manager
-version: "2.0.0"
+version: "2.0.1"
 slug: dispensa_manager
 description: Gestione dispensa con barcode scanner, scadenze, lista spesa e autenticazione utenti.
 url: https://github.com/domoluigi/Dispensa-Manager
@@ -26,9 +26,18 @@ map:
 
 options:
   jwt_secret_key: ""
+  telegram_token: ""
+  telegram_chat_id: ""
+  giorni_alert_scadenza: 3
+  cloudflare_url: ""
 
 schema:
-  jwt_secret_key: str
+  jwt_secret_key: str?
+  telegram_token: str?
+  telegram_chat_id: str?
+  giorni_alert_scadenza: int?
+  cloudflare_url: str?
 
-# Nota: le impostazioni operative (Telegram, Cloudflare, alert)
-# si configurano dal pannello Admin dell'app dopo il primo login.
+# Le impostazioni sopra sono opzionali: se non compilate, vengono
+# gestite direttamente dal pannello Admin dell'app (sezione Impostazioni).
+# jwt_secret_key: se vuoto, viene generato automaticamente e salvato nel DB.
