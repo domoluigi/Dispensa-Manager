@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import get_jwt_identity
 from database import get_db, set_setting
 from auth import admin_required, hash_password
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
 
-# ── Utenti ────────────────────────────────────────────
+# ── Utenti ────────────────────────────────────────────────────────────────────────────
 
 @bp.get("/users")
 @admin_required
@@ -83,7 +84,6 @@ def update_user(user_id):
 @bp.delete("/users/<int:user_id>")
 @admin_required
 def delete_user(user_id):
-    from flask_jwt_extended import get_jwt_identity
     identity = get_jwt_identity()
     if str(user_id) == str(identity):
         return jsonify({"error": "Non puoi eliminare te stesso"}), 400
@@ -97,7 +97,7 @@ def delete_user(user_id):
         conn.close()
 
 
-# ── Impostazioni ─────────────────────────────────────────────
+# ── Impostazioni ───────────────────────────────────────────────────────────────────────────
 
 @bp.get("/settings")
 @admin_required
@@ -139,7 +139,7 @@ def update_settings():
         conn.close()
 
 
-# ── IP Ban ───────────────────────────────────────────────
+# ── IP Ban ─────────────────────────────────────────────────────────────────────────────
 
 @bp.get("/ip-bans")
 @admin_required

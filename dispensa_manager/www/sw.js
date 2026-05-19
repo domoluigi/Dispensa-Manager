@@ -1,7 +1,9 @@
-const CACHE = 'dispensa-v6';
+const CACHE = 'dispensa-v7';
 
 const STATIC_ASSETS = [
   'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
+  'style.css',
+  'app.js',
 ];
 
 self.addEventListener('install', e => {
