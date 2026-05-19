@@ -8,7 +8,6 @@
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
 <meta name="app-version" content="1.5.5">
-<meta name="cf-token" content="">
 <meta name="cf-url" content="">
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
@@ -742,8 +741,6 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 const API_BASE = () => { const u = document.querySelector('meta[name="cf-url"]')?.content || ''; return u || window.location.pathname.replace(/\/+$/g, ''); };
 
 
-function getCfToken() { return document.querySelector('meta[name="cf-token"]')?.content || ''; }
-
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 const AUTH_KEY = 'dispensa_access';
 const REFRESH_KEY = 'dispensa_refresh';
@@ -781,10 +778,8 @@ async function tryRefreshToken() {
 }
 
 async function apiFetch(url, opts = {}) {
-  const cfToken = getCfToken();
   const jwt = getAccessToken();
   const headers = Object.assign({}, opts.headers || {});
-  if (cfToken) headers['x-jarvis-token'] = cfToken;
   if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
   opts.headers = headers;
 
@@ -893,7 +888,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // ── Fine auth helpers ─────────────────────────────────────────────────────────
 
-async function initCfToken() {}
 let codeReader = null;
 let prodottoCorrente = {};
 let qtyCorrente = 1;
