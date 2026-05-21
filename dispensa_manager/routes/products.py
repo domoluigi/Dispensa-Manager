@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("products", __name__)
 
 
-# ── Helpers ────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _get_days_threshold(conn):
     try:
@@ -133,7 +133,7 @@ def _pos_icon(pos):
     return {"Frigo": "\U0001f9ca", "Freezer": "❄️", "Dispensa": "\U0001f5c4️"}.get(pos, "\U0001f4e6")
 
 
-# ── Barcode ────────────────────────────────────────────
+# ── Barcode ──────────────────────────────────────────────────────────────────
 
 @bp.get("/api/barcode/<ean>")
 @jwt_required()
@@ -190,13 +190,14 @@ def cerca_barcode(ean):
                         "sale": nutriments.get("salt_100g"),
                     },
                 })
-        except Exception:
+        except Exception as e:
+            logger.warning("Errore lookup barcode %s su %s: %s", ean, url, e)
             continue
 
     return jsonify({
         "trovato": False, "ean": ean, "nome": "", "marca": "",
         "categoria": "", "immagine_url": "", "nutriscore": "", "nutriments": {},
-    })
+    }), 404
 
 
 @bp.post("/api/barcode-cache")
@@ -233,7 +234,7 @@ def elimina_barcode_cache(ean):
         conn.close()
 
 
-# ── Prodotti ─────────────────────────────────────────────
+# ── Prodotti ─────────────────────────────────────────────────────────────────
 
 @bp.get("/api/prodotti")
 @jwt_required()
@@ -418,7 +419,7 @@ def elimina_prodotto(id):
     return jsonify({"ok": True})
 
 
-# ── Export / Statistiche ─────────────────────────────────────────
+# ── Export / Statistiche ─────────────────────────────────────────────────────
 
 @bp.get("/api/export-csv")
 @jwt_required()
@@ -482,7 +483,7 @@ def statistiche():
         conn.close()
 
 
-# ── Alerts / Sync HA ─────────────────────────────────────────────
+# ── Alerts / Sync HA ─────────────────────────────────────────────────────────
 
 @bp.get("/api/alerts")
 @jwt_required()
