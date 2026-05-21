@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
-<meta name="app-version" content="2.0.2">
+<meta name="app-version" content="2.0.3">
 <meta name="cf-url" content="">
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
@@ -59,7 +59,7 @@
       <div class="chip active" data-filtro="tutti" onclick="setFiltro('tutti')">Tutti</div>
       <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
       <div class="chip" data-filtro="scaduti" onclick="setFiltro('scaduti')">🔴 Scaduti</div>
-      <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧠 Frigo</div>
+      <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧨 Frigo</div>
       <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Freezer</div>
       <div class="chip" data-filtro="dispensa" onclick="setFiltro('dispensa')">🗄️ Dispensa</div>
     </div>
@@ -107,7 +107,7 @@
 <!-- SCREEN: Scanner -->
 <div class="screen" id="screen-scan">
   <div class="topbar">
-    <div class="topbar-back" onclick="showScreen('screen-inventario')">&#x2715;</div>
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">✕</div>
     <div class="topbar-title">Scansiona</div>
   </div>
   <div class="content">
@@ -127,7 +127,7 @@
 <!-- SCREEN: Conferma prodotto -->
 <div class="screen" id="screen-conferma">
   <div class="topbar">
-    <div class="topbar-back" onclick="showScreen('screen-scan')">&#x2039; Indietro</div>
+    <div class="topbar-back" onclick="showScreen('screen-scan')">‹ Indietro</div>
     <div class="topbar-title">Conferma prodotto</div>
   </div>
   <div class="content">
@@ -144,6 +144,8 @@
         <label>Nome prodotto</label>
         <input type="text" id="conf-nome-edit">
       </div>
+
+      <!-- Sezione foto prodotto (visibile solo se barcode non trovato) -->
       <div id="foto-section" style="display:none;">
         <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">Foto prodotto (opzionale)</div>
         <div class="foto-upload-area" id="foto-upload-area" onclick="apriFotoMenu()">
@@ -155,6 +157,7 @@
         </div>
         <input type="file" id="foto-input" accept="image/*">
       </div>
+
       <div class="field">
         <label>Quantità</label>
         <div class="qty-row">
@@ -170,6 +173,7 @@
           <button onclick="avviaOCRScadenza()" style="padding:10px 14px;border-radius:12px;border:0.5px solid var(--border);background:var(--bg);font-size:20px;cursor:pointer;flex-shrink:0;" title="Scansiona scadenza">📷</button>
         </div>
       </div>
+
       <!-- Modal OCR -->
       <div id="ocr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000;flex-direction:column;align-items:center;justify-content:center;">
         <div style="width:90%;max-width:400px;background:#000;border-radius:20px;overflow:hidden;position:relative;">
@@ -191,14 +195,15 @@
         </div>
         <div style="display:flex;gap:12px;margin-top:16px;">
           <button onclick="scattaFotoOCR()" style="padding:14px 28px;border-radius:14px;background:var(--green);color:white;font-size:16px;font-weight:600;border:none;cursor:pointer;">📸 Scatta</button>
-          <button onclick="chiudiOCR()" style="padding:14px 28px;border-radius:14px;background:rgba(255,255,255,0.2);color:white;font-size:16px;border:none;cursor:pointer;">&#x2715; Annulla</button>
+          <button onclick="chiudiOCR()" style="padding:14px 28px;border-radius:14px;background:rgba(255,255,255,0.2);color:white;font-size:16px;border:none;cursor:pointer;">✕ Annulla</button>
         </div>
       </div>
+
       <div class="field">
         <label>Posizione</label>
         <select id="conf-posizione">
           <option value="Dispensa">🗄️ Dispensa</option>
-          <option value="Frigo">🧠 Frigo</option>
+          <option value="Frigo">🧨 Frigo</option>
           <option value="Freezer">❄️ Freezer</option>
         </select>
       </div>
@@ -214,7 +219,7 @@
 <!-- SCREEN: Dettaglio prodotto -->
 <div class="screen" id="screen-dettaglio">
   <div class="topbar">
-    <div class="topbar-back" onclick="showScreen('screen-inventario')">&#x2039;</div>
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">‹</div>
     <div class="topbar-title" id="det-title">Prodotto</div>
   </div>
   <div class="content" id="det-content"></div>
@@ -319,7 +324,7 @@
       <div style="font-size:14px;color:var(--text);margin-bottom:12px;">Connesso come: <strong id="current-username"></strong></div>
       <button class="btn btn-secondary" onclick="doLogout()" style="color:var(--red);">🚪 Esci (logout)</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.2</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.3</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -352,13 +357,19 @@
 <!-- SCREEN: Modifica prodotto -->
 <div class="screen" id="screen-modifica">
   <div class="topbar">
-    <div class="topbar-back" onclick="showScreen('screen-inventario')">&#x2039;</div>
+    <div class="topbar-back" onclick="showScreen('screen-inventario')">‹</div>
     <div class="topbar-title">Modifica prodotto</div>
   </div>
   <div class="content">
     <div class="card card-body">
-      <div class="field"><label>Nome prodotto</label><input type="text" id="mod-nome"></div>
-      <div class="field"><label>Marca (opzionale)</label><input type="text" id="mod-marca"></div>
+      <div class="field">
+        <label>Nome prodotto</label>
+        <input type="text" id="mod-nome">
+      </div>
+      <div class="field">
+        <label>Marca (opzionale)</label>
+        <input type="text" id="mod-marca">
+      </div>
       <div class="field">
         <label>Quantità</label>
         <div class="qty-row">
@@ -367,16 +378,22 @@
           <div class="qty-btn" onclick="cambiaQtyMod(1)">+</div>
         </div>
       </div>
-      <div class="field"><label>Data di scadenza</label><input type="date" id="mod-scadenza"></div>
+      <div class="field">
+        <label>Data di scadenza</label>
+        <input type="date" id="mod-scadenza">
+      </div>
       <div class="field">
         <label>Posizione</label>
         <select id="mod-posizione">
           <option value="Dispensa">🗄️ Dispensa</option>
-          <option value="Frigo">🧠 Frigo</option>
+          <option value="Frigo">🧨 Frigo</option>
           <option value="Freezer">❄️ Freezer</option>
         </select>
       </div>
-      <div class="field"><label>Note (opzionale)</label><input type="text" id="mod-note" placeholder="es. aperto, in frigo..."></div>
+      <div class="field">
+        <label>Note (opzionale)</label>
+        <input type="text" id="mod-note" placeholder="es. aperto, in frigo...">
+      </div>
     </div>
     <button class="btn btn-primary" onclick="salvaModifica()" style="margin-top:8px;">Salva modifiche</button>
   </div>
@@ -386,27 +403,42 @@
 
 <!-- SCREEN: Admin -->
 <div class="screen" id="screen-admin">
-  <div class="topbar"><div class="topbar-title">Pannello Admin</div></div>
+  <div class="topbar">
+    <div class="topbar-title">Pannello Admin</div>
+  </div>
   <div class="content">
+    <!-- Impostazioni -->
     <div class="card card-body admin-section" style="margin-top:12px;">
       <div class="admin-section-title">Impostazioni sistema</div>
       <div id="admin-settings-form"><div class="empty"><div class="spinner"></div></div></div>
       <button class="btn btn-primary" style="margin-top:8px;" onclick="salvaImpostazioniAdmin()">Salva impostazioni</button>
     </div>
+
+    <!-- Gestione utenti -->
     <div class="card card-body admin-section">
       <div class="admin-section-title">Utenti</div>
       <div id="admin-users-list"><div class="empty"><div class="spinner"></div></div></div>
     </div>
+
+    <!-- Crea utente -->
     <div class="card card-body admin-section">
       <div class="admin-section-title">Crea nuovo utente</div>
-      <div class="field"><label>Username</label><input type="text" id="new-username" placeholder="es. mario" autocapitalize="none"></div>
-      <div class="field"><label>Password (min 6 caratteri)</label><input type="password" id="new-password" placeholder="••••••"></div>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="new-username" placeholder="es. mario" autocapitalize="none">
+      </div>
+      <div class="field">
+        <label>Password (min 6 caratteri)</label>
+        <input type="password" id="new-password" placeholder="••••••">
+      </div>
       <div class="setting-row" style="margin-bottom:12px;">
         <span style="font-size:15px;">Amministratore</span>
         <input type="checkbox" id="new-is-admin" style="width:20px;height:20px;accent-color:var(--green);">
       </div>
       <button class="btn btn-primary" onclick="creaUtente()">Crea utente</button>
     </div>
+
+    <!-- IP Bannati -->
     <div class="card card-body admin-section">
       <div class="admin-section-title">IP Bannati</div>
       <div id="admin-ip-bans-list"><div class="empty"><div class="spinner"></div></div></div>
