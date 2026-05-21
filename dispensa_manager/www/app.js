@@ -3,6 +3,7 @@ const API_BASE = () => {
   return u || window.location.pathname.replace(/\/+$/g, '');
 };
 
+// ── Auth helpers ──────────────────────────────────────────────────────────────
 const AUTH_KEY = 'dispensa_access';
 const REFRESH_KEY = 'dispensa_refresh';
 const USER_KEY = 'dispensa_user';
@@ -118,6 +119,7 @@ async function initAuth() {
       applyUserUI();
       return;
     }
+    // Token scaduto – prova refresh
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       hideLoginOverlay();
@@ -127,6 +129,7 @@ async function initAuth() {
       showLoginOverlay();
     }
   } catch {
+    // Rete non disponibile ma token presente – lascia passare
     hideLoginOverlay();
     applyUserUI();
   }
@@ -140,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') document.getElementById('login-password')?.focus();
   });
 });
+// ── Fine auth helpers ─────────────────────────────────────────────────────────
 
 let codeReader = null;
 let prodottoCorrente = {};
@@ -414,7 +418,7 @@ function renderInventario(attivi, esauriti) {
           ${badgeHtml}
         </div>
         <div class="prod-actions" onclick="event.stopPropagation()">
-          <div class="quick-btn" onclick="consumaRapido(${p.id},${p.quantita})">&minus;</div>
+          <div class="quick-btn" onclick="consumaRapido(${p.id},${p.quantita})">−</div>
           <div class="prod-qty">×${p.quantita}</div>
           <div class="quick-btn" onclick="aggiungiRapido(${p.id},${p.quantita})">+</div>
         </div>
@@ -450,6 +454,7 @@ function renderInventario(attivi, esauriti) {
   }
 
   document.getElementById('lista-prodotti').innerHTML = html + esauritiHtml;
+
   document.getElementById('metrics').innerHTML = `
     <div class="metric"><div class="metric-val">${attivi.length}</div><div class="metric-label">In dispensa</div></div>
     <div class="metric"><div class="metric-val" style="color:#EF9F27">${inScadenza}</div><div class="metric-label">In scadenza</div></div>
@@ -465,6 +470,40 @@ function toggleEsauriti() {
   if (chevron) chevron.classList.toggle('open', esauritiOpen);
 }
 
+function renderNutriments(p) {
+  if (!p.nutriments) return '';
+  const n = typeof p.nutriments === 'string' ? JSON.parse(p.nutriments) : p.nutriments;
+  const righe = [
+    ['Energia', n.energia_kcal, 'kcal'], ['Grassi', n.grassi, 'g'],
+    ['di cui saturi', n.grassi_saturi, 'g'], ['Carboidrati', n.carboidrati, 'g'],
+    ['di cui zuccheri', n.zuccheri, 'g'], ['Fibre', n.fibre, 'g'],
+    ['Proteine', n.proteine, 'g'], ['Sale', n.sale, 'g'],
+  ].filter(r => r[1] != null);
+  if (!righe.length) return '';
+  const nsColor = {'A':'#1D9E75','B':'#8BC34A','C':'#FFC107','D':'#FF9800','E':'#F44336'};
+  let rows = '';
+  righe.forEach(function(r, i) {
+    const notLast = i < righe.length - 1;
+    const isDi = r[0].startsWith('di');
+    const borderStyle = notLast ? 'border-bottom:0.5px solid var(--border);' : '';
+    const indentStyle = isDi ? 'padding-left:12px;' : '';
+    const weightStyle = isDi ? '400' : '600';
+    rows += '<tr>';
+    rows += '<td style="color:var(--muted);padding:6px 0;' + borderStyle + indentStyle + '">' + r[0] + '</td>';
+    rows += '<td style="text-align:right;font-weight:' + weightStyle + ';' + borderStyle + '">' + Number(r[1]).toFixed(1) + ' ' + r[2] + '</td>';
+    rows += '</tr>';
+  });
+  let nsHtml = '';
+  if (p.nutriscore) {
+    const color = nsColor[p.nutriscore] || 'var(--text)';
+    nsHtml = '<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:' + color + '">● ' + p.nutriscore + '</strong></div>';
+  }
+  return '<div class="card card-body" style="margin-top:8px;">'
+    + '<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📊 Valori nutrizionali per 100g</div>'
+    + '<table style="width:100%;font-size:13px;border-collapse:collapse;">' + rows + '</table>'
+    + nsHtml + '</div>';
+}
+
 function apriDettaglio(id) {
   const p = prodottiCache.find(x => x.id === id);
   if (!p) return;
@@ -472,53 +511,37 @@ function apriDettaglio(id) {
   document.getElementById('det-title').textContent = p.nome;
   const scadFormatted = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'long',year:'numeric'}) : 'Non specificata';
   const isEsaurito = p.quantita <= 0;
-  document.getElementById('det-content').innerHTML = `
-    <div class="card card-body">
-      ${p.immagine_url ? `<img src="${p.immagine_url}" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);">` : ''}
-      <div style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">${p.nome}</div>
-      <div style="font-size: 14px; color: var(--muted); margin-bottom: 20px;">${p.marca || ''} ${p.categoria ? '· ' + p.categoria : ''}</div>
-      ${isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">⬜ Prodotto esaurito — rimane nel database</div>' : ''}
-      <table style="width:100%;font-size:14px;border-collapse:collapse;">
-        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.posizione === 'Frigo' ? '🧠 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'}</td></tr>
-        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Quantità</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${p.quantita}</td></tr>
-        <tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Scadenza</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">${scadFormatted}</td></tr>
-        <tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">${p.ean}</td></tr>
-      </table>
-    </div>
-    ${p.nutriments ? (() => {
-      const n = typeof p.nutriments === 'string' ? JSON.parse(p.nutriments) : p.nutriments;
-      const righe = [
-        ['Energia', n.energia_kcal, 'kcal'],['Grassi', n.grassi, 'g'],['di cui saturi', n.grassi_saturi, 'g'],
-        ['Carboidrati', n.carboidrati, 'g'],['di cui zuccheri', n.zuccheri, 'g'],['Fibre', n.fibre, 'g'],
-        ['Proteine', n.proteine, 'g'],['Sale', n.sale, 'g'],
-      ].filter(r => r[1] != null);
-      if (!righe.length) return '';
-      const nsColor = {'A':'#1D9E75','B':'#8BC34A','C':'#FFC107','D':'#FF9800','E':'#F44336'};
-      return `<div class="card card-body" style="margin-top:8px;">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📊 Valori nutrizionali per 100g</div>
-        <table style="width:100%;font-size:13px;border-collapse:collapse;">
-          ${righe.map((r,i) => `<tr><td style="color:var(--muted);padding:6px 0;${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''}${r[0].startsWith('di')?'padding-left:12px;':''} ">${r[0]}</td><td style="text-align:right;font-weight:${r[0].startsWith('di')?'400':'600'};${i<righe.length-1?'border-bottom:0.5px solid var(--border);':''">${Number(r[1]).toFixed(1)} ${r[2]}</td></tr>`).join('')}
-        </table>
-        ${p.nutriscore ? `<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:${nsColor[p.nutriscore]||'var(--text)'}">● ${p.nutriscore}</strong></div>` : ''}
-      </div>`;
-    })() : ''}
-    <div class="card card-body" style="margin-top:8px;">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>
-      <div class="qty-row" style="margin-bottom:12px;">
-        <div class="qty-btn" onclick="cambiaQtyDet(-1)">&minus;</div>
-        <div class="qty-val" id="det-qty-delta">1</div>
-        <div class="qty-btn" onclick="cambiaQtyDet(1)">+</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <button class="btn btn-secondary" onclick="consumaProdotto(${p.id},${p.quantita})">&minus; Consuma</button>
-        <button class="btn btn-secondary" onclick="aggiungiQty(${p.id},${p.quantita})">+ Aggiungi</button>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
-      <button class="btn btn-secondary" onclick="apriModifica(${p.id})">✏️ Modifica</button>
-      <button class="btn btn-danger" onclick="eliminaProdotto(${p.id})">🗑️ Elimina</button>
-    </div>
-  `;
+  const imgHtml = p.immagine_url ? '<img src="' + p.immagine_url + '" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);">' : '';
+  const esauritoHtml = isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">□ Prodotto esaurito — rimane nel database</div>' : '';
+  const posizioneLabel = p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa';
+  document.getElementById('det-content').innerHTML =
+    '<div class="card card-body">'
+    + imgHtml
+    + '<div style="font-size:20px;font-weight:700;margin-bottom:4px;">' + p.nome + '</div>'
+    + '<div style="font-size:14px;color:var(--muted);margin-bottom:20px;">' + (p.marca || '') + (p.categoria ? ' · ' + p.categoria : '') + '</div>'
+    + esauritoHtml
+    + '<table style="width:100%;font-size:14px;border-collapse:collapse;">'
+    + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + posizioneLabel + '</td></tr>'
+    + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Quantità</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + p.quantita + '</td></tr>'
+    + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Scadenza</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + scadFormatted + '</td></tr>'
+    + '<tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">' + p.ean + '</td></tr>'
+    + '</table></div>'
+    + renderNutriments(p)
+    + '<div class="card card-body" style="margin-top:8px;">'
+    + '<div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>'
+    + '<div class="qty-row" style="margin-bottom:12px;">'
+    + '<div class="qty-btn" onclick="cambiaQtyDet(-1)">−</div>'
+    + '<div class="qty-val" id="det-qty-delta">1</div>'
+    + '<div class="qty-btn" onclick="cambiaQtyDet(1)">+</div>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+    + '<button class="btn btn-secondary" onclick="consumaProdotto(' + p.id + ',' + p.quantita + ')">− Consuma</button>'
+    + '<button class="btn btn-secondary" onclick="aggiungiQty(' + p.id + ',' + p.quantita + ')">+ Aggiungi</button>'
+    + '</div></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">'
+    + '<button class="btn btn-secondary" onclick="apriModifica(' + p.id + ')">✏️ Modifica</button>'
+    + '<button class="btn btn-danger" onclick="eliminaProdotto(' + p.id + ')">🗑️ Elimina</button>'
+    + '</div>';
   showScreen('screen-dettaglio');
 }
 
@@ -688,11 +711,12 @@ function apriConferma(prodotto) {
 
   const badge = document.getElementById('found-badge-container');
   badge.innerHTML = prodotto.trovato
-    ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posizione === 'Frigo' ? '🧠 Frigo' : posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'} suggerito</div></div>`
+    ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posizione === 'Frigo' ? '🧊 Frigo' : posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'} suggerito</div></div>`
     : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci i dettagli e aggiungi foto</div></div>`;
   showScreen('screen-conferma');
 }
 
+// ── Gestione foto prodotto ──────────────────────────────────────────────────
 function apriFotoMenu() {
   const input = document.getElementById('foto-input');
   input.setAttribute('capture', 'environment');
@@ -759,6 +783,7 @@ async function salvaInDispensa() {
     nutriments: prodottoCorrente.nutriments || null,
     nutriscore: prodottoCorrente.nutriscore || ''
   };
+
   try {
     await apiFetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if (payload.ean && !payload.ean.startsWith('MANUAL-') && prodottoCorrente.trovato) {
@@ -853,7 +878,7 @@ async function caricaStatistiche() {
   try {
     const r = await apiFetch(`${API_BASE()}/api/statistiche`);
     const s = await r.json();
-    const posIcon = {'Frigo':'🧠','Freezer':'❄️','Dispensa':'🗄️'};
+    const posIcon = {'Frigo':'🧊','Freezer':'❄️','Dispensa':'🗄️'};
     let html = `
       <div class="metric-row" style="grid-template-columns:repeat(2,1fr);">
         <div class="metric"><div class="metric-val">${s.totali.acquisti}</div><div class="metric-label">Acquisti totali</div></div>
@@ -869,16 +894,16 @@ async function caricaStatistiche() {
       html += `</div>`;
     }
     if (s.top_acquistati.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">\ud83c� Più acquistati</div>`;
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🏆 Più acquistati</div>`;
       s.top_acquistati.forEach((p,i) => {
-        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--green);font-weight:600;">&times;${p.totale}</span></div>`;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--green);font-weight:600;">×${p.totale}</span></div>`;
       });
       html += `</div>`;
     }
     if (s.top_consumati.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">\ud83d� Più consumati</div>`;
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🔥 Più consumati</div>`;
       s.top_consumati.forEach((p,i) => {
-        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--amber);font-weight:600;">&times;${p.totale}</span></div>`;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--amber);font-weight:600;">×${p.totale}</span></div>`;
       });
       html += `</div>`;
     }
@@ -891,6 +916,7 @@ async function caricaStatistiche() {
   }
 }
 
+// ── OCR scadenza ──────────────────────────────────────────────────────────────
 let ocrStream = null;
 
 function avviaOCRScadenza() {
@@ -938,7 +964,7 @@ async function scattaFotoOCR() {
   const canvas = document.getElementById('ocr-canvas');
   canvas.width = video.videoWidth; canvas.height = video.videoHeight;
   canvas.getContext('2d').drawImage(video, 0, 0);
-  document.getElementById('ocr-status').textContent = '\ud83d� Elaborazione immagine...';
+  document.getElementById('ocr-status').textContent = '🔍 Elaborazione immagine...';
   try {
     const processed = preprocessCanvas(canvas);
     let text = '';
@@ -1034,6 +1060,7 @@ function formatDataIT(iso) {
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
 }
+// ── Fine OCR ──────────────────────────────────────────────────────────────────
 
 function salvaImpostazioni() {
   const giorni = document.getElementById('set-giorni').value;
@@ -1041,6 +1068,7 @@ function salvaImpostazioni() {
   toast('Impostazioni salvate');
 }
 
+// ── Controllo aggiornamenti ───────────────────────────────────────────────────
 const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0';
 
 async function checkForUpdates() {
@@ -1069,6 +1097,7 @@ async function applicaAggiornamento() {
   location.reload(true);
 }
 
+// ── Avvio applicazione ────────────────────────────────────────────────────────
 document.getElementById('set-giorni').value = localStorage.getItem('dispensa_giorni') || '3';
 initDarkMode();
 initAuth().then(() => caricaInventario());
@@ -1082,6 +1111,7 @@ checkForUpdates();
 setInterval(checkForUpdates, 5 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdates(); });
 
+// ── Deep link da notifica (es. /?filter=scaduti) ──────────────────────────────
 function applyDeepLink() {
   const params = new URLSearchParams(window.location.search);
   const filtro = params.get('filter');
@@ -1091,6 +1121,7 @@ function applyDeepLink() {
 window.addEventListener('popstate', applyDeepLink);
 setTimeout(applyDeepLink, 800);
 
+// ── Admin panel ───────────────────────────────────────────────────────────────
 async function caricaAdmin() {
   await Promise.all([caricaUtenti(), caricaImpostazioniAdmin(), caricaIPBans()]);
 }
