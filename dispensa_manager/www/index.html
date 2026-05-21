@@ -12,7 +12,7 @@
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=__VER__">
 </head>
 <body>
 
@@ -59,7 +59,7 @@
       <div class="chip active" data-filtro="tutti" onclick="setFiltro('tutti')">Tutti</div>
       <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
       <div class="chip" data-filtro="scaduti" onclick="setFiltro('scaduti')">🔴 Scaduti</div>
-      <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧨 Frigo</div>
+      <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧊 Frigo</div>
       <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Freezer</div>
       <div class="chip" data-filtro="dispensa" onclick="setFiltro('dispensa')">🗄️ Dispensa</div>
     </div>
@@ -203,7 +203,7 @@
         <label>Posizione</label>
         <select id="conf-posizione">
           <option value="Dispensa">🗄️ Dispensa</option>
-          <option value="Frigo">🧨 Frigo</option>
+          <option value="Frigo">🧊 Frigo</option>
           <option value="Freezer">❄️ Freezer</option>
         </select>
       </div>
@@ -386,7 +386,7 @@
         <label>Posizione</label>
         <select id="mod-posizione">
           <option value="Dispensa">🗄️ Dispensa</option>
-          <option value="Frigo">🧨 Frigo</option>
+          <option value="Frigo">🧊 Frigo</option>
           <option value="Freezer">❄️ Freezer</option>
         </select>
       </div>
@@ -516,7 +516,7 @@
 
 <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
 <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=__VER__"></script>
 
 </body>
 </html>
