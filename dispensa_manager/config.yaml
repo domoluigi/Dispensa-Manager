@@ -1,5 +1,5 @@
 name: Dispensa Manager
-version: "2.0.3"
+version: "2.0.4"
 slug: dispensa_manager
 description: Gestione dispensa con barcode scanner, scadenze, lista spesa e autenticazione utenti.
 url: https://github.com/domoluigi/Dispensa-Manager
