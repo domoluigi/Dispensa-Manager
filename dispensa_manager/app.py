@@ -19,8 +19,10 @@ def _load_jwt_secret() -> str:
     global _JWT_SECRET_CACHE
     if _JWT_SECRET_CACHE:
         return _JWT_SECRET_CACHE
+    # 1. Env var (Docker / CI)
     secret = os.environ.get("JWT_SECRET_KEY", "")
     if not secret:
+        # 2. options.json (HA add-on)
         try:
             import json
             with open(OPTIONS_PATH) as f:
@@ -29,6 +31,7 @@ def _load_jwt_secret() -> str:
         except Exception:
             pass
     if not secret:
+        # 3. Genera e persisti nel DB (stabile tra i riavvii)
         secret = _get_or_create_secret_in_db()
     _JWT_SECRET_CACHE = secret
     return secret
@@ -56,6 +59,7 @@ def _get_or_create_secret_in_db() -> str:
 def create_app():
     app = Flask(__name__)
 
+    # JWT secret — letto da options.json, poi env, poi generato (non stabile tra restart)
     jwt_secret = _load_jwt_secret()
     app.config["JWT_SECRET_KEY"] = jwt_secret
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
@@ -65,19 +69,22 @@ def create_app():
 
     CORS(app, resources={r"/api/*": {
         "origins": "*",
-        "allow_headers": ["Content-Type", "Authorization"],
+        "allow_headers": ["Content-Type", "Authorization", "x-jarvis-token"],
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }})
 
     JWTManager(app)
 
+    # Errori JWT personalizzati
     from flask_jwt_extended import exceptions as jwt_exc
+    from werkzeug.exceptions import HTTPException
 
     @app.errorhandler(jwt_exc.NoAuthorizationError)
     @app.errorhandler(jwt_exc.InvalidHeaderError)
     def handle_jwt_error(e):
         return jsonify({"error": "Token mancante o non valido"}), 401
 
+    # Blueprints
     from routes.auth_routes import bp as auth_bp
     from routes.products import bp as products_bp
     from routes.shopping import bp as shopping_bp
@@ -87,6 +94,8 @@ def create_app():
     app.register_blueprint(products_bp)
     app.register_blueprint(shopping_bp)
     app.register_blueprint(admin_bp)
+
+    # ── Frontend statico ──────────────────────────────────────────────────────
 
     @app.route("/")
     def index():
@@ -100,6 +109,7 @@ def create_app():
             html = html.replace('<meta name="cf-url" content="">', f'<meta name="cf-url" content="{cf_url}">')
             html = re.sub(r'<meta name="app-version" content="[^"]*">', f'<meta name="app-version" content="{APP_VERSION}">', html)
             html = re.sub(r"Dispensa Manager v\d+\.\d+\.\d+", f"Dispensa Manager v{APP_VERSION}", html)
+            html = html.replace('?v=__VER__', f'?v={APP_VERSION}')
             resp = make_response(html)
             resp.headers["Content-Type"] = "text/html; charset=utf-8"
             resp.headers["Cache-Control"] = "no-cache"
@@ -120,6 +130,8 @@ def create_app():
         resp = send_from_directory(WWW_DIR, filename)
         resp.headers["Cache-Control"] = "public, max-age=86400"
         return resp
+
+    # ── Health ────────────────────────────────────────────────────────────────
 
     @app.route("/api/health")
     def health():
