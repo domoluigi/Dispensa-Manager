@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
-<meta name="app-version" content="2.0.7">
+<meta name="app-version" content="2.0.8">
 <meta name="cf-url" content="">
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
@@ -330,7 +330,7 @@
       <div style="font-size:14px;color:var(--text);margin-bottom:12px;">Connesso come: <strong id="current-username"></strong></div>
       <button class="btn btn-secondary" onclick="doLogout()" style="color:var(--red);">🚪 Esci (logout)</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.7</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.8</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -446,9 +446,9 @@
       <div id="admin-ip-bans-list"><div class="empty"><div class="spinner"></div></div></div>
       <div class="field" style="margin-top:12px;">
         <label>Banna IP manualmente</label>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="ban-ip-input" placeholder="es. 192.168.1.100" style="flex:1" autocapitalize="none" autocorrect="off">
-          <button class="btn btn-danger" onclick="banIP()">Banna</button>
+        <div style="display:flex;gap:8px;align-items:stretch;">
+          <input type="text" id="ban-ip-input" placeholder="es. 192.168.1.100" style="flex:1 1 auto;min-width:0;" autocapitalize="none" autocorrect="off">
+          <button class="btn-danger" style="flex:0 0 auto;white-space:nowrap;" onclick="banIP()">Banna</button>
         </div>
       </div>
     </div>
