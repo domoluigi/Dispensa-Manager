@@ -299,7 +299,8 @@ async function consumaRapido(id, qtyAttuali) {
   if (p) p.quantita = nuova;
   applicaFiltroSort();
   toastUndo('−1', async () => {
-    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
+    // bug #2 fix: _skip_log=true così l'undo non crea entry fake nello storico
+    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali, _skip_log: true}) });
     const p2 = prodottiCache.find(x => x.id === id);
     if (p2) p2.quantita = qtyAttuali;
     applicaFiltroSort();
@@ -313,7 +314,7 @@ async function aggiungiRapido(id, qtyAttuali) {
   if (p) p.quantita = nuova;
   applicaFiltroSort();
   toastUndo('+1', async () => {
-    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
+    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali, _skip_log: true}) });
     const p2 = prodottiCache.find(x => x.id === id);
     if (p2) p2.quantita = qtyAttuali;
     applicaFiltroSort();
@@ -514,6 +515,8 @@ function apriDettaglio(id) {
   const imgHtml = p.immagine_url ? '<img src="' + p.immagine_url + '" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);">' : '';
   const esauritoHtml = isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">□ Prodotto esaurito — rimane nel database</div>' : '';
   const posizioneLabel = p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa';
+  // bug #3 fix: mostra '—' invece di "null"/"undefined" quando p.ean è vuoto
+  const eanLabel = p.ean ? (p.ean.startsWith('MANUAL-') ? '—' : p.ean) : '—';
   document.getElementById('det-content').innerHTML =
     '<div class="card card-body">'
     + imgHtml
@@ -524,7 +527,7 @@ function apriDettaglio(id) {
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + posizioneLabel + '</td></tr>'
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Quantità</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + p.quantita + '</td></tr>'
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Scadenza</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + scadFormatted + '</td></tr>'
-    + '<tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">' + p.ean + '</td></tr>'
+    + '<tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">' + eanLabel + '</td></tr>'
     + '</table></div>'
     + renderNutriments(p)
     + '<div class="card card-body" style="margin-top:8px;">'
@@ -557,7 +560,7 @@ async function consumaProdotto(id, qtyAttuali) {
   await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
   showScreen('screen-inventario');
   toastUndo(`−${delta}`, async () => {
-    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
+    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali, _skip_log: true}) });
     const p = prodottiCache.find(x => x.id === id);
     if (p) p.quantita = qtyAttuali;
     applicaFiltroSort();
@@ -570,7 +573,7 @@ async function aggiungiQty(id, qtyAttuali) {
   await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: nuova}) });
   showScreen('screen-inventario');
   toastUndo(`+${delta}`, async () => {
-    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali}) });
+    await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali, _skip_log: true}) });
     const p = prodottiCache.find(x => x.id === id);
     if (p) p.quantita = qtyAttuali;
     applicaFiltroSort();
@@ -612,14 +615,11 @@ function avviaScanner() {
     : 'Inquadra il barcode del prodotto';
 }
 
+// bug #5 fix: ferma solo la fotocamera, lascia DOM intatto (avviaScanner ripristina)
 function fermaScanner() {
   if (codeReader) { codeReader.reset(); codeReader = null; }
   const video = document.getElementById('video');
   if (video && video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
-  const vc = document.getElementById('video-container');
-  if (vc) vc.style.display = '';
-  const sfb = document.getElementById('scan-foto-btn');
-  if (sfb) sfb.style.display = 'none';
 }
 
 function avviaFotoScan() {
