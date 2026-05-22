@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.6"
+APP_VERSION = "2.0.7"
 SCHEMA_VERSION = 4
 
 
@@ -20,6 +20,20 @@ def get_db():
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def get_ha_option(key: str, default: str = "") -> str:
+    """Legge una option dell'addon HA da /data/options.json. Fallback al default.
+    Usata per chiavi gestite via UI HA (telegram_token, telegram_chat_id, cloudflare_url)."""
+    try:
+        with open(OPTIONS_PATH) as f:
+            opts = json.load(f)
+        value = opts.get(key, default)
+        if value is None:
+            return default
+        return str(value) if not isinstance(value, str) else value
+    except Exception:
+        return default
 
 
 def _get_schema_version(conn):
@@ -40,7 +54,7 @@ def _set_schema_version(conn, version):
 def init_db():
     conn = get_db()
 
-    # ── DDL — idempotente, executescript auto-commit (corretto fuori da with conn) ──
+    # ── DDL — idempotente ──
 
     # Schema v1: tabelle originali
     conn.executescript("""
@@ -97,7 +111,6 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_movimenti_data ON storico_movimenti(data);
     """)
 
-    # Colonne aggiunte in versioni precedenti (ALTER ignorato se già esiste)
     for alter in [
         "ALTER TABLE prodotti ADD COLUMN nutriments TEXT",
         "ALTER TABLE prodotti ADD COLUMN nutriscore TEXT",
@@ -149,7 +162,7 @@ def init_db():
         );
     """)
 
-    # ── DML seed / migrazioni — transazionali ────────────────────────────────
+    # ── Migrazioni transazionali ────────────────────────────────
     current = _get_schema_version(conn)
 
     if current < 2:
@@ -183,6 +196,9 @@ def init_db():
 
 
 def _seed_defaults(conn):
+    """Seed dei settings App-managed (editabili da admin UI).
+    NOTA: telegram_token, telegram_chat_id, cloudflare_url sono HA-managed
+    (letti runtime da options.json) e NON vengono inseriti nel DB."""
     ha_opts = {}
     try:
         with open(OPTIONS_PATH) as f:
@@ -195,12 +211,6 @@ def _seed_defaults(conn):
          "Giorni prima della scadenza per inviare alert"),
         ("soglia_scorte_minime", str(ha_opts.get("soglia_scorte_minime", 1)),
          "Quantità minima prima di avvisare scorta esaurita"),
-        ("telegram_token", ha_opts.get("telegram_token", ""),
-         "Token del bot Telegram"),
-        ("telegram_chat_id", str(ha_opts.get("telegram_chat_id", "")),
-         "Chat ID Telegram per notifiche"),
-        ("cloudflare_url", ha_opts.get("cloudflare_url", ""),
-         "URL esterno Cloudflare (es. https://dispensa-api.esempio.it)"),
         ("max_login_attempts", "3",
          "Tentativi di login falliti max prima del ban IP"),
         ("ban_window_minutes", "15",
