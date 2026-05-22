@@ -5,7 +5,7 @@ from datetime import timedelta
 from flask import Flask, jsonify, make_response, send_from_directory, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from database import APP_VERSION
+from database import APP_VERSION, get_ha_option
 
 WWW_DIR = os.path.join(os.path.dirname(__file__), "www")
 
@@ -59,7 +59,7 @@ def _get_or_create_secret_in_db() -> str:
 def create_app():
     app = Flask(__name__)
 
-    # JWT secret — letto da options.json, poi env, poi generato (non stabile tra restart)
+    # JWT secret — letto da options.json, poi env, poi generato (stabile via DB)
     jwt_secret = _load_jwt_secret()
     app.config["JWT_SECRET_KEY"] = jwt_secret
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
@@ -99,10 +99,8 @@ def create_app():
 
     @app.route("/")
     def index():
-        from database import get_db, get_setting
-        conn = get_db()
-        cf_url = get_setting(conn, "cloudflare_url").rstrip("/")
-        conn.close()
+        # cloudflare_url letto runtime dalle HA options (no più DB)
+        cf_url = get_ha_option("cloudflare_url", "").rstrip("/")
         try:
             with open(os.path.join(WWW_DIR, "index.html"), "r", encoding="utf-8-sig") as fh:
                 html = fh.read()
