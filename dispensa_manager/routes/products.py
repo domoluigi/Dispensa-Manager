@@ -349,6 +349,9 @@ def aggiungi_prodotto():
 @jwt_required()
 def aggiorna_prodotto(id):
     data = request.get_json(silent=True) or {}
+    # _skip_log = true → richiesta di undo, non registrare il movimento (bug #2)
+    skip_log = bool(data.get("_skip_log", False))
+
     p = None
     conn = get_db()
     try:
@@ -367,15 +370,24 @@ def aggiorna_prodotto(id):
     finally:
         conn.close()
 
-    if p and "quantita" in data and data["quantita"] < p["quantita"]:
-        log_movimento(
-            nome=p["nome"], tipo="consumo", ean=p["ean"] or "",
-            marca=p["marca"] or "", categoria=p["categoria"] or "",
-            quantita=p["quantita"] - data["quantita"],
-        )
+    # Bug #1 fix: logga 'acquisto' su incremento, 'consumo' su decremento
+    if p and "quantita" in data and not skip_log:
+        diff = data["quantita"] - p["quantita"]
+        if diff < 0:
+            log_movimento(
+                nome=p["nome"], tipo="consumo", ean=p["ean"] or "",
+                marca=p["marca"] or "", categoria=p["categoria"] or "",
+                quantita=-diff,
+            )
+        elif diff > 0:
+            log_movimento(
+                nome=p["nome"], tipo="acquisto", ean=p["ean"] or "",
+                marca=p["marca"] or "", categoria=p["categoria"] or "",
+                quantita=diff,
+            )
     _async(aggiorna_sensori_ha)
 
-    if p:
+    if p and not skip_log:
         cambiamenti = []
         nome = data.get("nome", p["nome"])
         if "quantita" in data and data["quantita"] != p["quantita"]:
