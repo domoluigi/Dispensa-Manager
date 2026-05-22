@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 import requests as http_requests
 
-from database import get_db, get_setting
+from database import get_db, get_ha_option
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +83,12 @@ def svuota_completati():
 @bp.get("/api/lista-spesa/invia-telegram")
 @jwt_required()
 def invia_lista_spesa_telegram():
+    # token e chat_id letti runtime dalle HA options
+    token = get_ha_option("telegram_token", "")
+    chat_id_raw = get_ha_option("telegram_chat_id", "")
+
     conn = get_db()
     try:
-        token = get_setting(conn, "telegram_token")
-        chat_id_raw = get_setting(conn, "telegram_chat_id")
         items = conn.execute(
             "SELECT * FROM lista_spesa WHERE completato=0 ORDER BY data_aggiunta DESC"
         ).fetchall()
@@ -94,7 +96,7 @@ def invia_lista_spesa_telegram():
         conn.close()
 
     if not token or not chat_id_raw:
-        return jsonify({"ok": False, "errore": "Telegram non configurato"})
+        return jsonify({"ok": False, "errore": "Telegram non configurato nelle opzioni HA addon"})
     if not items:
         return jsonify({"ok": False, "errore": "Lista spesa vuota"})
 
