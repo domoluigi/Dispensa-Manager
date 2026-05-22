@@ -56,12 +56,16 @@ def aggiorna_sensori_ha():
     esauriti_list = [p for p in tutti if p["quantita"] <= 0]
 
     in_scadenza = []
+    scaduti = []
     for p in attivi:
         if p["scadenza"]:
             try:
                 scad = datetime.strptime(p["scadenza"], "%Y-%m-%d").date()
-                if (scad - oggi).days <= giorni_soglia:
-                    in_scadenza.append({"nome": p["nome"], "scadenza": p["scadenza"], "giorni": (scad - oggi).days})
+                giorni = (scad - oggi).days
+                if giorni < 0:
+                    scaduti.append({"nome": p["nome"], "scadenza": p["scadenza"], "giorni": giorni})
+                elif giorni <= giorni_soglia:
+                    in_scadenza.append({"nome": p["nome"], "scadenza": p["scadenza"], "giorni": giorni})
             except Exception:
                 pass
 
@@ -87,15 +91,19 @@ def aggiorna_sensori_ha():
     stati = {
         "sensor.dispensa_totale_prodotti": {
             "state": len(attivi),
-            "attributes": {"friendly_name": "Dispensa: prodotti totali", "icon": "mdi:package-variant"},
+            "attributes": {"friendly_name": "Dispensa: prodotti totali", "icon": "mdi:package-variant", "unit_of_measurement": "prodotti"},
         },
         "sensor.dispensa_in_scadenza": {
             "state": len(in_scadenza),
-            "attributes": {"friendly_name": "Dispensa: in scadenza", "prodotti": in_scadenza, "icon": "mdi:calendar-alert"},
+            "attributes": {"friendly_name": "Dispensa: in scadenza", "prodotti": in_scadenza, "icon": "mdi:calendar-alert", "unit_of_measurement": "prodotti"},
+        },
+        "sensor.dispensa_scaduti": {
+            "state": len(scaduti),
+            "attributes": {"friendly_name": "Dispensa: scaduti", "prodotti": scaduti, "icon": "mdi:calendar-remove", "unit_of_measurement": "prodotti"},
         },
         "sensor.dispensa_esauriti": {
             "state": len(esauriti_list),
-            "attributes": {"friendly_name": "Dispensa: esauriti", "prodotti": [p["nome"] for p in esauriti_list], "icon": "mdi:package-variant-remove"},
+            "attributes": {"friendly_name": "Dispensa: esauriti", "prodotti": [p["nome"] for p in esauriti_list], "icon": "mdi:package-variant-remove", "unit_of_measurement": "prodotti"},
         },
     }
     for entity_id, payload in stati.items():
@@ -110,7 +118,6 @@ def _async(fn, *args, **kwargs):
 
 
 def invia_telegram(testo):
-    # token e chat_id letti runtime dalle HA options (gestiti via UI HA addon)
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
     if not token or not chat_id_raw:
@@ -553,7 +560,6 @@ def sync_ha():
 @bp.get("/api/test-telegram")
 @jwt_required()
 def test_telegram():
-    # token e chat_id letti runtime dalle HA options
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
 
@@ -578,7 +584,6 @@ def test_telegram():
 @bp.get("/api/report")
 @jwt_required()
 def report_dispensa():
-    # token e chat_id letti runtime dalle HA options
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
 
