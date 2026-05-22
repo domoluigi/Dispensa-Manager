@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.7"
+APP_VERSION = "2.0.8"
 SCHEMA_VERSION = 4
 
 
@@ -54,9 +54,6 @@ def _set_schema_version(conn, version):
 def init_db():
     conn = get_db()
 
-    # ── DDL — idempotente ──
-
-    # Schema v1: tabelle originali
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS prodotti (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,7 +120,6 @@ def init_db():
         except Exception:
             pass
 
-    # Schema v2: users + app_settings
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
@@ -143,7 +139,6 @@ def init_db():
         );
     """)
 
-    # Schema v3: IP ban
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS login_attempts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,7 +157,6 @@ def init_db():
         );
     """)
 
-    # ── Migrazioni transazionali ────────────────────────────────
     current = _get_schema_version(conn)
 
     if current < 2:
@@ -196,9 +190,6 @@ def init_db():
 
 
 def _seed_defaults(conn):
-    """Seed dei settings App-managed (editabili da admin UI).
-    NOTA: telegram_token, telegram_chat_id, cloudflare_url sono HA-managed
-    (letti runtime da options.json) e NON vengono inseriti nel DB."""
     ha_opts = {}
     try:
         with open(OPTIONS_PATH) as f:
