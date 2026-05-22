@@ -1,4 +1,4 @@
-const CACHE = 'dispensa-v7';
+const CACHE = 'dispensa-v8';
 
 const STATIC_ASSETS = [
   'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
@@ -44,7 +44,8 @@ self.addEventListener('fetch', e => {
     return;
   }
 
+  // ignoreSearch:true → cache hit anche con querystring di cache-busting (?v=2.0.x)
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
+    caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request))
   );
 });
