@@ -124,6 +124,7 @@ def update_settings():
         "giorni_alert_scadenza", "soglia_scorte_minime",
         "telegram_token", "telegram_chat_id",
         "cloudflare_url",
+        "max_login_attempts", "ban_window_minutes",
     }
     invalid = set(data.keys()) - ALLOWED_KEYS
     if invalid:
