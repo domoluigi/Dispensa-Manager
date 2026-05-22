@@ -99,8 +99,9 @@ function doLogout() {
 function applyUserUI() {
   const user = getCurrentUser();
   if (!user) return;
+  // bug fix v2.0.6: 'flex' (non '') per sovrascrivere CSS .tab-admin { display: none; }
   document.querySelectorAll('.tab-admin').forEach(el => {
-    el.style.display = user.is_admin ? '' : 'none';
+    el.style.display = user.is_admin ? 'flex' : 'none';
   });
   const el = document.getElementById('current-username');
   if (el) el.textContent = user.username + (user.is_admin ? ' (admin)' : '');
@@ -299,7 +300,6 @@ async function consumaRapido(id, qtyAttuali) {
   if (p) p.quantita = nuova;
   applicaFiltroSort();
   toastUndo('−1', async () => {
-    // bug #2 fix: _skip_log=true così l'undo non crea entry fake nello storico
     await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({quantita: qtyAttuali, _skip_log: true}) });
     const p2 = prodottiCache.find(x => x.id === id);
     if (p2) p2.quantita = qtyAttuali;
@@ -515,7 +515,6 @@ function apriDettaglio(id) {
   const imgHtml = p.immagine_url ? '<img src="' + p.immagine_url + '" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);">' : '';
   const esauritoHtml = isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">□ Prodotto esaurito — rimane nel database</div>' : '';
   const posizioneLabel = p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa';
-  // bug #3 fix: mostra '—' invece di "null"/"undefined" quando p.ean è vuoto
   const eanLabel = p.ean ? (p.ean.startsWith('MANUAL-') ? '—' : p.ean) : '—';
   document.getElementById('det-content').innerHTML =
     '<div class="card card-body">'
@@ -615,7 +614,6 @@ function avviaScanner() {
     : 'Inquadra il barcode del prodotto';
 }
 
-// bug #5 fix: ferma solo la fotocamera, lascia DOM intatto (avviaScanner ripristina)
 function fermaScanner() {
   if (codeReader) { codeReader.reset(); codeReader = null; }
   const video = document.getElementById('video');
@@ -1166,7 +1164,7 @@ async function salvaImpostazioniAdmin() {
     body: JSON.stringify(payload)
   });
   if (r.ok) toast('Impostazioni salvate');
-  else toast('Errore nel salvataggio');
+  else { const d = await r.json(); toast(d.error || 'Errore nel salvataggio'); }
 }
 
 async function creaUtente() {
