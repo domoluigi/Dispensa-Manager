@@ -5,6 +5,11 @@ from auth import admin_required, hash_password
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
+# Chiavi gestite via UI HA addon (NON editabili da admin panel)
+HA_MANAGED_KEYS = ("telegram_token", "telegram_chat_id", "cloudflare_url")
+# Chiavi interne (non esposte mai)
+INTERNAL_KEYS = ("schema_version", "jwt_secret_key")
+
 
 # ── Utenti ────────────────────────────────────────────────────────────────────────────
 
@@ -102,11 +107,17 @@ def delete_user(user_id):
 @bp.get("/settings")
 @admin_required
 def get_all_settings():
+    """Restituisce solo le settings App-managed (editabili da admin UI).
+    Le chiavi HA-managed (telegram, cloudflare_url) sono filtrate — vanno gestite
+    dalla UI dell'addon HA."""
+    excluded = INTERNAL_KEYS + HA_MANAGED_KEYS
+    placeholders = ",".join("?" * len(excluded))
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT key, value, description, updated_at FROM app_settings "
-            "WHERE key NOT IN ('schema_version', 'jwt_secret_key') ORDER BY key"
+            f"SELECT key, value, description, updated_at FROM app_settings "
+            f"WHERE key NOT IN ({placeholders}) ORDER BY key",
+            excluded,
         ).fetchall()
         return jsonify([dict(r) for r in rows])
     finally:
@@ -120,10 +131,9 @@ def update_settings():
     if not isinstance(data, dict):
         return jsonify({"error": "JSON object richiesto"}), 400
 
+    # Solo settings App-managed sono modificabili da qui
     ALLOWED_KEYS = {
         "giorni_alert_scadenza", "soglia_scorte_minime",
-        "telegram_token", "telegram_chat_id",
-        "cloudflare_url",
         "max_login_attempts", "ban_window_minutes",
     }
     invalid = set(data.keys()) - ALLOWED_KEYS
