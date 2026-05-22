@@ -4,12 +4,27 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import request, jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt
-from database import get_db
+from database import get_db, get_setting
 
 logger = logging.getLogger(__name__)
 
-BAN_WINDOW_MINUTES = 15
-MAX_ATTEMPTS = 3
+# Default fallback se i settings non sono ancora popolati
+DEFAULT_BAN_WINDOW_MINUTES = 15
+DEFAULT_MAX_ATTEMPTS = 3
+
+
+def _get_ban_window_minutes(conn) -> int:
+    try:
+        return int(get_setting(conn, "ban_window_minutes", str(DEFAULT_BAN_WINDOW_MINUTES)))
+    except ValueError:
+        return DEFAULT_BAN_WINDOW_MINUTES
+
+
+def _get_max_attempts(conn) -> int:
+    try:
+        return int(get_setting(conn, "max_login_attempts", str(DEFAULT_MAX_ATTEMPTS)))
+    except ValueError:
+        return DEFAULT_MAX_ATTEMPTS
 
 
 def hash_password(plain: str) -> str:
@@ -48,16 +63,18 @@ def record_attempt(conn, ip: str, username: str, success: bool):
 
 
 def _maybe_ban(conn, ip: str):
-    window_start = (datetime.now(timezone.utc) - timedelta(minutes=BAN_WINDOW_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
+    window_minutes = _get_ban_window_minutes(conn)
+    max_attempts = _get_max_attempts(conn)
+    window_start = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
     row = conn.execute(
         "SELECT COUNT(*) as n FROM login_attempts "
         "WHERE ip=? AND success=0 AND attempted_at>=?",
         (ip, window_start),
     ).fetchone()
-    if row["n"] >= MAX_ATTEMPTS:
+    if row["n"] >= max_attempts:
         with conn:
             conn.execute("INSERT OR IGNORE INTO ip_bans (ip) VALUES (?)", (ip,))
-        logger.warning("IP bannato dopo %d tentativi falliti: %s", MAX_ATTEMPTS, ip)
+        logger.warning("IP bannato dopo %d tentativi falliti: %s", max_attempts, ip)
 
 
 def admin_required(fn):
