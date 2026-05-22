@@ -9,7 +9,7 @@ from flask import Blueprint, request, jsonify, make_response
 from flask_jwt_extended import jwt_required
 import requests as http_requests
 
-from database import get_db, get_setting, APP_VERSION
+from database import get_db, get_setting, get_ha_option, APP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -110,12 +110,9 @@ def _async(fn, *args, **kwargs):
 
 
 def invia_telegram(testo):
-    conn = get_db()
-    try:
-        token = get_setting(conn, "telegram_token")
-        chat_id_raw = get_setting(conn, "telegram_chat_id")
-    finally:
-        conn.close()
+    # token e chat_id letti runtime dalle HA options (gestiti via UI HA addon)
+    token = get_ha_option("telegram_token", "")
+    chat_id_raw = get_ha_option("telegram_chat_id", "")
     if not token or not chat_id_raw:
         return
     for cid in [c.strip() for c in str(chat_id_raw).split(",") if c.strip()]:
@@ -349,7 +346,6 @@ def aggiungi_prodotto():
 @jwt_required()
 def aggiorna_prodotto(id):
     data = request.get_json(silent=True) or {}
-    # _skip_log = true → richiesta di undo, non registrare il movimento (bug #2)
     skip_log = bool(data.get("_skip_log", False))
 
     p = None
@@ -370,7 +366,6 @@ def aggiorna_prodotto(id):
     finally:
         conn.close()
 
-    # Bug #1 fix: logga 'acquisto' su incremento, 'consumo' su decremento
     if p and "quantita" in data and not skip_log:
         diff = data["quantita"] - p["quantita"]
         if diff < 0:
@@ -558,15 +553,12 @@ def sync_ha():
 @bp.get("/api/test-telegram")
 @jwt_required()
 def test_telegram():
-    conn = get_db()
-    try:
-        token = get_setting(conn, "telegram_token")
-        chat_id_raw = get_setting(conn, "telegram_chat_id")
-    finally:
-        conn.close()
+    # token e chat_id letti runtime dalle HA options
+    token = get_ha_option("telegram_token", "")
+    chat_id_raw = get_ha_option("telegram_chat_id", "")
 
     if not token or not chat_id_raw:
-        return jsonify({"ok": False, "errore": "Token o chat_id non configurati"})
+        return jsonify({"ok": False, "errore": "Token o chat_id non configurati nelle opzioni HA addon"})
 
     msg = "\U0001f9ea *Test Dispensa Manager*\n\nLe notifiche Telegram funzionano correttamente! ✅"
     risultati = []
@@ -586,17 +578,19 @@ def test_telegram():
 @bp.get("/api/report")
 @jwt_required()
 def report_dispensa():
+    # token e chat_id letti runtime dalle HA options
+    token = get_ha_option("telegram_token", "")
+    chat_id_raw = get_ha_option("telegram_chat_id", "")
+
     conn = get_db()
     try:
         prodotti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC NULLS LAST").fetchall()
         giorni_soglia = _get_days_threshold(conn)
-        token = get_setting(conn, "telegram_token")
-        chat_id_raw = get_setting(conn, "telegram_chat_id")
     finally:
         conn.close()
 
     if not token or not chat_id_raw:
-        return jsonify({"ok": False, "errore": "Telegram non configurato"})
+        return jsonify({"ok": False, "errore": "Telegram non configurato nelle opzioni HA addon"})
 
     oggi = datetime.now().date()
     in_scadenza, esauriti, ok_list = [], [], []
