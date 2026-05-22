@@ -6,7 +6,7 @@ from flask_jwt_extended import (
     get_jwt_identity,
     get_jwt,
 )
-from datetime import datetime
+from datetime import datetime, timezone
 from database import get_db
 from auth import check_password, get_client_ip, is_ip_banned, record_attempt
 
@@ -45,7 +45,7 @@ def login():
         with conn:
             conn.execute(
                 "UPDATE users SET last_login=? WHERE id=?",
-                (datetime.utcnow().isoformat(), user["id"]),
+                (datetime.now(timezone.utc).isoformat(), user["id"]),
             )
 
         return jsonify({
