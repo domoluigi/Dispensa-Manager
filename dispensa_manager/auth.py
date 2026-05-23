@@ -4,11 +4,10 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import request, jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt
-from database import get_db, get_setting
+from database import get_db, get_setting, get_api_key
 
 logger = logging.getLogger(__name__)
 
-# Default fallback se i settings non sono ancora popolati
 DEFAULT_BAN_WINDOW_MINUTES = 15
 DEFAULT_MAX_ATTEMPTS = 3
 
@@ -84,5 +83,27 @@ def admin_required(fn):
         claims = get_jwt()
         if not claims.get("is_admin"):
             return jsonify({"error": "Accesso riservato agli amministratori"}), 403
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def api_key_or_jwt(fn):
+    """Decoratore che accetta autenticazione via API key (x-api-key header)
+    OPPURE JWT (Authorization: Bearer ...). Usato per endpoint automation-friendly
+    chiamati da HA rest_command."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        api_key_header = request.headers.get("x-api-key", "").strip()
+        if api_key_header:
+            stored = get_api_key()
+            if stored and api_key_header == stored:
+                return fn(*args, **kwargs)
+            logger.warning("Tentativo API call con x-api-key non valida da %s", get_client_ip())
+            return jsonify({"error": "API key non valida"}), 401
+        # Fallback su JWT
+        try:
+            verify_jwt_in_request()
+        except Exception:
+            return jsonify({"error": "Autenticazione richiesta (JWT o x-api-key)"}), 401
         return fn(*args, **kwargs)
     return wrapper
