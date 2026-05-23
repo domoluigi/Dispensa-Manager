@@ -2,6 +2,7 @@ import sqlite3
 import json
 import os
 import logging
+import secrets
 import bcrypt
 
 logger = logging.getLogger(__name__)
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.8"
+APP_VERSION = "2.0.9"
 SCHEMA_VERSION = 4
 
 
@@ -23,8 +24,6 @@ def get_db():
 
 
 def get_ha_option(key: str, default: str = "") -> str:
-    """Legge una option dell'addon HA da /data/options.json. Fallback al default.
-    Usata per chiavi gestite via UI HA (telegram_token, telegram_chat_id, cloudflare_url)."""
     try:
         with open(OPTIONS_PATH) as f:
             opts = json.load(f)
@@ -34,6 +33,41 @@ def get_ha_option(key: str, default: str = "") -> str:
         return str(value) if not isinstance(value, str) else value
     except Exception:
         return default
+
+
+def get_api_key() -> str:
+    """Restituisce la API key persistente per automazioni HA.
+    Generata al primo accesso e salvata nel DB. Stabile tra restart."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT value FROM app_settings WHERE key='api_key'").fetchone()
+        if row and row["value"]:
+            return row["value"]
+        key = "dk_" + secrets.token_urlsafe(32)
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
+                ("api_key", key, "API key per automazioni HA (rest_command)"),
+            )
+        # Rileggi per gestire race condition (altro processo potrebbe averla inserita)
+        row = conn.execute("SELECT value FROM app_settings WHERE key='api_key'").fetchone()
+        return row["value"] if row else key
+    finally:
+        conn.close()
+
+
+def regenerate_api_key() -> str:
+    """Genera una nuova API key sovrascrivendo la precedente.
+    Invalida tutte le automazioni HA che usano la chiave vecchia."""
+    key = "dk_" + secrets.token_urlsafe(32)
+    conn = get_db()
+    try:
+        with conn:
+            set_setting(conn, "api_key", key)
+    finally:
+        conn.close()
+    logger.info("API key rigenerata da admin")
+    return key
 
 
 def _get_schema_version(conn):
@@ -187,6 +221,9 @@ def init_db():
         current = 4
 
     conn.close()
+
+    # API key auto-generata al primo avvio (idempotente)
+    get_api_key()
 
 
 def _seed_defaults(conn):
