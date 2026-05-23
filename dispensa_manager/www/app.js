@@ -143,6 +143,126 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // ── Fine auth helpers ─────────────────────────────────────────────────────────
 
+// ── PWA install ──────────────────────────────────────────────────────────────
+let deferredInstallPrompt = null;
+
+function isStandalonePWA() {
+  return window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || window.navigator.standalone === true;  // iOS Safari
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  updatePWAInstallUI();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  toast('✅ App installata!');
+  updatePWAInstallUI();
+});
+
+function updatePWAInstallUI() {
+  const installedInfo = document.getElementById('pwa-status-installed');
+  const installBtn = document.getElementById('install-pwa-btn');
+  const helpBtn = document.getElementById('install-pwa-help-btn');
+  if (!installedInfo || !installBtn || !helpBtn) return;
+
+  if (isStandalonePWA()) {
+    installedInfo.style.display = 'block';
+    installBtn.style.display = 'none';
+    helpBtn.style.display = 'none';
+  } else if (deferredInstallPrompt) {
+    installedInfo.style.display = 'none';
+    installBtn.style.display = 'block';
+    helpBtn.style.display = 'none';
+  } else {
+    installedInfo.style.display = 'none';
+    installBtn.style.display = 'none';
+    helpBtn.style.display = 'block';
+  }
+}
+
+async function installaPWA() {
+  if (!deferredInstallPrompt) {
+    mostraIstruzioniInstall();
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    toast('⏳ Installazione in corso...');
+  } else {
+    toast('Installazione annullata');
+  }
+  deferredInstallPrompt = null;
+  updatePWAInstallUI();
+}
+
+function mostraIstruzioniInstall() {
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isAndroid = /Android/.test(ua);
+  const isFirefox = /Firefox/.test(ua);
+  const isChrome = /Chrome|CriOS/.test(ua) && !/Edg/.test(ua);
+  const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|Edg/.test(ua);
+
+  let html = '';
+  if (isIOS) {
+    html = `
+      <p><strong>iOS (Safari):</strong></p>
+      <ol style="margin-left:18px;">
+        <li>Tocca l'icona <strong>Condividi</strong> ⬆️ in basso</li>
+        <li>Scorri e tocca <strong>"Aggiungi alla schermata Home"</strong></li>
+        <li>Conferma con <strong>"Aggiungi"</strong> in alto a destra</li>
+      </ol>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px;">⚠️ Su iOS funziona solo con Safari (non Chrome/Firefox).</p>
+    `;
+  } else if (isAndroid && isChrome) {
+    html = `
+      <p><strong>Android (Chrome):</strong></p>
+      <ol style="margin-left:18px;">
+        <li>Tocca il menu <strong>⋮</strong> in alto a destra</li>
+        <li>Tocca <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong></li>
+        <li>Conferma con <strong>"Installa"</strong></li>
+      </ol>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px;">💡 Se il pulsante non appare, ricarica la pagina (sito già installato?).</p>
+    `;
+  } else if (isFirefox) {
+    html = `
+      <p><strong>Firefox:</strong></p>
+      <ol style="margin-left:18px;">
+        <li>Tocca il menu <strong>⋮</strong></li>
+        <li>Tocca <strong>"Installa"</strong></li>
+      </ol>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px;">💡 Firefox supporta PWA solo su Android, non su desktop.</p>
+    `;
+  } else if (isSafari) {
+    html = `
+      <p><strong>Safari (Mac):</strong></p>
+      <ol style="margin-left:18px;">
+        <li>Menu <strong>File → Aggiungi al Dock</strong></li>
+      </ol>
+    `;
+  } else {
+    html = `
+      <p><strong>Browser desktop (Chrome/Edge):</strong></p>
+      <ol style="margin-left:18px;">
+        <li>Clicca l'icona <strong>⊕ Installa</strong> nella barra degli indirizzi</li>
+        <li>Oppure menu <strong>⋮ → Installa Dispensa Manager</strong></li>
+      </ol>
+    `;
+  }
+  document.getElementById('modal-install-content').innerHTML = html;
+  openModal('modal-install-help');
+}
+
+// Verifica stato all'avvio (timeout per dare tempo al beforeinstallprompt di arrivare)
+setTimeout(updatePWAInstallUI, 1500);
+// ── Fine PWA install ──────────────────────────────────────────────────────────
+
 let codeReader = null;
 let prodottoCorrente = {};
 let qtyCorrente = 1;
@@ -170,7 +290,7 @@ function showTab(tab) {
   else if (tab === 'scan') { scanMode = 'add'; showScreen('screen-scan'); }
   else if (tab === 'spesa') showScreen('screen-spesa');
   else if (tab === 'statistiche') showScreen('screen-statistiche');
-  else if (tab === 'impostazioni') { showScreen('screen-impostazioni'); applyUserUI(); }
+  else if (tab === 'impostazioni') { showScreen('screen-impostazioni'); applyUserUI(); updatePWAInstallUI(); }
   else if (tab === 'admin') { showScreen('screen-admin'); caricaAdmin(); }
 }
 
@@ -1108,6 +1228,11 @@ function applyDeepLink() {
   const filtro = params.get('filter');
   const validi = ['tutti', 'scadenza', 'scaduti', 'frigo', 'freezer', 'dispensa'];
   if (filtro && validi.indexOf(filtro) !== -1) setFiltro(filtro);
+  // PWA shortcut deep links
+  const action = params.get('action');
+  if (action === 'scan') { scanMode = 'add'; showScreen('screen-scan'); }
+  const tab = params.get('tab');
+  if (tab === 'spesa') showScreen('screen-spesa');
 }
 window.addEventListener('popstate', applyDeepLink);
 setTimeout(applyDeepLink, 800);
