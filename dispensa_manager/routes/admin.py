@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity
-from database import get_db, set_setting
+from database import get_db, set_setting, get_api_key, regenerate_api_key
 from auth import admin_required, hash_password
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -8,7 +8,7 @@ bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 # Chiavi gestite via UI HA addon (NON editabili da admin panel)
 HA_MANAGED_KEYS = ("telegram_token", "telegram_chat_id", "cloudflare_url")
 # Chiavi interne (non esposte mai)
-INTERNAL_KEYS = ("schema_version", "jwt_secret_key")
+INTERNAL_KEYS = ("schema_version", "jwt_secret_key", "api_key")
 
 
 # ── Utenti ────────────────────────────────────────────────────────────────────────────
@@ -107,9 +107,6 @@ def delete_user(user_id):
 @bp.get("/settings")
 @admin_required
 def get_all_settings():
-    """Restituisce solo le settings App-managed (editabili da admin UI).
-    Le chiavi HA-managed (telegram, cloudflare_url) sono filtrate — vanno gestite
-    dalla UI dell'addon HA."""
     excluded = INTERNAL_KEYS + HA_MANAGED_KEYS
     placeholders = ",".join("?" * len(excluded))
     conn = get_db()
@@ -131,7 +128,6 @@ def update_settings():
     if not isinstance(data, dict):
         return jsonify({"error": "JSON object richiesto"}), 400
 
-    # Solo settings App-managed sono modificabili da qui
     ALLOWED_KEYS = {
         "giorni_alert_scadenza", "soglia_scorte_minime",
         "max_login_attempts", "ban_window_minutes",
@@ -148,6 +144,21 @@ def update_settings():
         return jsonify({"ok": True, "updated": list(data.keys())})
     finally:
         conn.close()
+
+
+# ── API Key (automazioni HA) ───────────────────────────────────────────────────────
+
+@bp.get("/api-key")
+@admin_required
+def get_api_key_endpoint():
+    return jsonify({"api_key": get_api_key()})
+
+
+@bp.post("/api-key/regenerate")
+@admin_required
+def regenerate_api_key_endpoint():
+    new_key = regenerate_api_key()
+    return jsonify({"api_key": new_key, "ok": True})
 
 
 # ── IP Ban ─────────────────────────────────────────────────────────────────────────────
