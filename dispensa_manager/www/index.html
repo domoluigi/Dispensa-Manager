@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
-<meta name="app-version" content="2.0.8">
+<meta name="app-version" content="2.0.9">
 <meta name="cf-url" content="">
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
@@ -330,7 +330,7 @@
       <div style="font-size:14px;color:var(--text);margin-bottom:12px;">Connesso come: <strong id="current-username"></strong></div>
       <button class="btn btn-secondary" onclick="doLogout()" style="color:var(--red);">🚪 Esci (logout)</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.8</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.9</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -417,6 +417,18 @@
       <div class="admin-section-title">Impostazioni sistema</div>
       <div id="admin-settings-form"><div class="empty"><div class="spinner"></div></div></div>
       <button class="btn btn-primary" style="margin-top:8px;" onclick="salvaImpostazioniAdmin()">Salva impostazioni</button>
+    </div>
+
+    <div class="card card-body admin-section">
+      <div class="admin-section-title">🔑 API Key per automazioni HA</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5;">
+        Usa questa chiave nell'header <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">x-api-key</code> dei tuoi <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">rest_command</code> in <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">configuration.yaml</code>. La chiave rimane stabile tra i riavvii.
+      </div>
+      <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:10px;">
+        <input type="text" id="api-key-display" readonly style="flex:1 1 auto;min-width:0;font-family:monospace;font-size:13px;" placeholder="caricamento...">
+        <button class="btn-sm btn-sm-green" style="flex:0 0 auto;white-space:nowrap;" onclick="copiaApiKey()">📋 Copia</button>
+      </div>
+      <button class="btn-danger" style="width:100%;padding:10px;" onclick="apriRigeneraApiKey()">🔄 Rigenera chiave</button>
     </div>
 
     <div class="card card-body admin-section">
@@ -510,6 +522,25 @@
     <div style="display:flex;gap:8px;">
       <button class="btn btn-danger" style="flex:1" id="modal-confirm-ok">Conferma</button>
       <button class="btn" style="flex:1" onclick="closeModal('modal-confirm')">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal rigenera API key con doppia conferma (typing RIGENERA) -->
+<div class="modal-overlay hidden" id="modal-regen-apikey">
+  <div class="modal-box">
+    <div class="modal-title">⚠️ Rigenera API Key</div>
+    <div style="color:var(--muted);font-size:14px;margin-bottom:14px;line-height:1.5;">
+      Tutte le automazioni HA che usano la <strong>vecchia chiave smetteranno di funzionare</strong>.
+      Dovrai aggiornare il <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">configuration.yaml</code> con la nuova chiave.
+    </div>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:8px;">
+      Per confermare, scrivi <strong>RIGENERA</strong> qui sotto:
+    </div>
+    <input type="text" id="regen-confirm-input" placeholder="RIGENERA" oninput="checkRegenConfirm()" autocapitalize="characters" autocorrect="off" style="margin-bottom:16px;font-family:monospace;letter-spacing:2px;text-align:center;">
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-danger" style="flex:1;opacity:0.4;cursor:not-allowed;" id="btn-regen-confirm" disabled onclick="rigeneraApiKey()">Rigenera</button>
+      <button class="btn" style="flex:1" onclick="closeModal('modal-regen-apikey')">Annulla</button>
     </div>
   </div>
 </div>
