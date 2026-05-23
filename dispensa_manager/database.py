@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.12"
+APP_VERSION = "2.0.13"
 SCHEMA_VERSION = 4
 
 
@@ -56,8 +56,7 @@ def get_api_key() -> str:
 
 
 def regenerate_api_key() -> str:
-    """Genera una nuova API key sovrascrivendo la precedente.
-    Invalida tutte le automazioni HA che usano la chiave vecchia."""
+    """Genera una nuova API key sovrascrivendo la precedente."""
     key = "dk_" + secrets.token_urlsafe(32)
     conn = get_db()
     try:
