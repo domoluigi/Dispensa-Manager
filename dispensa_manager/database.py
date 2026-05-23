@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.10"
+APP_VERSION = "2.0.11"
 SCHEMA_VERSION = 4
 
 
