@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint("products", __name__)
 
+# Telegram limita i messaggi a 4096 caratteri
+TELEGRAM_MAX_LEN = 4000
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -119,17 +122,26 @@ def _async(fn, *args, **kwargs):
 
 
 def invia_telegram(testo):
+    """Invia messaggio Telegram. Tronca se supera limite (4096) e logga errori HTTP."""
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
     if not token or not chat_id_raw:
+        logger.warning("Telegram non configurato (token o chat_id mancanti nelle opzioni HA)")
         return
+    if len(testo) > TELEGRAM_MAX_LEN:
+        logger.warning("Messaggio Telegram troppo lungo (%d char) — troncato a %d", len(testo), TELEGRAM_MAX_LEN)
+        testo = testo[:TELEGRAM_MAX_LEN - 60] + "\n\n_…messaggio troncato, apri l'app per il dettaglio_"
     for cid in [c.strip() for c in str(chat_id_raw).split(",") if c.strip()]:
         try:
-            http_requests.post(
+            r = http_requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={"chat_id": cid, "text": testo, "parse_mode": "Markdown"},
                 timeout=10,
             )
+            if r.status_code != 200:
+                logger.error("Telegram chat %s respinto (HTTP %d): %s", cid, r.status_code, r.text[:300])
+            else:
+                logger.info("Telegram chat %s OK (%d char)", cid, len(testo))
         except Exception as e:
             logger.error("Errore Telegram %s: %s", cid, e)
 
@@ -576,7 +588,7 @@ def test_telegram():
                 json={"chat_id": cid, "text": msg, "parse_mode": "Markdown"},
                 timeout=10,
             )
-            risultati.append({"chat_id": cid, "ok": r.status_code == 200})
+            risultati.append({"chat_id": cid, "ok": r.status_code == 200, "http_status": r.status_code})
         except Exception as e:
             risultati.append({"chat_id": cid, "ok": False, "errore": str(e)})
     return jsonify({"risultati": risultati})
@@ -585,6 +597,9 @@ def test_telegram():
 @bp.get("/api/report")
 @api_key_or_jwt
 def report_dispensa():
+    """Report riassuntivo dispensa via Telegram.
+    NON elenca tutti i prodotti OK (sarebbe troppo lungo per dispense grandi).
+    Mostra: totali + scaduti + in scadenza + esauriti (con dettagli)."""
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
 
@@ -599,7 +614,8 @@ def report_dispensa():
         return jsonify({"ok": False, "errore": "Telegram non configurato nelle opzioni HA addon"})
 
     oggi = datetime.now().date()
-    in_scadenza, esauriti, ok_list = [], [], []
+    in_scadenza, scaduti, esauriti = [], [], []
+    totale_ok = 0  # prodotti attivi con scadenza ok o senza scadenza
 
     for p in prodotti:
         if p["quantita"] <= 0:
@@ -609,39 +625,58 @@ def report_dispensa():
             try:
                 scad = datetime.strptime(p["scadenza"], "%Y-%m-%d").date()
                 giorni = (scad - oggi).days
-                if giorni <= giorni_soglia:
+                if giorni < 0:
+                    scaduti.append({"nome": p["nome"], "giorni": giorni, "quantita": p["quantita"]})
+                elif giorni <= giorni_soglia:
                     in_scadenza.append({"nome": p["nome"], "giorni": giorni, "quantita": p["quantita"]})
                 else:
-                    ok_list.append(p)
+                    totale_ok += 1
             except Exception:
-                ok_list.append(p)
+                totale_ok += 1
         else:
-            ok_list.append(p)
+            totale_ok += 1
 
     attivi = len([p for p in prodotti if p["quantita"] > 0])
+
     msg = f"\U0001f4e6 *Report Dispensa*\n_{datetime.now().strftime('%d/%m/%Y %H:%M')}_\n\n"
-    msg += f"*Prodotti in dispensa: {attivi}*"
+    msg += f"📊 *Riepilogo*\n"
+    msg += f"  • Totale: *{attivi}* prodotti\n"
+    msg += f"  • OK: {totale_ok}\n"
+    if scaduti:
+        msg += f"  • 🔴 Scaduti: {len(scaduti)}\n"
+    if in_scadenza:
+        msg += f"  • ⚠️ In scadenza: {len(in_scadenza)}\n"
     if esauriti:
-        msg += f" _(+ {len(esauriti)} esauriti)_"
-    msg += "\n\n"
+        msg += f"  • 🛒 Esauriti: {len(esauriti)}\n"
+    msg += "\n"
+
+    if scaduti:
+        msg += "🔴 *Scaduti:*\n"
+        for p in scaduti[:30]:
+            gg = abs(p["giorni"])
+            lbl = "ieri" if gg == 1 else f"{gg} giorni fa"
+            msg += f"  • {p['nome']} ×{p['quantita']} — _scaduto {lbl}_\n"
+        if len(scaduti) > 30:
+            msg += f"  _…e altri {len(scaduti) - 30}_\n"
+        msg += "\n"
+
     if in_scadenza:
         msg += "⚠️ *In scadenza:*\n"
-        for p in in_scadenza:
-            if p["giorni"] < 0: lbl = "scaduto!"
-            elif p["giorni"] == 0: lbl = "scade oggi!"
+        for p in in_scadenza[:30]:
+            if p["giorni"] == 0: lbl = "scade oggi!"
             elif p["giorni"] == 1: lbl = "scade domani"
             else: lbl = f"tra {p['giorni']} giorni"
             msg += f"  • {p['nome']} ×{p['quantita']} — _{lbl}_\n"
+        if len(in_scadenza) > 30:
+            msg += f"  _…e altri {len(in_scadenza) - 30}_\n"
         msg += "\n"
+
     if esauriti:
-        msg += "❌ *Esauriti:*\n"
-        for p in esauriti:
+        msg += "🛒 *Esauriti (lista spesa):*\n"
+        for p in esauriti[:30]:
             msg += f"  • {p['nome']}\n"
-        msg += "\n"
-    if ok_list:
-        msg += "✅ *In dispensa:*\n"
-        for p in ok_list:
-            msg += f"  • {p['nome']} ×{p['quantita']}\n"
+        if len(esauriti) > 30:
+            msg += f"  _…e altri {len(esauriti) - 30}_\n"
 
     _async(invia_telegram, msg)
-    return jsonify({"ok": True, "totale": attivi})
+    return jsonify({"ok": True, "totale": attivi, "scaduti": len(scaduti), "in_scadenza": len(in_scadenza), "esauriti": len(esauriti)})
