@@ -1,6 +1,8 @@
 import os
 import re
+import time
 import logging
+import threading
 from datetime import timedelta
 from flask import Flask, jsonify, make_response, send_from_directory, request
 from flask_cors import CORS
@@ -19,10 +21,8 @@ def _load_jwt_secret() -> str:
     global _JWT_SECRET_CACHE
     if _JWT_SECRET_CACHE:
         return _JWT_SECRET_CACHE
-    # 1. Env var (Docker / CI)
     secret = os.environ.get("JWT_SECRET_KEY", "")
     if not secret:
-        # 2. options.json (HA add-on)
         try:
             import json
             with open(OPTIONS_PATH) as f:
@@ -31,7 +31,6 @@ def _load_jwt_secret() -> str:
         except Exception:
             pass
     if not secret:
-        # 3. Genera e persisti nel DB (stabile tra i riavvii)
         secret = _get_or_create_secret_in_db()
     _JWT_SECRET_CACHE = secret
     return secret
@@ -56,10 +55,20 @@ def _get_or_create_secret_in_db() -> str:
         return _os.urandom(32).hex()
 
 
+def _sync_ha_on_startup():
+    """Aggiorna i sensori HA all'avvio dell'addon (dopo 5s per dare tempo a Flask)."""
+    time.sleep(5)
+    try:
+        from routes.products import aggiorna_sensori_ha
+        aggiorna_sensori_ha()
+        logger.info("Sync sensori HA all'avvio completato")
+    except Exception as e:
+        logger.warning("Sync sensori HA all'avvio fallito: %s", e)
+
+
 def create_app():
     app = Flask(__name__)
 
-    # JWT secret — letto da options.json, poi env, poi generato (stabile via DB)
     jwt_secret = _load_jwt_secret()
     app.config["JWT_SECRET_KEY"] = jwt_secret
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
@@ -69,13 +78,12 @@ def create_app():
 
     CORS(app, resources={r"/api/*": {
         "origins": "*",
-        "allow_headers": ["Content-Type", "Authorization", "x-jarvis-token"],
+        "allow_headers": ["Content-Type", "Authorization", "x-jarvis-token", "x-api-key"],
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }})
 
     JWTManager(app)
 
-    # Errori JWT personalizzati
     from flask_jwt_extended import exceptions as jwt_exc
     from werkzeug.exceptions import HTTPException
 
@@ -84,7 +92,6 @@ def create_app():
     def handle_jwt_error(e):
         return jsonify({"error": "Token mancante o non valido"}), 401
 
-    # Blueprints
     from routes.auth_routes import bp as auth_bp
     from routes.products import bp as products_bp
     from routes.shopping import bp as shopping_bp
@@ -95,11 +102,8 @@ def create_app():
     app.register_blueprint(shopping_bp)
     app.register_blueprint(admin_bp)
 
-    # ── Frontend statico ──────────────────────────────────────────────────────
-
     @app.route("/")
     def index():
-        # cloudflare_url letto runtime dalle HA options (no più DB)
         cf_url = get_ha_option("cloudflare_url", "").rstrip("/")
         try:
             with open(os.path.join(WWW_DIR, "index.html"), "r", encoding="utf-8-sig") as fh:
@@ -129,8 +133,6 @@ def create_app():
         resp.headers["Cache-Control"] = "public, max-age=86400"
         return resp
 
-    # ── Health ────────────────────────────────────────────────────────────────
-
     @app.route("/api/health")
     def health():
         from datetime import datetime
@@ -143,5 +145,7 @@ if __name__ == "__main__":
     from database import init_db
     init_db()
     logger.info("Dispensa Manager v%s avviato su porta 5000", APP_VERSION)
+    # Sync sensori HA in background (best-effort, non blocca lo startup)
+    threading.Thread(target=_sync_ha_on_startup, daemon=True).start()
     app = create_app()
     app.run(host="0.0.0.0", port=5000, debug=False)
