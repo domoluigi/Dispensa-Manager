@@ -5,6 +5,7 @@ from flask_jwt_extended import jwt_required
 import requests as http_requests
 
 from database import get_db, get_ha_option
+from auth import api_key_or_jwt
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +82,9 @@ def svuota_completati():
 
 
 @bp.get("/api/lista-spesa/invia-telegram")
-@jwt_required()
+@api_key_or_jwt
 def invia_lista_spesa_telegram():
-    # token e chat_id letti runtime dalle HA options
+    # Auth: x-api-key (HA automation) o JWT (frontend)
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
 
