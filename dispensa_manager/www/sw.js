@@ -1,4 +1,4 @@
-const CACHE = 'dispensa-v8';
+const CACHE = 'dispensa-v9';
 
 const STATIC_ASSETS = [
   'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
