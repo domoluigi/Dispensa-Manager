@@ -99,7 +99,6 @@ function doLogout() {
 function applyUserUI() {
   const user = getCurrentUser();
   if (!user) return;
-  // bug fix v2.0.6: 'flex' (non '') per sovrascrivere CSS .tab-admin { display: none; }
   document.querySelectorAll('.tab-admin').forEach(el => {
     el.style.display = user.is_admin ? 'flex' : 'none';
   });
@@ -120,7 +119,6 @@ async function initAuth() {
       applyUserUI();
       return;
     }
-    // Token scaduto – prova refresh
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       hideLoginOverlay();
@@ -130,7 +128,6 @@ async function initAuth() {
       showLoginOverlay();
     }
   } catch {
-    // Rete non disponibile ma token presente – lascia passare
     hideLoginOverlay();
     applyUserUI();
   }
@@ -714,7 +711,6 @@ function apriConferma(prodotto) {
   showScreen('screen-conferma');
 }
 
-// ── Gestione foto prodotto ──────────────────────────────────────────────────
 function apriFotoMenu() {
   const input = document.getElementById('foto-input');
   input.setAttribute('capture', 'environment');
@@ -1066,7 +1062,6 @@ function salvaImpostazioni() {
   toast('Impostazioni salvate');
 }
 
-// ── Controllo aggiornamenti ───────────────────────────────────────────────────
 const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0';
 
 async function checkForUpdates() {
@@ -1095,7 +1090,6 @@ async function applicaAggiornamento() {
   location.reload(true);
 }
 
-// ── Avvio applicazione ────────────────────────────────────────────────────────
 document.getElementById('set-giorni').value = localStorage.getItem('dispensa_giorni') || '3';
 initDarkMode();
 initAuth().then(() => caricaInventario());
@@ -1109,7 +1103,6 @@ checkForUpdates();
 setInterval(checkForUpdates, 5 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdates(); });
 
-// ── Deep link da notifica (es. /?filter=scaduti) ──────────────────────────────
 function applyDeepLink() {
   const params = new URLSearchParams(window.location.search);
   const filtro = params.get('filter');
@@ -1121,7 +1114,7 @@ setTimeout(applyDeepLink, 800);
 
 // ── Admin panel ───────────────────────────────────────────────────────────────
 async function caricaAdmin() {
-  await Promise.all([caricaUtenti(), caricaImpostazioniAdmin(), caricaIPBans()]);
+  await Promise.all([caricaUtenti(), caricaImpostazioniAdmin(), caricaIPBans(), caricaApiKey()]);
 }
 
 async function caricaUtenti() {
@@ -1285,5 +1278,73 @@ async function banIP() {
   } else {
     const d = await r.json();
     toast(d.error || 'Errore ban IP');
+  }
+}
+
+// ── API Key (automazioni HA) ──────────────────────────────────────────────────
+async function caricaApiKey() {
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/api-key`);
+    if (r.ok) {
+      const data = await r.json();
+      const el = document.getElementById('api-key-display');
+      if (el) el.value = data.api_key || '';
+    }
+  } catch(e) {
+    console.warn('Errore caricamento API key:', e);
+  }
+}
+
+function copiaApiKey() {
+  const el = document.getElementById('api-key-display');
+  if (!el || !el.value) { toast('Nessuna API key da copiare'); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(el.value).then(() => {
+      toast('🔑 API key copiata!');
+    }).catch(() => {
+      el.select(); document.execCommand('copy');
+      toast('🔑 API key copiata!');
+    });
+  } else {
+    el.select(); document.execCommand('copy');
+    toast('🔑 API key copiata!');
+  }
+}
+
+function apriRigeneraApiKey() {
+  const input = document.getElementById('regen-confirm-input');
+  const btn = document.getElementById('btn-regen-confirm');
+  if (input) input.value = '';
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; }
+  openModal('modal-regen-apikey');
+  setTimeout(() => input?.focus(), 100);
+}
+
+function checkRegenConfirm() {
+  const v = (document.getElementById('regen-confirm-input').value || '').trim().toUpperCase();
+  const btn = document.getElementById('btn-regen-confirm');
+  const ok = (v === 'RIGENERA');
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '1' : '0.4';
+  btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+
+async function rigeneraApiKey() {
+  const btn = document.getElementById('btn-regen-confirm');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/api-key/regenerate`, { method: 'POST' });
+    closeModal('modal-regen-apikey');
+    if (r.ok) {
+      const data = await r.json();
+      document.getElementById('api-key-display').value = data.api_key;
+      toast('🔑 Nuova API key generata — aggiorna configuration.yaml!', 5000);
+    } else {
+      toast('Errore rigenerazione API key');
+    }
+  } catch(e) {
+    closeModal('modal-regen-apikey');
+    toast('Errore di rete');
   }
 }
