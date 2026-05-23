@@ -2,54 +2,62 @@
   "id": "/",
   "name": "Dispensa Manager",
   "short_name": "Dispensa",
-  "description": "Gestione inventario dispensa con barcode scanner",
+  "description": "Gestione inventario dispensa con barcode scanner, scadenze e lista spesa",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#F7F6F2",
   "theme_color": "#1D9E75",
   "lang": "it",
+  "dir": "ltr",
+  "categories": ["productivity", "food", "lifestyle", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "./icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "./icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "./icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ],
   "screenshots": [
     {
-      "src": "./screenshot-narrow.png",
+      "src": "/screenshot-narrow.png",
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Dispensa Manager - Vista inventario"
+      "label": "Dispensa Manager - Vista inventario mobile"
     },
     {
-      "src": "./screenshot-wide.png",
+      "src": "/screenshot-wide.png",
       "sizes": "1280x800",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Dispensa Manager - Vista desktop"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Scansiona prodotto",
+      "short_name": "Scansiona",
+      "description": "Aggiungi rapidamente un prodotto via barcode",
+      "url": "/?action=scan",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Lista spesa",
+      "short_name": "Spesa",
+      "description": "Apri la lista della spesa",
+      "url": "/?tab=spesa",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
