@@ -7,10 +7,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
-<meta name="app-version" content="2.0.12">
+<meta name="app-version" content="2.0.13">
 <meta name="cf-url" content="">
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="shortcut icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="style.css?v=__VER__">
 </head>
@@ -314,6 +317,15 @@
       </div>
       <button class="btn btn-primary" onclick="salvaImpostazioni()" style="margin-top:4px;">Salva</button>
     </div>
+
+    <!-- Installa app come PWA -->
+    <div class="card card-body" style="margin-top:12px;" id="pwa-section">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">📲 App</div>
+      <div id="pwa-status-installed" style="display:none;font-size:14px;color:var(--green-d);font-weight:500;padding:8px 0;">✅ Stai usando l'app installata</div>
+      <button class="btn btn-primary" id="install-pwa-btn" onclick="installaPWA()" style="display:none;">📲 Installa come App</button>
+      <button class="btn btn-secondary" id="install-pwa-help-btn" onclick="mostraIstruzioniInstall()" style="display:none;">📖 Come installare manualmente</button>
+    </div>
+
     <div class="card card-body" style="margin-top:12px;">
       <div style="font-size:13px;font-weight:500;margin-bottom:12px;color:var(--muted);">Aspetto</div>
       <div class="setting-row">
@@ -330,7 +342,7 @@
       <div style="font-size:14px;color:var(--text);margin-bottom:12px;">Connesso come: <strong id="current-username"></strong></div>
       <button class="btn btn-secondary" onclick="doLogout()" style="color:var(--red);">🚪 Esci (logout)</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.12</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.13</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')">
@@ -542,6 +554,15 @@
       <button class="btn btn-danger" style="flex:1;opacity:0.4;cursor:not-allowed;" id="btn-regen-confirm" disabled onclick="rigeneraApiKey()">Rigenera</button>
       <button class="btn" style="flex:1" onclick="closeModal('modal-regen-apikey')">Annulla</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal istruzioni installazione PWA -->
+<div class="modal-overlay hidden" id="modal-install-help">
+  <div class="modal-box">
+    <div class="modal-title">📲 Installa Dispensa</div>
+    <div id="modal-install-content" style="color:var(--text);font-size:14px;line-height:1.6;margin-bottom:16px;"></div>
+    <button class="btn btn-primary" style="width:100%;" onclick="closeModal('modal-install-help')">Capito</button>
   </div>
 </div>
 
