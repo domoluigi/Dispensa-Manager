@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.9"
+APP_VERSION = "2.0.10"
 SCHEMA_VERSION = 4
 
 
@@ -49,7 +49,6 @@ def get_api_key() -> str:
                 "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
                 ("api_key", key, "API key per automazioni HA (rest_command)"),
             )
-        # Rileggi per gestire race condition (altro processo potrebbe averla inserita)
         row = conn.execute("SELECT value FROM app_settings WHERE key='api_key'").fetchone()
         return row["value"] if row else key
     finally:
