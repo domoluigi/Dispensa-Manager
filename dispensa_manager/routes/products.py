@@ -10,6 +10,7 @@ from flask_jwt_extended import jwt_required
 import requests as http_requests
 
 from database import get_db, get_setting, get_ha_option, APP_VERSION
+from auth import api_key_or_jwt
 
 logger = logging.getLogger(__name__)
 
@@ -500,7 +501,7 @@ def statistiche():
 # ── Alerts / Sync HA ─────────────────────────────────────────────────────────
 
 @bp.get("/api/alerts")
-@jwt_required()
+@api_key_or_jwt
 def invia_alerts():
     conn = get_db()
     try:
@@ -548,7 +549,7 @@ def invia_alerts():
 
 
 @bp.get("/api/sync-ha")
-@jwt_required()
+@api_key_or_jwt
 def sync_ha():
     try:
         aggiorna_sensori_ha()
@@ -558,7 +559,7 @@ def sync_ha():
 
 
 @bp.get("/api/test-telegram")
-@jwt_required()
+@api_key_or_jwt
 def test_telegram():
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
@@ -582,7 +583,7 @@ def test_telegram():
 
 
 @bp.get("/api/report")
-@jwt_required()
+@api_key_or_jwt
 def report_dispensa():
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
