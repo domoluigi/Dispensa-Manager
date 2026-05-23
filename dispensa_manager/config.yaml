@@ -1,5 +1,5 @@
 name: Dispensa Manager
-version: "2.0.10"
+version: "2.0.11"
 slug: dispensa_manager
 description: Gestione dispensa con barcode scanner, scadenze, lista spesa e autenticazione utenti.
 url: https://github.com/domoluigi/Dispensa-Manager
@@ -9,6 +9,9 @@ arch:
 init: false
 startup: application
 boot: auto
+
+# Permessi per scrivere stati sui sensori HA (sensor.dispensa_*) via SUPERVISOR_TOKEN
+homeassistant_api: true
 
 ports:
   5000/tcp: 5000
