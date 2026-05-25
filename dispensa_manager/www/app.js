@@ -28,10 +28,7 @@ async function tryRefreshToken() {
   const rt = getRefreshToken();
   if (!rt) return false;
   try {
-    const r = await fetch(API_BASE() + '/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + rt }
-    });
+    const r = await fetch(API_BASE() + '/api/auth/refresh', { method: 'POST', headers: { 'Authorization': 'Bearer ' + rt } });
     if (!r.ok) return false;
     const data = await r.json();
     localStorage.setItem(AUTH_KEY, data.access_token);
@@ -44,7 +41,6 @@ async function apiFetch(url, opts = {}) {
   const headers = Object.assign({}, opts.headers || {});
   if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
   opts.headers = headers;
-
   let r = await fetch(url, opts);
   if (r.status === 401) {
     const refreshed = await tryRefreshToken();
@@ -69,8 +65,7 @@ async function doLogin() {
   if (!username || !password) { errEl.textContent = 'Inserisci username e password'; return; }
   try {
     const r = await fetch(API_BASE() + '/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
     const data = await r.json();
@@ -87,21 +82,13 @@ function showLoginOverlay() {
   document.getElementById('login-password').value = '';
   document.getElementById('login-error').textContent = '';
 }
-function hideLoginOverlay() {
-  document.getElementById('login-overlay').classList.add('hidden');
-}
-
-function doLogout() {
-  clearAuth();
-  showLoginOverlay();
-}
+function hideLoginOverlay() { document.getElementById('login-overlay').classList.add('hidden'); }
+function doLogout() { clearAuth(); showLoginOverlay(); }
 
 function applyUserUI() {
   const user = getCurrentUser();
   if (!user) return;
-  document.querySelectorAll('.tab-admin').forEach(el => {
-    el.style.display = user.is_admin ? 'flex' : 'none';
-  });
+  document.querySelectorAll('.tab-admin').forEach(el => { el.style.display = user.is_admin ? 'flex' : 'none'; });
   const el = document.getElementById('current-username');
   if (el) el.textContent = user.username + (user.is_admin ? ' (admin)' : '');
 }
@@ -109,89 +96,49 @@ function applyUserUI() {
 async function initAuth() {
   if (!getAccessToken()) { showLoginOverlay(); return; }
   try {
-    const r = await fetch(API_BASE() + '/api/auth/me', {
-      headers: { 'Authorization': 'Bearer ' + getAccessToken() }
-    });
+    const r = await fetch(API_BASE() + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + getAccessToken() } });
     if (r.ok) {
       const me = await r.json();
       saveAuth({ access_token: getAccessToken(), username: me.username, is_admin: me.is_admin });
-      hideLoginOverlay();
-      applyUserUI();
-      return;
+      hideLoginOverlay(); applyUserUI(); return;
     }
     const refreshed = await tryRefreshToken();
-    if (refreshed) {
-      hideLoginOverlay();
-      applyUserUI();
-    } else {
-      clearAuth();
-      showLoginOverlay();
-    }
-  } catch {
-    hideLoginOverlay();
-    applyUserUI();
-  }
+    if (refreshed) { hideLoginOverlay(); applyUserUI(); }
+    else { clearAuth(); showLoginOverlay(); }
+  } catch { hideLoginOverlay(); applyUserUI(); }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('login-password')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
-  });
-  document.getElementById('login-username')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('login-password')?.focus();
-  });
+  document.getElementById('login-password')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('login-username')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-password')?.focus(); });
 });
 
 // ── PWA install ──────────────────────────────────────────────────────────────
 let deferredInstallPrompt = null;
-
 function isStandalonePWA() {
   return window.matchMedia('(display-mode: standalone)').matches
       || window.matchMedia('(display-mode: fullscreen)').matches
       || window.navigator.standalone === true;
 }
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  updatePWAInstallUI();
-});
-
-window.addEventListener('appinstalled', () => {
-  deferredInstallPrompt = null;
-  toast('✅ App installata!');
-  updatePWAInstallUI();
-});
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstallPrompt = e; updatePWAInstallUI(); });
+window.addEventListener('appinstalled', () => { deferredInstallPrompt = null; toast('✅ App installata!'); updatePWAInstallUI(); });
 
 function updatePWAInstallUI() {
   const installedInfo = document.getElementById('pwa-status-installed');
   const installBtn = document.getElementById('install-pwa-btn');
   const helpBtn = document.getElementById('install-pwa-help-btn');
   if (!installedInfo || !installBtn || !helpBtn) return;
-
-  if (isStandalonePWA()) {
-    installedInfo.style.display = 'block';
-    installBtn.style.display = 'none';
-    helpBtn.style.display = 'none';
-  } else if (deferredInstallPrompt) {
-    installedInfo.style.display = 'none';
-    installBtn.style.display = 'block';
-    helpBtn.style.display = 'none';
-  } else {
-    installedInfo.style.display = 'none';
-    installBtn.style.display = 'none';
-    helpBtn.style.display = 'block';
-  }
+  if (isStandalonePWA()) { installedInfo.style.display = 'block'; installBtn.style.display = 'none'; helpBtn.style.display = 'none'; }
+  else if (deferredInstallPrompt) { installedInfo.style.display = 'none'; installBtn.style.display = 'block'; helpBtn.style.display = 'none'; }
+  else { installedInfo.style.display = 'none'; installBtn.style.display = 'none'; helpBtn.style.display = 'block'; }
 }
 
 async function installaPWA() {
   if (!deferredInstallPrompt) { mostraIstruzioniInstall(); return; }
   deferredInstallPrompt.prompt();
   const { outcome } = await deferredInstallPrompt.userChoice;
-  if (outcome === 'accepted') toast('⏳ Installazione in corso...');
-  else toast('Installazione annullata');
-  deferredInstallPrompt = null;
-  updatePWAInstallUI();
+  toast(outcome === 'accepted' ? '⏳ Installazione in corso...' : 'Installazione annullata');
+  deferredInstallPrompt = null; updatePWAInstallUI();
 }
 
 function mostraIstruzioniInstall() {
@@ -200,28 +147,19 @@ function mostraIstruzioniInstall() {
   const isAndroid = /Android/.test(ua);
   const isFirefox = /Firefox/.test(ua);
   const isChrome = /Chrome|CriOS/.test(ua) && !/Edg/.test(ua);
-  const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|Edg/.test(ua);
-
   let html = '';
-  if (isIOS) {
-    html = `<p><strong>iOS (Safari):</strong></p><ol style="margin-left:18px;"><li>Tocca l'icona <strong>Condividi</strong> ⬆️ in basso</li><li>Scorri e tocca <strong>"Aggiungi alla schermata Home"</strong></li><li>Conferma con <strong>"Aggiungi"</strong></li></ol><p style="color:var(--muted);font-size:12px;margin-top:8px;">⚠️ Su iOS funziona solo con Safari.</p>`;
-  } else if (isAndroid && isChrome) {
-    html = `<p><strong>Android (Chrome):</strong></p><ol style="margin-left:18px;"><li>Tocca il menu <strong>⋮</strong> in alto a destra</li><li>Tocca <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong></li><li>Conferma con <strong>"Installa"</strong></li></ol>`;
-  } else if (isFirefox) {
-    html = `<p><strong>Firefox:</strong></p><ol style="margin-left:18px;"><li>Tocca il menu <strong>⋮</strong></li><li>Tocca <strong>"Installa"</strong></li></ol>`;
-  } else if (isSafari) {
-    html = `<p><strong>Safari (Mac):</strong></p><ol style="margin-left:18px;"><li>Menu <strong>File → Aggiungi al Dock</strong></li></ol>`;
-  } else {
-    html = `<p><strong>Browser desktop (Chrome/Edge):</strong></p><ol style="margin-left:18px;"><li>Clicca <strong>⊕ Installa</strong> nella barra indirizzi</li><li>Oppure menu <strong>⋮ → Installa Dispensa Manager</strong></li></ol>`;
-  }
+  if (isIOS) html = `<p><strong>iOS (Safari):</strong></p><ol style="margin-left:18px;"><li>Tocca <strong>Condividi</strong> ⬆️</li><li><strong>"Aggiungi alla schermata Home"</strong></li></ol>`;
+  else if (isAndroid && isChrome) html = `<p><strong>Android (Chrome):</strong></p><ol style="margin-left:18px;"><li>Menu <strong>⋮</strong></li><li><strong>"Installa app"</strong></li></ol>`;
+  else if (isFirefox) html = `<p><strong>Firefox:</strong></p><ol style="margin-left:18px;"><li>Menu <strong>⋮</strong></li><li><strong>"Installa"</strong></li></ol>`;
+  else html = `<p>Apri menu browser → cerca <strong>"Installa app"</strong>.</p>`;
   document.getElementById('modal-install-content').innerHTML = html;
   openModal('modal-install-help');
 }
-
 setTimeout(updatePWAInstallUI, 1500);
-// ── Fine PWA install ──────────────────────────────────────────────────────────
 
+// ── State ────────────────────────────────────────────────────────────────────
 let codeReader = null;
+let barcodeDetectorActive = false;
 let prodottoCorrente = {};
 let qtyCorrente = 1;
 let fotoBase64 = null;
@@ -233,9 +171,15 @@ let modQtyCorrente = 1;
 let detQtyDelta = 1;
 let esauritiOpen = false;
 
+// Bulk mode state
+let bulkMode = false;
+let bulkSelected = new Set();
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  // Exit bulk mode quando lasciamo inventario
+  if (id !== 'screen-inventario' && bulkMode) exitBulkMode();
   if (id === 'screen-inventario') caricaInventario();
   if (id === 'screen-spesa') caricaListaSpesa();
   if (id === 'screen-statistiche') caricaStatistiche();
@@ -255,37 +199,26 @@ function showTab(tab) {
 function toast(msg, durata = 2500) {
   const t = document.getElementById('toast');
   if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; _undoFn = null; }
-  t.classList.remove('with-undo');
-  t.innerHTML = '';
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), durata);
+  t.classList.remove('with-undo'); t.innerHTML = ''; t.textContent = msg;
+  t.classList.add('show'); setTimeout(() => t.classList.remove('show'), durata);
 }
 
 let _undoTimer = null;
 let _undoFn = null;
-
 function toastUndo(msg, undoFn, durata = 4000) {
   const t = document.getElementById('toast');
   if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
   _undoFn = undoFn;
   t.innerHTML = `<span>${msg}</span><button class="toast-undo-btn" onclick="_eseguiUndo()">Annulla</button>`;
   t.classList.add('show', 'with-undo');
-  _undoTimer = setTimeout(() => {
-    t.classList.remove('show', 'with-undo');
-    _undoFn = null; _undoTimer = null;
-  }, durata);
+  _undoTimer = setTimeout(() => { t.classList.remove('show', 'with-undo'); _undoFn = null; _undoTimer = null; }, durata);
 }
-
 async function _eseguiUndo() {
   if (!_undoFn) return;
-  const fn = _undoFn;
-  _undoFn = null;
+  const fn = _undoFn; _undoFn = null;
   if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
-  const t = document.getElementById('toast');
-  t.classList.remove('show', 'with-undo');
-  await fn();
-  toast('Annullato ✓');
+  document.getElementById('toast').classList.remove('show', 'with-undo');
+  await fn(); toast('Annullato ✓');
 }
 
 async function caricaInventario() {
@@ -294,7 +227,7 @@ async function caricaInventario() {
     prodottiCache = await r.json();
     applicaFiltroSort();
   } catch(e) {
-    document.getElementById('lista-prodotti').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.<br>Controlla le impostazioni.</div></div>`;
+    document.getElementById('lista-prodotti').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
   }
 }
 
@@ -305,12 +238,8 @@ function setFiltro(f) {
   applicaFiltroSort();
 }
 
-// Search debouncing — aspetta 200ms prima di filtrare durante typing
 let _searchTimer = null;
-function ricercaDebounce() {
-  if (_searchTimer) clearTimeout(_searchTimer);
-  _searchTimer = setTimeout(applicaFiltroSort, 200);
-}
+function ricercaDebounce() { if (_searchTimer) clearTimeout(_searchTimer); _searchTimer = setTimeout(applicaFiltroSort, 200); }
 
 function applicaFiltroSort() {
   const q = (document.getElementById('ricerca-input')?.value || '').toLowerCase().trim();
@@ -322,29 +251,14 @@ function applicaFiltroSort() {
   let esauriti = prodottiCache.filter(p => p.quantita <= 0);
 
   if (filtroAttivo === 'scadenza') {
-    attivi = attivi.filter(p => {
-      if (!p.scadenza) return false;
-      const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000);
-      return gg >= 0 && gg <= giorniAlert;
-    });
+    attivi = attivi.filter(p => { if (!p.scadenza) return false; const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000); return gg >= 0 && gg <= giorniAlert; });
     esauriti = [];
   } else if (filtroAttivo === 'scaduti') {
-    attivi = attivi.filter(p => {
-      if (!p.scadenza) return false;
-      const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000);
-      return gg < 0;
-    });
+    attivi = attivi.filter(p => { if (!p.scadenza) return false; const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000); return gg < 0; });
     esauriti = [];
-  } else if (filtroAttivo === 'frigo') {
-    attivi = attivi.filter(p => p.posizione === 'Frigo');
-    esauriti = esauriti.filter(p => p.posizione === 'Frigo');
-  } else if (filtroAttivo === 'freezer') {
-    attivi = attivi.filter(p => p.posizione === 'Freezer');
-    esauriti = esauriti.filter(p => p.posizione === 'Freezer');
-  } else if (filtroAttivo === 'dispensa') {
-    attivi = attivi.filter(p => p.posizione === 'Dispensa');
-    esauriti = esauriti.filter(p => p.posizione === 'Dispensa');
-  }
+  } else if (filtroAttivo === 'frigo') { attivi = attivi.filter(p => p.posizione === 'Frigo'); esauriti = esauriti.filter(p => p.posizione === 'Frigo'); }
+  else if (filtroAttivo === 'freezer') { attivi = attivi.filter(p => p.posizione === 'Freezer'); esauriti = esauriti.filter(p => p.posizione === 'Freezer'); }
+  else if (filtroAttivo === 'dispensa') { attivi = attivi.filter(p => p.posizione === 'Dispensa'); esauriti = esauriti.filter(p => p.posizione === 'Dispensa'); }
 
   if (q) {
     attivi = attivi.filter(p => (p.nome||'').toLowerCase().includes(q) || (p.marca||'').toLowerCase().includes(q) || (p.posizione||'').toLowerCase().includes(q));
@@ -368,8 +282,8 @@ function avviaScannerRicerca() { scanMode = 'search'; showScreen('screen-scan');
 function cercaNellaDispensa(ean) {
   const trovato = prodottiCache.find(p => p.ean === ean);
   showScreen('screen-inventario');
-  if (trovato) { apriDettaglio(trovato.id); }
-  else { toast('Prodotto non trovato in dispensa'); }
+  if (trovato) apriDettaglio(trovato.id);
+  else toast('Prodotto non trovato in dispensa');
 }
 
 async function consumaRapido(id, qtyAttuali) {
@@ -411,6 +325,7 @@ function apriModifica(id) {
   document.getElementById('mod-scadenza').value = p.scadenza || '';
   document.getElementById('mod-posizione').value = p.posizione || 'Dispensa';
   document.getElementById('mod-note').value = p.note || '';
+  document.getElementById('mod-prezzo').value = p.prezzo || '';
   showScreen('screen-modifica');
 }
 
@@ -420,13 +335,15 @@ function cambiaQtyMod(delta) {
 }
 
 async function salvaModifica() {
+  const prezzo = document.getElementById('mod-prezzo').value;
   const payload = {
     nome: document.getElementById('mod-nome').value.trim() || 'Prodotto',
     marca: document.getElementById('mod-marca').value.trim(),
     quantita: modQtyCorrente,
     scadenza: document.getElementById('mod-scadenza').value || null,
     posizione: document.getElementById('mod-posizione').value,
-    note: document.getElementById('mod-note').value.trim()
+    note: document.getElementById('mod-note').value.trim(),
+    prezzo: prezzo === '' ? null : parseFloat(prezzo),
   };
   try {
     await apiFetch(`${API_BASE()}/api/prodotti/${modProdottoId}`, {
@@ -434,12 +351,10 @@ async function salvaModifica() {
     });
     toast('Prodotto aggiornato!');
     showScreen('screen-inventario');
-  } catch(e) {
-    toast('Errore salvataggio. Riprova.');
-  }
+  } catch(e) { toast('Errore salvataggio. Riprova.'); }
 }
 
-// Dark mode — supporta "auto" (segue sistema) se localStorage non settato
+// Dark mode
 function initDarkMode() {
   const stored = localStorage.getItem('dispensa_dark');
   let isDark;
@@ -449,7 +364,6 @@ function initDarkMode() {
   document.documentElement.classList.toggle('dark', isDark);
   const btn = document.getElementById('dark-toggle');
   if (btn) btn.classList.toggle('on', isDark);
-  // Ascolta cambi sistema solo se siamo in modalità auto
   if (!stored && window.matchMedia('(prefers-color-scheme: dark)').addEventListener) {
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
       if (!localStorage.getItem('dispensa_dark')) {
@@ -460,26 +374,21 @@ function initDarkMode() {
     });
   }
 }
-
 function toggleDarkMode() {
   const isDark = document.documentElement.classList.toggle('dark');
   localStorage.setItem('dispensa_dark', isDark ? '1' : '0');
   const btn = document.getElementById('dark-toggle');
   if (btn) btn.classList.toggle('on', isDark);
   const info = document.getElementById('dark-mode-info');
-  if (info) info.textContent = 'Impostato manualmente. Tocca a lungo per tornare ad automatico.';
-  // Long-press sul toggle resetta a "auto"
+  if (info) info.textContent = 'Impostato manualmente. Tieni premuto per ritornare automatico.';
 }
-
-// Long-press sul toggle per resettare a "auto"
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('dark-toggle');
   if (!btn) return;
   let _lpTimer = null;
   btn.addEventListener('touchstart', () => {
     _lpTimer = setTimeout(() => {
-      localStorage.removeItem('dispensa_dark');
-      initDarkMode();
+      localStorage.removeItem('dispensa_dark'); initDarkMode();
       const info = document.getElementById('dark-mode-info');
       if (info) info.textContent = 'Segue automaticamente il tema di sistema. Tocca per sovrascrivere.';
       toast('🌗 Tema automatico (sistema)');
@@ -491,10 +400,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function esportaCSV() {
   if (!prodottiCache.length) { toast('Nessun prodotto da esportare'); return; }
-  const cols = ['ID','Nome','Marca','Categoria','Quantità','Scadenza','Posizione','EAN','Note'];
+  const cols = ['ID','Nome','Marca','Categoria','Quantità','Scadenza','Posizione','EAN','Note','Prezzo'];
   const righe = prodottiCache.map(p => [
     p.id, p.nome, p.marca||'', p.categoria||'', p.quantita,
-    p.scadenza||'', p.posizione||'', p.ean||'', (p.note||'').replace(/"/g,"'")
+    p.scadenza||'', p.posizione||'', p.ean||'', (p.note||'').replace(/"/g,"'"),
+    p.prezzo || ''
   ].map(v => `"${v}"`).join(','));
   const csv = [cols.join(','), ...righe].join('\n');
   const blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'});
@@ -505,6 +415,7 @@ function esportaCSV() {
   toast('CSV esportato!');
 }
 
+// ── Render inventario (con bulk mode) ────────────────────────────────────────
 function renderInventario(attivi, esauriti) {
   const oggi = new Date(); oggi.setHours(0,0,0,0);
   const giorniAlert = parseInt(localStorage.getItem('dispensa_giorni') || '3');
@@ -526,7 +437,9 @@ function renderInventario(attivi, esauriti) {
         else if (giorni <= giorniAlert) { dotClass = 'dot-warn'; metaText = `Scade tra ${giorni}g`; badgeHtml = `<span class="badge badge-warn">In scadenza</span>`; inScadenza++; }
         else { metaText = `Scade ${scad.toLocaleDateString('it-IT', {day:'numeric', month:'short'})}`; }
       }
-      html += `<div class="prod-item" onclick="apriDettaglio(${p.id})">
+      const selected = bulkSelected.has(p.id) ? 'bulk-selected' : '';
+      html += `<div class="prod-item ${selected}" data-id="${p.id}" onclick="onProdottoClick(${p.id})" oncontextmenu="event.preventDefault(); enterBulkMode(${p.id});">
+        <div class="bulk-check"></div>
         <div class="prod-dot ${dotClass}"></div>
         <div class="prod-info">
           <div class="prod-nome">${p.nome}</div>
@@ -555,7 +468,7 @@ function renderInventario(attivi, esauriti) {
       </div>
       <div class="esauriti-list ${listStyle}" id="esauriti-list-inner">`;
     esauriti.forEach(p => {
-      esauritiHtml += `<div class="prod-item esaurito" onclick="apriDettaglio(${p.id})">
+      esauritiHtml += `<div class="prod-item esaurito" data-id="${p.id}" onclick="apriDettaglio(${p.id})">
         <div class="prod-dot dot-out"></div>
         <div class="prod-info">
           <div class="prod-nome esaurito-text">${p.nome}</div>
@@ -570,12 +483,14 @@ function renderInventario(attivi, esauriti) {
   }
 
   document.getElementById('lista-prodotti').innerHTML = html + esauritiHtml;
-
   document.getElementById('metrics').innerHTML = `
     <div class="metric"><div class="metric-val">${attivi.length}</div><div class="metric-label">In dispensa</div></div>
     <div class="metric"><div class="metric-val" style="color:#EF9F27">${inScadenza}</div><div class="metric-label">In scadenza</div></div>
     <div class="metric"><div class="metric-val" style="color:var(--gray)">${esauriti.length}</div><div class="metric-label">Esauriti</div></div>
   `;
+
+  // Long-press handler per attivare bulk mode
+  setupLongPress();
 }
 
 function toggleEsauriti() {
@@ -586,6 +501,116 @@ function toggleEsauriti() {
   if (chevron) chevron.classList.toggle('open', esauritiOpen);
 }
 
+// ── Bulk mode (multi-select) ─────────────────────────────────────────────────
+function setupLongPress() {
+  document.querySelectorAll('#lista-prodotti .prod-item[data-id]').forEach(el => {
+    let lpTimer = null;
+    const id = parseInt(el.dataset.id);
+    el.addEventListener('touchstart', (e) => {
+      lpTimer = setTimeout(() => { enterBulkMode(id); navigator.vibrate?.(50); }, 600);
+    }, { passive: true });
+    el.addEventListener('touchend', () => { if (lpTimer) clearTimeout(lpTimer); });
+    el.addEventListener('touchmove', () => { if (lpTimer) clearTimeout(lpTimer); });
+    el.addEventListener('touchcancel', () => { if (lpTimer) clearTimeout(lpTimer); });
+  });
+}
+
+function onProdottoClick(id) {
+  if (bulkMode) toggleBulkSelect(id);
+  else apriDettaglio(id);
+}
+
+function enterBulkMode(initialId = null) {
+  bulkMode = true;
+  bulkSelected.clear();
+  if (initialId) bulkSelected.add(initialId);
+  document.body.classList.add('bulk-mode');
+  document.getElementById('topbar-inventario-normal').style.display = 'none';
+  document.getElementById('topbar-inventario-bulk').style.display = 'flex';
+  applicaFiltroSort();
+  updateBulkCount();
+}
+
+function exitBulkMode() {
+  bulkMode = false;
+  bulkSelected.clear();
+  document.body.classList.remove('bulk-mode');
+  document.getElementById('topbar-inventario-normal').style.display = 'flex';
+  document.getElementById('topbar-inventario-bulk').style.display = 'none';
+  applicaFiltroSort();
+}
+
+function toggleBulkSelect(id) {
+  if (bulkSelected.has(id)) bulkSelected.delete(id);
+  else bulkSelected.add(id);
+  const el = document.querySelector(`#lista-prodotti .prod-item[data-id="${id}"]`);
+  if (el) el.classList.toggle('bulk-selected', bulkSelected.has(id));
+  updateBulkCount();
+  if (bulkSelected.size === 0) exitBulkMode();
+}
+
+function updateBulkCount() {
+  const el = document.getElementById('bulk-count');
+  if (el) el.textContent = bulkSelected.size;
+}
+
+function bulkActionMenu() {
+  if (bulkSelected.size === 0) { toast('Nessun prodotto selezionato'); return; }
+  document.getElementById('bulk-action-count').textContent = bulkSelected.size;
+  openModal('modal-bulk-action');
+}
+
+async function bulkMoveTo(posizione) {
+  closeModal('modal-bulk-action');
+  const ids = Array.from(bulkSelected);
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/prodotti/bulk`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ ids, action: 'set_posizione', value: posizione })
+    });
+    const data = await r.json();
+    toast(`✅ ${data.affected} prodotti spostati in ${posizione}`);
+    exitBulkMode(); caricaInventario();
+  } catch(e) { toast('Errore'); }
+}
+
+function bulkExtendScadenza() {
+  closeModal('modal-bulk-action');
+  document.getElementById('extend-giorni-input').value = '7';
+  openModal('modal-extend-scad');
+}
+
+async function confirmExtendScadenza() {
+  const giorni = parseInt(document.getElementById('extend-giorni-input').value);
+  if (!giorni || giorni < 1) { toast('Inserisci giorni validi'); return; }
+  closeModal('modal-extend-scad');
+  const ids = Array.from(bulkSelected);
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/prodotti/bulk`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ ids, action: 'extend_scadenza', value: giorni })
+    });
+    const data = await r.json();
+    toast(`✅ ${data.affected} scadenze estese di ${giorni} giorni`);
+    exitBulkMode(); caricaInventario();
+  } catch(e) { toast('Errore'); }
+}
+
+function bulkDelete() {
+  closeModal('modal-bulk-action');
+  const count = bulkSelected.size;
+  if (!confirm(`Eliminare definitivamente ${count} prodotti?`)) return;
+  const ids = Array.from(bulkSelected);
+  apiFetch(`${API_BASE()}/api/prodotti/bulk`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids, action: 'delete' })
+  }).then(r => r.json()).then(data => {
+    toast(`🗑️ ${data.affected} prodotti eliminati`);
+    exitBulkMode(); caricaInventario();
+  }).catch(() => toast('Errore'));
+}
+
+// ── Renderer nutriments + dettaglio ──────────────────────────────────────────
 function renderNutriments(p) {
   if (!p.nutriments) return '';
   const n = typeof p.nutriments === 'string' ? JSON.parse(p.nutriments) : p.nutriments;
@@ -604,20 +629,14 @@ function renderNutriments(p) {
     const borderStyle = notLast ? 'border-bottom:0.5px solid var(--border);' : '';
     const indentStyle = isDi ? 'padding-left:12px;' : '';
     const weightStyle = isDi ? '400' : '600';
-    rows += '<tr>';
-    rows += '<td style="color:var(--muted);padding:6px 0;' + borderStyle + indentStyle + '">' + r[0] + '</td>';
-    rows += '<td style="text-align:right;font-weight:' + weightStyle + ';' + borderStyle + '">' + Number(r[1]).toFixed(1) + ' ' + r[2] + '</td>';
-    rows += '</tr>';
+    rows += '<tr><td style="color:var(--muted);padding:6px 0;' + borderStyle + indentStyle + '">' + r[0] + '</td><td style="text-align:right;font-weight:' + weightStyle + ';' + borderStyle + '">' + Number(r[1]).toFixed(1) + ' ' + r[2] + '</td></tr>';
   });
   let nsHtml = '';
   if (p.nutriscore) {
     const color = nsColor[p.nutriscore] || 'var(--text)';
     nsHtml = '<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:' + color + '">● ' + p.nutriscore + '</strong></div>';
   }
-  return '<div class="card card-body" style="margin-top:8px;">'
-    + '<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📊 Valori nutrizionali per 100g</div>'
-    + '<table style="width:100%;font-size:13px;border-collapse:collapse;">' + rows + '</table>'
-    + nsHtml + '</div>';
+  return '<div class="card card-body" style="margin-top:8px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📊 Valori nutrizionali per 100g</div><table style="width:100%;font-size:13px;border-collapse:collapse;">' + rows + '</table>' + nsHtml + '</div>';
 }
 
 function apriDettaglio(id) {
@@ -627,38 +646,26 @@ function apriDettaglio(id) {
   document.getElementById('det-title').textContent = p.nome;
   const scadFormatted = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'long',year:'numeric'}) : 'Non specificata';
   const isEsaurito = p.quantita <= 0;
-  const imgHtml = p.immagine_url ? '<img src="' + p.immagine_url + '" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);">' : '';
+  const imgHtml = p.immagine_url ? '<img src="' + p.immagine_url + '" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);" onerror="this.style.display=\'none\'">' : '';
   const esauritoHtml = isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">□ Prodotto esaurito — rimane nel database</div>' : '';
   const posizioneLabel = p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa';
   const eanLabel = p.ean ? (p.ean.startsWith('MANUAL-') ? '—' : p.ean) : '—';
+  const prezzoRow = p.prezzo ? `<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Prezzo</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);color:var(--green-d);">${Number(p.prezzo).toFixed(2)}€</td></tr>` : '';
   document.getElementById('det-content').innerHTML =
-    '<div class="card card-body">'
-    + imgHtml
+    '<div class="card card-body">' + imgHtml
     + '<div style="font-size:20px;font-weight:700;margin-bottom:4px;">' + p.nome + '</div>'
     + '<div style="font-size:14px;color:var(--muted);margin-bottom:20px;">' + (p.marca || '') + (p.categoria ? ' · ' + p.categoria : '') + '</div>'
-    + esauritoHtml
-    + '<table style="width:100%;font-size:14px;border-collapse:collapse;">'
+    + esauritoHtml + '<table style="width:100%;font-size:14px;border-collapse:collapse;">'
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + posizioneLabel + '</td></tr>'
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Quantità</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + p.quantita + '</td></tr>'
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Scadenza</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + scadFormatted + '</td></tr>'
-    + '<tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">' + eanLabel + '</td></tr>'
-    + '</table></div>'
+    + prezzoRow
+    + '<tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">' + eanLabel + '</td></tr></table></div>'
     + renderNutriments(p)
-    + '<div class="card card-body" style="margin-top:8px;">'
-    + '<div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>'
-    + '<div class="qty-row" style="margin-bottom:12px;">'
-    + '<div class="qty-btn" onclick="cambiaQtyDet(-1)">−</div>'
-    + '<div class="qty-val" id="det-qty-delta">1</div>'
-    + '<div class="qty-btn" onclick="cambiaQtyDet(1)">+</div>'
-    + '</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
-    + '<button class="btn btn-secondary" onclick="consumaProdotto(' + p.id + ',' + p.quantita + ')">− Consuma</button>'
-    + '<button class="btn btn-secondary" onclick="aggiungiQty(' + p.id + ',' + p.quantita + ')">+ Aggiungi</button>'
-    + '</div></div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">'
-    + '<button class="btn btn-secondary" onclick="apriModifica(' + p.id + ')">✏️ Modifica</button>'
-    + '<button class="btn btn-danger" onclick="eliminaProdotto(' + p.id + ')">🗑️ Elimina</button>'
-    + '</div>';
+    + '<div class="card card-body" style="margin-top:8px;"><div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>'
+    + '<div class="qty-row" style="margin-bottom:12px;"><div class="qty-btn" onclick="cambiaQtyDet(-1)">−</div><div class="qty-val" id="det-qty-delta">1</div><div class="qty-btn" onclick="cambiaQtyDet(1)">+</div></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><button class="btn btn-secondary" onclick="consumaProdotto(' + p.id + ',' + p.quantita + ')">− Consuma</button><button class="btn btn-secondary" onclick="aggiungiQty(' + p.id + ',' + p.quantita + ')">+ Aggiungi</button></div></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;"><button class="btn btn-secondary" onclick="apriModifica(' + p.id + ')">✏️ Modifica</button><button class="btn btn-danger" onclick="eliminaProdotto(' + p.id + ')">🗑️ Elimina</button></div>';
   showScreen('screen-dettaglio');
 }
 
@@ -667,7 +674,6 @@ function cambiaQtyDet(delta) {
   const el = document.getElementById('det-qty-delta');
   if (el) el.textContent = detQtyDelta;
 }
-
 async function consumaProdotto(id, qtyAttuali) {
   const delta = detQtyDelta;
   const nuova = Math.max(0, qtyAttuali - delta);
@@ -680,7 +686,6 @@ async function consumaProdotto(id, qtyAttuali) {
     applicaFiltroSort();
   });
 }
-
 async function aggiungiQty(id, qtyAttuali) {
   const delta = detQtyDelta;
   const nuova = qtyAttuali + delta;
@@ -693,7 +698,6 @@ async function aggiungiQty(id, qtyAttuali) {
     applicaFiltroSort();
   });
 }
-
 async function eliminaProdotto(id) {
   if (!confirm('Eliminare questo prodotto dalla dispensa?')) return;
   await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'DELETE' });
@@ -701,38 +705,127 @@ async function eliminaProdotto(id) {
   showScreen('screen-inventario');
 }
 
-function avviaScanner() {
-  if (codeReader) return;
+// ── Barcode scanner — veloce con BarcodeDetector native, fallback ZXing ──
+function beep(freq = 900, duration = 100) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = freq;
+    osc.connect(gain); gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    osc.start(); osc.stop(ctx.currentTime + duration / 1000);
+  } catch(e) {}
+}
+
+async function avviaScanner() {
+  if (codeReader || barcodeDetectorActive) return;
   const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   if (!hasCamera) {
     document.getElementById('video-container').style.display = 'none';
     document.getElementById('scan-foto-btn').style.display = 'block';
-    document.getElementById('scan-status').textContent = scanMode === 'search'
-      ? 'Scatta una foto del barcode per cercarlo'
-      : 'Scatta una foto del barcode per aggiungerlo';
+    document.getElementById('scan-status').textContent = scanMode === 'search' ? 'Scatta foto del barcode per cercarlo' : 'Scatta foto del barcode per aggiungerlo';
     return;
   }
   document.getElementById('video-container').style.display = '';
   document.getElementById('scan-foto-btn').style.display = 'none';
-  document.getElementById('scan-status').textContent = 'Avvio fotocamera...';
-  codeReader = new ZXing.BrowserMultiFormatReader();
-  codeReader.decodeFromVideoDevice(null, 'video', async (result, err) => {
-    if (result) {
-      fermaScanner();
-      document.getElementById('scan-status').textContent = 'Codice rilevato!';
-      if (scanMode === 'search') { cercaNellaDispensa(result.getText()); }
-      else { await cercaProdotto(result.getText()); }
-    }
-  });
-  document.getElementById('scan-status').textContent = scanMode === 'search'
-    ? 'Inquadra il barcode per cercare nella dispensa'
-    : 'Inquadra il barcode del prodotto';
+  document.getElementById('scan-status').className = 'scan-active';
+  document.getElementById('scan-status').textContent = '📷 Avvio fotocamera...';
+
+  // Try BarcodeDetector nativo (più veloce su Chrome Android)
+  if ('BarcodeDetector' in window) {
+    try {
+      const supportedFormats = await BarcodeDetector.getSupportedFormats();
+      const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'].filter(f => supportedFormats.includes(f));
+      if (formats.length > 0) {
+        await startNativeScanner(new BarcodeDetector({ formats }));
+        return;
+      }
+    } catch(e) { console.warn('BarcodeDetector failed, fallback ZXing:', e); }
+  }
+
+  // Fallback ZXing con hints per soli formati prodotti
+  await startZXingScanner();
+}
+
+async function startNativeScanner(detector) {
+  const video = document.getElementById('video');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    video.srcObject = stream;
+    await video.play();
+    barcodeDetectorActive = { stream };
+    document.getElementById('scan-status').innerHTML = '<span class="scan-active">📷 Scansione attiva (nativa)</span>';
+
+    const scan = async () => {
+      if (!barcodeDetectorActive) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes && codes.length > 0) {
+          const ean = codes[0].rawValue;
+          fermaScanner();
+          onBarcodeDetected(ean);
+          return;
+        }
+      } catch(e) {}
+      if (barcodeDetectorActive) requestAnimationFrame(scan);
+    };
+    requestAnimationFrame(scan);
+  } catch(e) {
+    document.getElementById('scan-status').textContent = '⚠️ Errore fotocamera: ' + e.message;
+  }
+}
+
+async function startZXingScanner() {
+  try {
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    // Hints per soli formati prodotti (più veloce)
+    const formats = [
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128,
+    ];
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    codeReader.hints = hints;
+
+    document.getElementById('scan-status').innerHTML = '<span class="scan-active">📷 Scansione attiva</span>';
+    codeReader.decodeFromVideoDevice(null, 'video', async (result, err) => {
+      if (result) {
+        fermaScanner();
+        onBarcodeDetected(result.getText());
+      }
+    });
+  } catch(e) {
+    document.getElementById('scan-status').textContent = '⚠️ Errore: ' + e.message;
+  }
+}
+
+function onBarcodeDetected(ean) {
+  navigator.vibrate?.(150);
+  beep();
+  document.getElementById('scan-status').className = 'scan-found';
+  document.getElementById('scan-status').innerHTML = `✅ Codice letto: <code>${ean}</code>`;
+  setTimeout(() => {
+    if (scanMode === 'search') cercaNellaDispensa(ean);
+    else cercaProdotto(ean);
+  }, 250);
 }
 
 function fermaScanner() {
-  if (codeReader) { codeReader.reset(); codeReader = null; }
+  if (codeReader) { try { codeReader.reset(); } catch(e) {} codeReader = null; }
+  if (barcodeDetectorActive) {
+    try { barcodeDetectorActive.stream?.getTracks().forEach(t => t.stop()); } catch(e) {}
+    barcodeDetectorActive = false;
+  }
   const video = document.getElementById('video');
-  if (video && video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+  if (video && video.srcObject) {
+    try { video.srcObject.getTracks().forEach(t => t.stop()); } catch(e) {}
+    video.srcObject = null;
+  }
 }
 
 function avviaFotoScan() { document.getElementById('barcode-file-input').click(); }
@@ -741,56 +834,56 @@ async function scansionaFoto(input) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  const btn = document.getElementById('scan-foto-btn');
   const status = document.getElementById('scan-status');
   status.textContent = 'Analisi barcode in corso...';
-  btn.disabled = true;
   const imgUrl = URL.createObjectURL(file);
   try {
     const reader = new ZXing.BrowserMultiFormatReader();
     const result = await reader.decodeFromImageUrl(imgUrl);
-    status.textContent = 'Codice rilevato!';
-    if (scanMode === 'search') { cercaNellaDispensa(result.getText()); }
-    else { await cercaProdotto(result.getText()); }
+    onBarcodeDetected(result.getText());
   } catch(e) {
-    status.textContent = 'Barcode non riconosciuto. Usa una foto nitida e ben illuminata.';
-    btn.disabled = false;
+    status.textContent = '⚠️ Barcode non riconosciuto';
     toast('Barcode non riconosciuto, riprova');
-  } finally {
-    URL.revokeObjectURL(imgUrl);
-  }
+  } finally { URL.revokeObjectURL(imgUrl); }
 }
 
-// ── Scan duplicato: se il barcode è già in dispensa, propone di incrementare ─
+// ── Cerca prodotto: check dispensa → cache locale → online (con status feedback) ─
 let _scanDuplicateEan = null;
 let _scanDuplicateProdotti = null;
 
 async function cercaProdotto(ean) {
-  document.getElementById('scan-status').textContent = 'Ricerca prodotto...';
-  // Step 1: controlla se il prodotto esiste già in dispensa (solo quantita > 0)
+  const statusEl = document.getElementById('scan-status');
+  statusEl.className = '';
+  statusEl.innerHTML = `✅ Codice: <code>${ean}</code><br><span style="font-size:12px;color:var(--muted);">🔍 Controllo se è in dispensa...</span>`;
   try {
     const r1 = await apiFetch(`${API_BASE()}/api/prodotti/by-ean/${encodeURIComponent(ean)}`);
     if (r1.ok) {
       const esistenti = await r1.json();
       if (Array.isArray(esistenti) && esistenti.length > 0) {
+        statusEl.innerHTML = `✅ Codice: <code>${ean}</code><br><span style="font-size:12px;color:var(--green-d);font-weight:600;">📦 Già in dispensa!</span>`;
         _scanDuplicateEan = ean;
         _scanDuplicateProdotti = esistenti;
-        mostraModalDuplicato(esistenti);
+        setTimeout(() => mostraModalDuplicato(esistenti), 350);
         return;
       }
     }
-  } catch(e) {
-    console.warn('Errore check duplicato (continuo):', e);
-  }
-  // Step 2: non esiste in dispensa → flusso normale (cerca su DB online/cache)
+  } catch(e) { console.warn('Errore check duplicato:', e); }
+  statusEl.innerHTML = `✅ Codice: <code>${ean}</code><br><span style="font-size:12px;color:var(--muted);">🌐 Cerco su database online...</span>`;
   await cercaProdottoOnline(ean);
 }
 
 async function cercaProdottoOnline(ean) {
+  const statusEl = document.getElementById('scan-status');
   try {
     const r = await apiFetch(`${API_BASE()}/api/barcode/${ean}`);
     const data = await r.json();
-    apriConferma(data);
+    if (data.trovato) {
+      const fonte = data.fonte === 'cache_locale' ? '💾 cache locale' : '🌐 Open Food Facts';
+      statusEl.innerHTML = `✅ Trovato! <strong>${data.nome}</strong><br><span style="font-size:12px;color:var(--green-d);">${fonte}</span>`;
+    } else {
+      statusEl.innerHTML = `⚠️ Non trovato online (${ean})<br><span style="font-size:12px;">Inserisci dettagli manualmente</span>`;
+    }
+    setTimeout(() => apriConferma(data), 600);
   } catch(e) {
     apriConferma({ trovato: false, ean, nome: '', marca: '', categoria: '', immagine_url: '' });
   }
@@ -799,13 +892,13 @@ async function cercaProdottoOnline(ean) {
 function mostraModalDuplicato(esistenti) {
   const totale = esistenti.reduce((acc, p) => acc + (p.quantita || 0), 0);
   const primo = esistenti[0];
-  let html = `<p>Hai già <strong>${totale}</strong> <strong>${primo.nome}</strong> in dispensa:</p><ul style="margin:10px 0 10px 20px;line-height:1.8;">`;
+  let html = `<p>Hai già <strong>${totale}</strong> <strong>${primo.nome}</strong>:</p><ul style="margin:10px 0 10px 20px;line-height:1.8;">`;
   esistenti.forEach(p => {
     const pos = p.posizione || 'Dispensa';
     const scadStr = p.scadenza ? ' — scade <em>' + new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'short',year:'numeric'}) + '</em>' : '';
     html += `<li>${pos}: <strong>${p.quantita}</strong> pz${scadStr}</li>`;
   });
-  html += '</ul><p style="color:var(--muted);font-size:13px;margin-top:8px;">Vuoi aggiungere +1 al primo o creare una nuova voce (es. lotto/scadenza diversa)?</p>';
+  html += '</ul>';
   document.getElementById('modal-dup-content').innerHTML = html;
   openModal('modal-scan-duplicato');
 }
@@ -817,24 +910,19 @@ async function aggiungiAEsistente() {
   const nuovaQty = primo.quantita + 1;
   try {
     await apiFetch(`${API_BASE()}/api/prodotti/${primo.id}`, {
-      method: 'PUT',
-      headers: {'Content-Type':'application/json'},
+      method: 'PUT', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({quantita: nuovaQty})
     });
     toast(`✅ ${primo.nome}: ${primo.quantita} → ${nuovaQty}`);
     showScreen('screen-inventario');
-  } catch(e) {
-    toast('Errore aggiornamento');
-  }
-  _scanDuplicateEan = null;
-  _scanDuplicateProdotti = null;
+  } catch(e) { toast('Errore'); }
+  _scanDuplicateEan = null; _scanDuplicateProdotti = null;
 }
 
 function creaNuovoDopoDuplicato() {
   closeModal('modal-scan-duplicato');
   const ean = _scanDuplicateEan;
-  _scanDuplicateEan = null;
-  _scanDuplicateProdotti = null;
+  _scanDuplicateEan = null; _scanDuplicateProdotti = null;
   if (ean) cercaProdottoOnline(ean);
 }
 
@@ -869,27 +957,24 @@ function apriConferma(prodotto) {
   document.getElementById('conf-nome-edit').value = prodotto.nome || '';
   document.getElementById('conf-qty').textContent = '1';
   document.getElementById('conf-note').value = '';
-
+  document.getElementById('conf-prezzo').value = '';
   const { posizione, giorni } = suggerisciDaCategoria(prodotto.categoria);
   const oggi = new Date();
   oggi.setDate(oggi.getDate() + giorni);
   document.getElementById('conf-scadenza').value = oggi.toISOString().split('T')[0];
   document.getElementById('conf-posizione').value = posizione;
-
   const img = document.getElementById('conf-img');
   if (prodotto.immagine_url) { img.src = prodotto.immagine_url; img.style.display = 'block'; }
   else img.style.display = 'none';
-
   const fotoSection = document.getElementById('foto-section');
   fotoSection.style.display = prodotto.trovato ? 'none' : 'block';
   document.getElementById('foto-preview').classList.remove('visible');
   document.getElementById('foto-placeholder').style.display = 'flex';
   document.getElementById('foto-upload-area').classList.remove('has-photo');
-
   const badge = document.getElementById('found-badge-container');
   badge.innerHTML = prodotto.trovato
     ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posizione === 'Frigo' ? '🧊 Frigo' : posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'} suggerito</div></div>`
-    : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci i dettagli e aggiungi foto</div></div>`;
+    : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci i dettagli</div></div>`;
   showScreen('screen-conferma');
 }
 
@@ -946,6 +1031,7 @@ function cambiaQty(delta) {
 
 async function salvaInDispensa() {
   const immagineDaSalvare = fotoBase64 || prodottoCorrente.immagine_url || '';
+  const prezzoVal = document.getElementById('conf-prezzo').value;
   const payload = {
     ean: prodottoCorrente.ean || '',
     nome: document.getElementById('conf-nome-edit').value || prodottoCorrente.nome || 'Prodotto',
@@ -957,15 +1043,14 @@ async function salvaInDispensa() {
     note: document.getElementById('conf-note').value || '',
     posizione: document.getElementById('conf-posizione').value || 'Dispensa',
     nutriments: prodottoCorrente.nutriments || null,
-    nutriscore: prodottoCorrente.nutriscore || ''
+    nutriscore: prodottoCorrente.nutriscore || '',
+    prezzo: prezzoVal === '' ? null : parseFloat(prezzoVal),
   };
-
   try {
     await apiFetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if (payload.ean && !payload.ean.startsWith('MANUAL-') && prodottoCorrente.trovato) {
       await apiFetch(`${API_BASE()}/api/barcode-cache`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           ean: payload.ean, nome: payload.nome, marca: payload.marca,
           categoria: payload.categoria, immagine_url: prodottoCorrente.immagine_url || '',
@@ -976,18 +1061,17 @@ async function salvaInDispensa() {
     fotoBase64 = null;
     toast('Prodotto salvato!');
     showScreen('screen-inventario');
-  } catch(e) {
-    toast('Errore salvataggio. Riprova.');
-  }
+  } catch(e) { toast('Errore salvataggio. Riprova.'); }
 }
 
 function inserisciManuale() {
-  const ean = prompt('Inserisci il codice a barre (EAN) del prodotto:\n(lascia vuoto per inserimento manuale senza barcode)');
+  const ean = prompt('Inserisci il codice a barre (EAN):\n(vuoto per inserimento manuale senza barcode)');
   if (ean === null) return;
-  if (ean.trim() !== '') { cercaProdotto(ean.trim()); }
-  else { apriConferma({ trovato: false, ean: 'MANUAL-' + Date.now(), nome: '', marca: '', categoria: '', immagine_url: '' }); }
+  if (ean.trim() !== '') cercaProdotto(ean.trim());
+  else apriConferma({ trovato: false, ean: 'MANUAL-' + Date.now(), nome: '', marca: '', categoria: '', immagine_url: '' });
 }
 
+// ── Lista spesa ──────────────────────────────────────────────────────────────
 async function caricaListaSpesa() {
   try {
     const r = await apiFetch(`${API_BASE()}/api/lista-spesa`);
@@ -1000,7 +1084,7 @@ async function caricaListaSpesa() {
 
 function renderListaSpesa(items) {
   if (!items.length) {
-    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">🛒</div><div>Lista spesa vuota!<br>I prodotti esauriti appariranno qui.</div></div>`;
+    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">🛒</div><div>Lista spesa vuota!</div></div>`;
     return;
   }
   let html = '';
@@ -1026,7 +1110,6 @@ function renderListaSpesa(items) {
 
 async function cambiaQtySpesa(id, nuovaQty, completato) {
   if (nuovaQty < 1) {
-    // Sotto 1 → elimina
     if (confirm('Quantità a 0: rimuovere dalla lista?')) await eliminaSpesa(id);
     return;
   }
@@ -1070,25 +1153,77 @@ function aggiungiSpesaManuale() {
   }).then(() => { toast('Aggiunto alla lista!'); caricaListaSpesa(); });
 }
 
+// ── Statistiche con Chart.js + anti-spreco insights ──────────────────────────
+let _statsCharts = [];
+
 async function caricaStatistiche() {
   try {
     const r = await apiFetch(`${API_BASE()}/api/statistiche`);
     const s = await r.json();
+    // Destroy charts vecchi
+    _statsCharts.forEach(c => { try { c.destroy(); } catch(e) {} });
+    _statsCharts = [];
+
     const posIcon = {'Frigo':'🧊','Freezer':'❄️','Dispensa':'🗄️'};
+
     let html = `
       <div class="metric-row" style="grid-template-columns:repeat(2,1fr);">
         <div class="metric"><div class="metric-val">${s.totali.acquisti}</div><div class="metric-label">Acquisti totali</div></div>
         <div class="metric"><div class="metric-val">${s.totali.consumi}</div><div class="metric-label">Consumi totali</div></div>
         <div class="metric"><div class="metric-val">${s.totali.acquisti_mese}</div><div class="metric-label">Acquisti questo mese</div></div>
-        <div class="metric"><div class="metric-val">${s.totali.eliminati}</div><div class="metric-label">Eliminati</div></div>
+        <div class="metric"><div class="metric-val" style="color:var(--red);">${s.totali.eliminati}</div><div class="metric-label">Eliminati totali</div></div>
       </div>`;
-    if (s.per_posizione.length) {
-      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📍 Prodotti per posizione</div>`;
-      s.per_posizione.forEach(p => {
-        html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:14px;"><span>${posIcon[p.posizione]||'📦'} ${p.posizione || 'Non specificata'}</span><strong>${p.n}</strong></div>`;
-      });
+
+    // Anti-spreco section
+    const spreco = s.spreco || {};
+    if (spreco.eliminati_6m > 0 || spreco.consumati_6m > 0) {
+      const pct = spreco.percentuale;
+      const pctColor = pct < 10 ? 'var(--green)' : pct < 25 ? '#EF9F27' : 'var(--red)';
+      html += `<div class="card card-body" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">💸 Anti-spreco (ultimi 6 mesi)</div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+          <div style="font-size:32px;font-weight:700;color:${pctColor};">${pct}%</div>
+          <div style="font-size:13px;color:var(--muted);flex:1;">
+            <div><strong>${spreco.eliminati_6m}</strong> prodotti eliminati</div>
+            <div><strong>${spreco.consumati_6m}</strong> prodotti consumati</div>
+          </div>
+        </div>`;
+      if (spreco.top_categorie && spreco.top_categorie.length) {
+        html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Categorie più sprecate:</div>`;
+        spreco.top_categorie.forEach(c => {
+          html += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;"><span>${c.categoria}</span><strong style="color:var(--red);">×${c.n}</strong></div>`;
+        });
+      }
       html += `</div>`;
     }
+
+    // Spesa stimata (solo se ci sono prezzi)
+    if (s.spesa_stimata && s.spesa_stimata.mese_corrente > 0) {
+      html += `<div class="card card-body" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">💰 Spesa stimata mese corrente</div>
+        <div style="display:flex;gap:16px;">
+          <div style="flex:1;"><div style="font-size:24px;font-weight:700;color:var(--green-d);">${s.spesa_stimata.mese_corrente.toFixed(2)}€</div><div style="font-size:12px;color:var(--muted);">Acquisti</div></div>
+          ${s.spesa_stimata.spreco_mese_corrente > 0 ? `<div style="flex:1;"><div style="font-size:24px;font-weight:700;color:var(--red);">${s.spesa_stimata.spreco_mese_corrente.toFixed(2)}€</div><div style="font-size:12px;color:var(--muted);">Sprecati</div></div>` : ''}
+        </div>
+      </div>`;
+    }
+
+    // Chart trend 6 mesi (line chart)
+    if (s.trend_6mesi && Object.keys(s.trend_6mesi).length > 0) {
+      html += `<div class="card card-body" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📈 Trend ultimi 6 mesi</div>
+        <canvas id="chart-trend" height="160"></canvas>
+      </div>`;
+    }
+
+    // Chart posizioni (doughnut)
+    if (s.per_posizione && s.per_posizione.length > 0) {
+      html += `<div class="card card-body" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📍 Prodotti per posizione</div>
+        <div style="max-width:240px;margin:auto;"><canvas id="chart-posizioni" height="200"></canvas></div>
+      </div>`;
+    }
+
     if (s.top_acquistati.length) {
       html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🏆 Più acquistati</div>`;
       s.top_acquistati.forEach((p,i) => {
@@ -1103,33 +1238,93 @@ async function caricaStatistiche() {
       });
       html += `</div>`;
     }
+    if (s.top_sprecati && s.top_sprecati.length) {
+      html += `<div class="card card-body" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">🗑️ Più sprecati</div>`;
+      s.top_sprecati.forEach((p,i) => {
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);"><span style="font-size:16px;font-weight:700;color:var(--muted);width:20px;">${i+1}</span><div style="flex:1;font-size:14px;">${p.nome}<br><span style="font-size:12px;color:var(--muted);">${p.marca||''}</span></div><span style="font-size:13px;color:var(--red);font-weight:600;">×${p.totale}</span></div>`;
+      });
+      html += `</div>`;
+    }
+
     if (!s.top_acquistati.length && !s.top_consumati.length) {
       html += `<div class="empty"><div class="empty-icon">📊</div><div>Nessun dato ancora.<br>Le statistiche si accumulano con l'uso!</div></div>`;
     }
+
     document.getElementById('stat-content').innerHTML = html;
+
+    // Render charts dopo che il DOM è pronto
+    setTimeout(() => renderStatsCharts(s), 50);
+
   } catch(e) {
     document.getElementById('stat-content').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
   }
 }
 
+function renderStatsCharts(s) {
+  if (typeof Chart === 'undefined') return;
+  Chart.defaults.color = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#333';
+  Chart.defaults.font.family = '-apple-system, sans-serif';
+  Chart.defaults.font.size = 11;
+
+  // Trend 6 mesi
+  const trendCanvas = document.getElementById('chart-trend');
+  if (trendCanvas && s.trend_6mesi) {
+    const mesi = Object.keys(s.trend_6mesi).sort();
+    const labels = mesi.map(m => {
+      const [y, mm] = m.split('-');
+      return ['', 'Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'][parseInt(mm)] + ' \'' + y.slice(2);
+    });
+    const acquisti = mesi.map(m => s.trend_6mesi[m].acquisto || 0);
+    const consumi = mesi.map(m => s.trend_6mesi[m].consumo || 0);
+    const eliminati = mesi.map(m => s.trend_6mesi[m].eliminato || 0);
+    _statsCharts.push(new Chart(trendCanvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Acquisti', data: acquisti, borderColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.15)', tension: 0.3, fill: true },
+          { label: 'Consumi', data: consumi, borderColor: '#EF9F27', backgroundColor: 'rgba(239,159,39,0.15)', tension: 0.3, fill: true },
+          { label: 'Eliminati', data: eliminati, borderColor: '#A32D2D', backgroundColor: 'rgba(163,45,45,0.15)', tension: 0.3, fill: true },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8 } } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    }));
+  }
+
+  // Posizioni doughnut
+  const posCanvas = document.getElementById('chart-posizioni');
+  if (posCanvas && s.per_posizione) {
+    const labels = s.per_posizione.map(p => p.posizione || 'N/D');
+    const data = s.per_posizione.map(p => p.n);
+    const colors = labels.map(l => l === 'Frigo' ? '#4FC3F7' : l === 'Freezer' ? '#81D4FA' : l === 'Dispensa' ? '#1D9E75' : '#888');
+    _statsCharts.push(new Chart(posCanvas, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8 } } }
+      }
+    }));
+  }
+}
+
 // ── OCR scadenza ──────────────────────────────────────────────────────────────
 let ocrStream = null;
-
 function avviaOCRScadenza() {
   const modal = document.getElementById('ocr-modal');
   modal.style.display = 'flex';
   document.getElementById('ocr-status').textContent = 'Avvio fotocamera...';
   document.getElementById('ocr-manuale').style.display = 'none';
-  navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-  }).then(stream => {
-    ocrStream = stream;
-    const video = document.getElementById('ocr-video');
-    video.srcObject = stream;
-    document.getElementById('ocr-status').textContent = 'Inquadra la data di scadenza nella cornice verde';
-  }).catch(err => {
-    document.getElementById('ocr-status').textContent = 'Errore fotocamera: ' + err.message;
-  });
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } })
+    .then(stream => {
+      ocrStream = stream;
+      document.getElementById('ocr-video').srcObject = stream;
+      document.getElementById('ocr-status').textContent = 'Inquadra la data di scadenza nella cornice verde';
+    }).catch(err => { document.getElementById('ocr-status').textContent = 'Errore fotocamera: ' + err.message; });
 }
 
 function chiudiOCR() {
@@ -1160,13 +1355,11 @@ async function scattaFotoOCR() {
   const canvas = document.getElementById('ocr-canvas');
   canvas.width = video.videoWidth; canvas.height = video.videoHeight;
   canvas.getContext('2d').drawImage(video, 0, 0);
-  document.getElementById('ocr-status').textContent = '🔍 Elaborazione immagine...';
+  document.getElementById('ocr-status').textContent = '🔍 Elaborazione...';
   try {
     const processed = preprocessCanvas(canvas);
     let text = '';
-    const r1 = await Tesseract.recognize(processed, 'ita+eng', { logger: () => {},
-      tessedit_char_whitelist: '0123456789/-.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz '
-    });
+    const r1 = await Tesseract.recognize(processed, 'ita+eng', { logger: () => {}, tessedit_char_whitelist: '0123456789/-.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ' });
     text = r1.data.text;
     let data = estraiDataScadenza(text);
     if (!data) {
@@ -1179,30 +1372,27 @@ async function scattaFotoOCR() {
       chiudiOCR();
       toast('✅ Scadenza rilevata: ' + formatDataIT(data));
     } else {
-      const testoLetto = text.replace(/\n/g, ' ').trim().substring(0, 100);
-      document.getElementById('ocr-status').textContent = '⚠️ Data non rilevata automaticamente.';
-      document.getElementById('ocr-testo-letto').textContent = testoLetto ? `Testo letto: "${testoLetto}"` : '';
+      document.getElementById('ocr-status').textContent = '⚠️ Data non rilevata.';
+      document.getElementById('ocr-testo-letto').textContent = text.replace(/\n/g, ' ').trim().substring(0, 100);
       document.getElementById('ocr-manuale').style.display = 'block';
     }
   } catch(e) {
-    document.getElementById('ocr-status').textContent = '⚠️ Errore OCR. Inserisci manualmente.';
+    document.getElementById('ocr-status').textContent = '⚠️ Errore OCR.';
     document.getElementById('ocr-manuale').style.display = 'block';
   }
 }
 
 function confermaManualeOCR() {
   const input = document.getElementById('ocr-input-manuale').value.trim();
-  const data = estraiDataScadenza(input) || estraiDataLibera(input);
+  const data = estraiDataScadenza(input);
   if (data) {
     document.getElementById('conf-scadenza').value = data;
     chiudiOCR();
     toast('✅ Scadenza impostata: ' + formatDataIT(data));
   } else {
-    document.getElementById('ocr-status').textContent = '⚠️ Formato non riconosciuto. Prova: GG/MM/AAAA o MM/AAAA o AAAA/MM';
+    document.getElementById('ocr-status').textContent = '⚠️ Formato non riconosciuto.';
   }
 }
-
-function estraiDataLibera(input) { const t = input.trim().replace(/\s+/g, ' '); return estraiDataScadenza(t); }
 
 function estraiDataScadenza(testo) {
   if (!testo) return null;
@@ -1239,14 +1429,12 @@ function isDataValida(data, giorno, mese) {
   if (anno < 2024 || anno > 2040) return false;
   return true;
 }
-
 function formatISO(data) {
   const y = data.getFullYear();
   const m = String(data.getMonth()+1).padStart(2,'0');
   const d = String(data.getDate()).padStart(2,'0');
   return `${y}-${m}-${d}`;
 }
-
 function formatDataIT(iso) { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; }
 
 function salvaImpostazioni() {
@@ -1265,9 +1453,7 @@ const PTR_MAX = 100;
 const PTR_SCREENS = ['screen-inventario', 'screen-spesa', 'screen-statistiche'];
 
 function initPullToRefresh() {
-  // Disabilita PTR nativo del browser
   document.body.style.overscrollBehaviorY = 'contain';
-  // Crea indicatore
   _ptrIndicator = document.createElement('div');
   _ptrIndicator.id = 'ptr-indicator';
   _ptrIndicator.style.cssText = 'position:fixed;top:-50px;left:50%;transform:translateX(-50%) rotate(0deg);width:40px;height:40px;background:var(--surface);border:0.5px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:9000;transition:top 0.2s,transform 0.1s;font-size:18px;color:var(--text);box-shadow:0 2px 12px rgba(0,0,0,0.18);pointer-events:none;';
@@ -1280,17 +1466,13 @@ function initPullToRefresh() {
     const scroller = active.querySelector('.content');
     if (!scroller || scroller.scrollTop > 0) return;
     _ptrStartY = e.touches[0].clientY;
-    _ptrActive = true;
-    _ptrCurrent = 0;
+    _ptrActive = true; _ptrCurrent = 0;
   }, { passive: true });
 
   document.addEventListener('touchmove', e => {
     if (!_ptrActive) return;
     _ptrCurrent = e.touches[0].clientY - _ptrStartY;
-    if (_ptrCurrent <= 0) {
-      _ptrIndicator.style.top = '-50px';
-      return;
-    }
+    if (_ptrCurrent <= 0) { _ptrIndicator.style.top = '-50px'; return; }
     const pos = Math.min(_ptrCurrent / 2, PTR_MAX) - 50;
     _ptrIndicator.style.top = pos + 'px';
     _ptrIndicator.textContent = _ptrCurrent > PTR_THRESHOLD ? '↻' : '↓';
@@ -1336,14 +1518,8 @@ async function checkForUpdates() {
 async function applicaAggiornamento() {
   document.getElementById('update-msg').textContent = '⏳ Aggiornamento in corso...';
   document.querySelector('#update-banner button').disabled = true;
-  if ('caches' in window) {
-    const keys = await caches.keys();
-    await Promise.all(keys.map(k => caches.delete(k)));
-  }
-  if ('serviceWorker' in navigator) {
-    const regs = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(regs.map(r => r.unregister()));
-  }
+  if ('caches' in window) { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); }
+  if ('serviceWorker' in navigator) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); }
   location.reload(true);
 }
 
@@ -1375,7 +1551,7 @@ setTimeout(applyDeepLink, 800);
 
 // ── Admin panel ───────────────────────────────────────────────────────────────
 async function caricaAdmin() {
-  await Promise.all([caricaUtenti(), caricaImpostazioniAdmin(), caricaIPBans(), caricaApiKey()]);
+  await Promise.all([caricaUtenti(), caricaImpostazioniAdmin(), caricaIPBans(), caricaApiKey(), caricaBackupStatus()]);
 }
 
 async function caricaUtenti() {
@@ -1398,7 +1574,6 @@ async function caricaImpostazioniAdmin() {
   const r = await apiFetch(`${API_BASE()}/api/admin/settings`);
   const settings = await r.json();
   const el = document.getElementById('admin-settings-form');
-  // Separa toggle (notif_*) da input regolari, mostra toggle in cima raggruppati
   const toggles = settings.filter(s => s.key.startsWith('notif_'));
   const inputs = settings.filter(s => !s.key.startsWith('notif_'));
   let html = '';
@@ -1406,21 +1581,16 @@ async function caricaImpostazioniAdmin() {
     html += '<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">🔔 Notifiche Telegram</div>';
     toggles.forEach(s => {
       const on = s.value === '1';
-      html += `
-        <div class="setting-row" style="padding:10px 0;">
+      html += `<div class="setting-row" style="padding:10px 0;">
           <span style="font-size:14px;flex:1;">${s.description || s.key}</span>
           <button class="toggle ${on ? 'on' : ''}" id="setting-${s.key}" data-key="${s.key}" data-value="${on ? '1' : '0'}" data-istoggle="1" onclick="toggleNotif(this)"></button>
-        </div>
-      `;
+        </div>`;
     });
     html += '<div style="height:16px;"></div>';
   }
   inputs.forEach(s => {
-    html += `
-      <div class="setting-key">${s.description || s.key}</div>
-      <input class="setting-input" type="${s.key.includes('password') || s.key.includes('token') ? 'password' : 'text'}"
-        id="setting-${s.key}" value="${s.value}" placeholder="${s.key}">
-    `;
+    html += `<div class="setting-key">${s.description || s.key}</div>
+      <input class="setting-input" type="${s.key.includes('password') || s.key.includes('token') ? 'password' : 'text'}" id="setting-${s.key}" value="${s.value}" placeholder="${s.key}">`;
   });
   el.innerHTML = html;
 }
@@ -1432,20 +1602,14 @@ function toggleNotif(btn) {
 
 async function salvaImpostazioniAdmin() {
   const payload = {};
-  // Text inputs
   document.querySelectorAll('#admin-settings-form .setting-input').forEach(inp => {
-    const key = inp.id.replace('setting-', '');
-    payload[key] = inp.value;
+    payload[inp.id.replace('setting-', '')] = inp.value;
   });
-  // Toggles (notif_*)
   document.querySelectorAll('#admin-settings-form [data-istoggle="1"]').forEach(t => {
-    const key = t.id.replace('setting-', '');
-    payload[key] = t.dataset.value;
+    payload[t.id.replace('setting-', '')] = t.dataset.value;
   });
   const r = await apiFetch(`${API_BASE()}/api/admin/settings`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   });
   if (r.ok) toast('Impostazioni salvate');
   else { const d = await r.json(); toast(d.error || 'Errore nel salvataggio'); }
@@ -1455,10 +1619,9 @@ async function creaUtente() {
   const username = document.getElementById('new-username').value.trim();
   const password = document.getElementById('new-password').value;
   const isAdmin = document.getElementById('new-is-admin').checked;
-  if (!username || password.length < 6) { toast('Username e password (min 6 caratteri) richiesti'); return; }
+  if (!username || password.length < 6) { toast('Username e password (min 6) richiesti'); return; }
   const r = await apiFetch(`${API_BASE()}/api/admin/users`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, is_admin: isAdmin })
   });
   if (r.ok) {
@@ -1467,10 +1630,7 @@ async function creaUtente() {
     document.getElementById('new-password').value = '';
     document.getElementById('new-is-admin').checked = false;
     caricaUtenti();
-  } else {
-    const d = await r.json();
-    toast(d.error || 'Errore creazione utente');
-  }
+  } else { const d = await r.json(); toast(d.error || 'Errore creazione utente'); }
 }
 
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -1496,9 +1656,7 @@ async function submitEditUser() {
   payload.is_admin = document.getElementById('edit-user-is-admin').checked;
   payload.is_active = document.getElementById('edit-user-is-active').checked;
   const r = await apiFetch(`${API_BASE()}/api/admin/users/${_editUserId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   });
   closeModal('modal-edit-user');
   if (r.ok) { toast('Utente aggiornato'); caricaUtenti(); }
@@ -1507,10 +1665,9 @@ async function submitEditUser() {
 
 function deleteUser(id, username) {
   document.getElementById('modal-confirm-title').textContent = 'Elimina utente';
-  document.getElementById('modal-confirm-msg').textContent = `Eliminare definitivamente l'utente "${username}"?`;
+  document.getElementById('modal-confirm-msg').textContent = `Eliminare definitivamente "${username}"?`;
   const btn = document.getElementById('modal-confirm-ok');
-  btn.className = 'btn btn-danger';
-  btn.textContent = 'Elimina';
+  btn.className = 'btn btn-danger'; btn.textContent = 'Elimina';
   btn.onclick = async () => {
     closeModal('modal-confirm');
     const r = await apiFetch(`${API_BASE()}/api/admin/users/${id}`, { method: 'DELETE' });
@@ -1524,16 +1681,12 @@ async function caricaIPBans() {
   const r = await apiFetch(`${API_BASE()}/api/admin/ip-bans`);
   const bans = await r.json();
   const el = document.getElementById('admin-ip-bans-list');
-  if (!bans.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:8px 0;">Nessun IP bannato</div>';
-    return;
-  }
+  if (!bans.length) { el.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:8px 0;">Nessun IP bannato</div>'; return; }
   el.innerHTML = bans.map(b => `
     <div class="ip-ban-row">
       <div style="flex:1;min-width:0;">
         <div class="ip-ban-ip">${b.ip}</div>
         <div class="ip-ban-info">${b.failed_attempts} tentativi falliti – ${new Date(b.banned_at).toLocaleString('it-IT')}</div>
-        ${b.reason ? `<div class="ip-ban-info">${b.reason}</div>` : ''}
       </div>
       <button class="btn-sm btn-sm-green" onclick="unbanIP('${b.ip}')">Sblocca</button>
     </div>`).join('');
@@ -1541,10 +1694,9 @@ async function caricaIPBans() {
 
 function unbanIP(ip) {
   document.getElementById('modal-confirm-title').textContent = 'Sblocca IP';
-  document.getElementById('modal-confirm-msg').textContent = `Sbloccare "${ip}" e cancellare i tentativi registrati?`;
+  document.getElementById('modal-confirm-msg').textContent = `Sbloccare "${ip}"?`;
   const btn = document.getElementById('modal-confirm-ok');
-  btn.className = 'btn btn-primary';
-  btn.textContent = 'Sblocca';
+  btn.className = 'btn btn-primary'; btn.textContent = 'Sblocca';
   btn.onclick = async () => {
     closeModal('modal-confirm');
     const r = await apiFetch(`${API_BASE()}/api/admin/ip-bans/${encodeURIComponent(ip)}`, { method: 'DELETE' });
@@ -1558,76 +1710,147 @@ async function banIP() {
   const ip = document.getElementById('ban-ip-input').value.trim();
   if (!ip) { toast('Inserisci un IP'); return; }
   const r = await apiFetch(`${API_BASE()}/api/admin/ip-bans`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ip })
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ip })
   });
-  if (r.ok) {
-    toast(`IP ${ip} bannato`);
-    document.getElementById('ban-ip-input').value = '';
-    caricaIPBans();
-  } else {
-    const d = await r.json();
-    toast(d.error || 'Errore ban IP');
-  }
+  if (r.ok) { toast(`IP ${ip} bannato`); document.getElementById('ban-ip-input').value = ''; caricaIPBans(); }
+  else { const d = await r.json(); toast(d.error || 'Errore ban IP'); }
 }
 
 // ── API Key ───────────────────────────────────────────────────────────────────
 async function caricaApiKey() {
   try {
     const r = await apiFetch(`${API_BASE()}/api/admin/api-key`);
-    if (r.ok) {
-      const data = await r.json();
-      const el = document.getElementById('api-key-display');
-      if (el) el.value = data.api_key || '';
-    }
-  } catch(e) { console.warn('Errore caricamento API key:', e); }
+    if (r.ok) { const data = await r.json(); document.getElementById('api-key-display').value = data.api_key || ''; }
+  } catch(e) {}
 }
-
 function copiaApiKey() {
   const el = document.getElementById('api-key-display');
-  if (!el || !el.value) { toast('Nessuna API key da copiare'); return; }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(el.value).then(() => { toast('🔑 API key copiata!'); }).catch(() => {
-      el.select(); document.execCommand('copy'); toast('🔑 API key copiata!');
-    });
+  if (!el || !el.value) { toast('Nessuna API key'); return; }
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(el.value).then(() => toast('🔑 API key copiata!')).catch(() => { el.select(); document.execCommand('copy'); toast('🔑 API key copiata!'); });
   } else { el.select(); document.execCommand('copy'); toast('🔑 API key copiata!'); }
 }
-
 function apriRigeneraApiKey() {
-  const input = document.getElementById('regen-confirm-input');
+  document.getElementById('regen-confirm-input').value = '';
   const btn = document.getElementById('btn-regen-confirm');
-  if (input) input.value = '';
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; }
+  btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed';
   openModal('modal-regen-apikey');
-  setTimeout(() => input?.focus(), 100);
+  setTimeout(() => document.getElementById('regen-confirm-input')?.focus(), 100);
 }
-
 function checkRegenConfirm() {
-  const v = (document.getElementById('regen-confirm-input').value || '').trim().toUpperCase();
+  const v = document.getElementById('regen-confirm-input').value.trim().toUpperCase();
   const btn = document.getElementById('btn-regen-confirm');
   const ok = (v === 'RIGENERA');
+  btn.disabled = !ok; btn.style.opacity = ok ? '1' : '0.4'; btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+async function rigeneraApiKey() {
+  const btn = document.getElementById('btn-regen-confirm');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/api-key/regenerate`, { method: 'POST' });
+    closeModal('modal-regen-apikey');
+    if (r.ok) { const data = await r.json(); document.getElementById('api-key-display').value = data.api_key; toast('🔑 Nuova API key generata!', 5000); }
+    else toast('Errore');
+  } catch(e) { closeModal('modal-regen-apikey'); toast('Errore di rete'); }
+}
+
+// ── Backup / Restore ─────────────────────────────────────────────────────────
+async function caricaBackupStatus() {
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/backup/auto-status`);
+    const s = await r.json();
+    const el = document.getElementById('auto-backup-status');
+    if (!el) return;
+    if (s.exists) {
+      const sizeKB = (s.size_bytes / 1024).toFixed(1);
+      const data = new Date(s.modified_at).toLocaleString('it-IT');
+      el.innerHTML = `📅 Ultimo backup auto: <strong>${data}</strong><br>📦 ${sizeKB} KB · ${s.age_days} giorni fa`;
+    } else {
+      el.textContent = 'Nessun backup automatico ancora generato (prossimo entro 1h).';
+    }
+  } catch(e) {}
+}
+
+async function scaricaBackup() {
+  toast('⏳ Generazione backup...');
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/backup`);
+    if (!r.ok) { toast('Errore generazione backup'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dispensa_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('✅ Backup scaricato');
+  } catch(e) { toast('Errore download'); }
+}
+
+async function forzaBackupAuto() {
+  if (!confirm('Generare ora un nuovo backup automatico (sovrascrive il precedente)?')) return;
+  toast('⏳ Generazione backup...');
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/backup/auto-now`, { method: 'POST' });
+    const data = await r.json();
+    if (r.ok) { toast(`✅ Backup salvato (${(data.size_bytes/1024).toFixed(1)} KB)`); caricaBackupStatus(); }
+    else toast('Errore: ' + (data.error || ''));
+  } catch(e) { toast('Errore di rete'); }
+}
+
+let _restoreFileData = null;
+function apriRestoreBackup() {
+  document.getElementById('restore-file').value = '';
+  document.getElementById('restore-confirm-input').value = '';
+  const btn = document.getElementById('btn-restore-confirm');
+  btn.disabled = true; btn.style.opacity = '0.4';
+  _restoreFileData = null;
+  openModal('modal-restore');
+  document.getElementById('restore-file').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      _restoreFileData = JSON.parse(text);
+      if (!_restoreFileData._meta || _restoreFileData._meta.version !== 'dispensa-manager-backup-v1') {
+        toast('⚠️ File backup non valido');
+        _restoreFileData = null;
+      } else {
+        toast('✅ File caricato');
+      }
+    } catch(err) { toast('⚠️ File JSON non valido'); _restoreFileData = null; }
+    checkRestoreConfirm();
+  };
+}
+
+function checkRestoreConfirm() {
+  const v = document.getElementById('restore-confirm-input').value.trim().toUpperCase();
+  const btn = document.getElementById('btn-restore-confirm');
+  const ok = (v === 'RIPRISTINA') && _restoreFileData;
   btn.disabled = !ok;
   btn.style.opacity = ok ? '1' : '0.4';
   btn.style.cursor = ok ? 'pointer' : 'not-allowed';
 }
 
-async function rigeneraApiKey() {
-  const btn = document.getElementById('btn-regen-confirm');
-  if (!btn || btn.disabled) return;
+async function eseguiRestore() {
+  const btn = document.getElementById('btn-restore-confirm');
+  if (btn.disabled || !_restoreFileData) return;
   btn.disabled = true;
+  toast('⏳ Ripristino in corso...');
   try {
-    const r = await apiFetch(`${API_BASE()}/api/admin/api-key/regenerate`, { method: 'POST' });
-    closeModal('modal-regen-apikey');
+    const r = await apiFetch(`${API_BASE()}/api/admin/restore`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ confirm: 'RIPRISTINA', backup: _restoreFileData })
+    });
+    const data = await r.json();
+    closeModal('modal-restore');
     if (r.ok) {
-      const data = await r.json();
-      document.getElementById('api-key-display').value = data.api_key;
-      toast('🔑 Nuova API key generata — aggiorna configuration.yaml!', 5000);
+      toast(`✅ Ripristinati: ${Object.entries(data.ripristinati).map(([k,v]) => `${v} ${k}`).join(', ')}`, 6000);
+      setTimeout(() => location.reload(), 2000);
     } else {
-      toast('Errore rigenerazione API key');
+      toast('Errore: ' + (data.error || ''), 4000);
     }
-  } catch(e) {
-    closeModal('modal-regen-apikey');
-    toast('Errore di rete');
-  }
+  } catch(e) { closeModal('modal-restore'); toast('Errore di rete'); }
+  _restoreFileData = null;
 }
