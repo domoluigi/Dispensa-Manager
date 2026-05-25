@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dispensa">
 <meta name="theme-color" content="#1D9E75">
-<meta name="app-version" content="2.0.15">
+<meta name="app-version" content="2.0.16">
 <meta name="cf-url" content="">
 <title>Dispensa</title>
 <link rel="manifest" href="manifest.json">
@@ -28,7 +28,10 @@
 .bulk-mode .bulk-check { display: flex; }
 .prod-item.bulk-selected { background: var(--green-l); }
 .prod-item.bulk-selected .bulk-check { background: var(--green); border-color: var(--green); }
-.prod-item.bulk-selected .bulk-check::after { content: '\\2713'; color: white; font-size: 14px; font-weight: 700; }
+.prod-item.bulk-selected .bulk-check::after { content: '\2713'; color: white; font-size: 14px; font-weight: 700; }
+/* Chart wrappers: altezza fissa per evitare ResizeObserver loop in Chart.js */
+.chart-wrap { position: relative; height: 220px; width: 100%; }
+.chart-wrap-sm { position: relative; height: 220px; width: 100%; max-width: 260px; margin: 0 auto; }
 /* Scan status visual */
 #scan-status.scan-active { color: var(--green); font-weight: 500; }
 #scan-status.scan-found { color: var(--green-d); font-weight: 600; font-size: 16px; }
@@ -307,7 +310,7 @@
       <div style="font-size:14px;color:var(--text);margin-bottom:12px;">Connesso come: <strong id="current-username"></strong></div>
       <button class="btn btn-secondary" onclick="doLogout()" style="color:var(--red);">🚪 Esci (logout)</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.15</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.16</div>
   </div>
   <div class="tab-bar">
     <div class="tab" onclick="showTab('inventario')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span>Dispensa</span></div>
@@ -329,6 +332,7 @@
     <div class="card card-body">
       <div class="field"><label>Nome prodotto</label><input type="text" id="mod-nome"></div>
       <div class="field"><label>Marca (opzionale)</label><input type="text" id="mod-marca"></div>
+      <div class="field"><label>Codice a barre (EAN) <span style="color:var(--hint);font-weight:400;font-size:12px;">— opzionale</span></label><input type="text" id="mod-ean" inputmode="numeric" placeholder="es. 8001234567890" autocomplete="off"></div>
       <div class="field">
         <label>Quantità</label>
         <div class="qty-row">
