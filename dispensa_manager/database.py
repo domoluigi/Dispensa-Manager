@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.13"
-SCHEMA_VERSION = 4
+APP_VERSION = "2.0.14"
+SCHEMA_VERSION = 5
 
 
 def get_db():
@@ -36,8 +36,7 @@ def get_ha_option(key: str, default: str = "") -> str:
 
 
 def get_api_key() -> str:
-    """Restituisce la API key persistente per automazioni HA.
-    Generata al primo accesso e salvata nel DB. Stabile tra restart."""
+    """Restituisce la API key persistente per automazioni HA."""
     conn = get_db()
     try:
         row = conn.execute("SELECT value FROM app_settings WHERE key='api_key'").fetchone()
@@ -218,6 +217,24 @@ def init_db():
             _set_schema_version(conn, 4)
         current = 4
 
+    if current < 5:
+        logger.info("Migrazione schema DB: v4 → v5 (notifiche Telegram granulari)")
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
+                ("notif_telegram_acquisto", "1", "Notifica Telegram quando aggiungi un prodotto"),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
+                ("notif_telegram_modifica", "1", "Notifica Telegram quando modifichi un prodotto"),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
+                ("notif_telegram_eliminazione", "1", "Notifica Telegram quando elimini un prodotto"),
+            )
+            _set_schema_version(conn, 5)
+        current = 5
+
     conn.close()
 
     # API key auto-generata al primo avvio (idempotente)
@@ -241,6 +258,12 @@ def _seed_defaults(conn):
          "Tentativi di login falliti max prima del ban IP"),
         ("ban_window_minutes", "15",
          "Finestra temporale (minuti) per contare i tentativi falliti"),
+        ("notif_telegram_acquisto", "1",
+         "Notifica Telegram quando aggiungi un prodotto"),
+        ("notif_telegram_modifica", "1",
+         "Notifica Telegram quando modifichi un prodotto"),
+        ("notif_telegram_eliminazione", "1",
+         "Notifica Telegram quando elimini un prodotto"),
     ]
     for key, value, desc in defaults:
         conn.execute(
