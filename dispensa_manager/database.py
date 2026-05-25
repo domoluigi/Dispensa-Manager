@@ -3,6 +3,7 @@ import json
 import os
 import logging
 import secrets
+import base64
 import bcrypt
 
 logger = logging.getLogger(__name__)
@@ -10,8 +11,12 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.environ.get("DB_PATH", "/config/dispensa.db")
 OPTIONS_PATH = "/data/options.json"
 
-APP_VERSION = "2.0.14"
-SCHEMA_VERSION = 5
+# Cartella per immagini salvate su filesystem (non più nel DB)
+IMAGES_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "images")
+BACKUPS_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "backups")
+
+APP_VERSION = "2.0.15"
+SCHEMA_VERSION = 6
 
 
 def get_db():
@@ -55,7 +60,6 @@ def get_api_key() -> str:
 
 
 def regenerate_api_key() -> str:
-    """Genera una nuova API key sovrascrivendo la precedente."""
     key = "dk_" + secrets.token_urlsafe(32)
     conn = get_db()
     try:
@@ -65,6 +69,60 @@ def regenerate_api_key() -> str:
         conn.close()
     logger.info("API key rigenerata da admin")
     return key
+
+
+def save_image_to_fs(data_url: str, prodotto_id: int) -> str:
+    """Decodifica una data-URL base64 e salva l'immagine su filesystem.
+    Ritorna il path relativo /dispensa-images/<id>.<ext> da salvare nel DB.
+    Se non è una data-URL, ritorna il valore originale immutato."""
+    if not data_url or not data_url.startswith("data:image/"):
+        return data_url
+    try:
+        os.makedirs(IMAGES_DIR, exist_ok=True)
+        header, b64data = data_url.split(",", 1)
+        ext = "jpg"
+        if "png" in header.lower():
+            ext = "png"
+        elif "webp" in header.lower():
+            ext = "webp"
+        filepath = os.path.join(IMAGES_DIR, f"{prodotto_id}.{ext}")
+        with open(filepath, "wb") as f:
+            f.write(base64.b64decode(b64data))
+        rel = f"/dispensa-images/{prodotto_id}.{ext}"
+        logger.info("Immagine prodotto %d salvata su FS (%d bytes)", prodotto_id, len(b64data))
+        return rel
+    except Exception as e:
+        logger.error("Errore salvataggio immagine prodotto %d: %s", prodotto_id, e)
+        return ""  # fallback: rimuove immagine corrotta
+
+
+def delete_image_from_fs(image_path: str):
+    """Elimina file immagine da FS se path inizia con /dispensa-images/."""
+    if not image_path or not image_path.startswith("/dispensa-images/"):
+        return
+    try:
+        filename = image_path.replace("/dispensa-images/", "")
+        filepath = os.path.join(IMAGES_DIR, filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    except Exception as e:
+        logger.warning("Impossibile rimuovere immagine %s: %s", image_path, e)
+
+
+def _migra_immagini_su_fs(conn):
+    """Migrazione one-shot: sposta tutte le immagini base64 dal DB al filesystem."""
+    rows = conn.execute(
+        "SELECT id, immagine_url FROM prodotti WHERE immagine_url LIKE 'data:image/%'"
+    ).fetchall()
+    if not rows:
+        return 0
+    count = 0
+    for r in rows:
+        new_path = save_image_to_fs(r["immagine_url"], r["id"])
+        if new_path != r["immagine_url"]:
+            conn.execute("UPDATE prodotti SET immagine_url=? WHERE id=?", (new_path, r["id"]))
+            count += 1
+    return count
 
 
 def _get_schema_version(conn):
@@ -99,7 +157,8 @@ def init_db():
             note TEXT,
             nutriments TEXT,
             nutriscore TEXT,
-            posizione TEXT DEFAULT 'Dispensa'
+            posizione TEXT DEFAULT 'Dispensa',
+            prezzo REAL
         );
 
         CREATE TABLE IF NOT EXISTS barcode_cache (
@@ -131,20 +190,25 @@ def init_db():
             categoria TEXT,
             tipo TEXT NOT NULL,
             quantita INTEGER DEFAULT 1,
+            prezzo REAL,
             data TEXT DEFAULT (datetime('now'))
         );
 
         CREATE INDEX IF NOT EXISTS idx_prodotti_scadenza ON prodotti(scadenza);
         CREATE INDEX IF NOT EXISTS idx_prodotti_ean ON prodotti(ean);
+        CREATE INDEX IF NOT EXISTS idx_prodotti_categoria ON prodotti(categoria);
         CREATE INDEX IF NOT EXISTS idx_movimenti_data ON storico_movimenti(data);
+        CREATE INDEX IF NOT EXISTS idx_movimenti_tipo_data ON storico_movimenti(tipo, data);
     """)
 
     for alter in [
         "ALTER TABLE prodotti ADD COLUMN nutriments TEXT",
         "ALTER TABLE prodotti ADD COLUMN nutriscore TEXT",
         "ALTER TABLE prodotti ADD COLUMN posizione TEXT DEFAULT 'Dispensa'",
+        "ALTER TABLE prodotti ADD COLUMN prezzo REAL",
         "ALTER TABLE barcode_cache ADD COLUMN nutriscore TEXT",
         "ALTER TABLE barcode_cache ADD COLUMN nutriments TEXT",
+        "ALTER TABLE storico_movimenti ADD COLUMN prezzo REAL",
     ]:
         try:
             conn.execute(alter)
@@ -204,7 +268,7 @@ def init_db():
         current = 3
 
     if current < 4:
-        logger.info("Migrazione schema DB: v3 → v4 (parametri IP ban configurabili)")
+        logger.info("Migrazione schema DB: v3 → v4 (IP ban configurabili)")
         with conn:
             conn.execute(
                 "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
@@ -235,10 +299,31 @@ def init_db():
             _set_schema_version(conn, 5)
         current = 5
 
+    if current < 6:
+        logger.info("Migrazione schema DB: v5 → v6 (immagini su FS, prezzo opzionale, indici)")
+        # Migra immagini base64 → filesystem
+        try:
+            n = _migra_immagini_su_fs(conn)
+            conn.commit()
+            if n > 0:
+                logger.info("Migrate %d immagini base64 → filesystem", n)
+        except Exception as e:
+            logger.error("Errore migrazione immagini: %s", e)
+        with conn:
+            _set_schema_version(conn, 6)
+        current = 6
+
     conn.close()
 
     # API key auto-generata al primo avvio (idempotente)
     get_api_key()
+
+    # Crea cartelle se mancanti
+    try:
+        os.makedirs(IMAGES_DIR, exist_ok=True)
+        os.makedirs(BACKUPS_DIR, exist_ok=True)
+    except Exception as e:
+        logger.warning("Impossibile creare cartelle dispensa: %s", e)
 
 
 def _seed_defaults(conn):
@@ -278,7 +363,7 @@ def _seed_defaults(conn):
             "INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)",
             ("admin", pw_hash),
         )
-        logger.warning("SICUREZZA: utente admin creato con password 'admin' — cambiala subito dal pannello Admin!")
+        logger.warning("SICUREZZA: utente admin creato con password 'admin' — cambiala subito!")
 
 
 def get_settings(conn) -> dict:
