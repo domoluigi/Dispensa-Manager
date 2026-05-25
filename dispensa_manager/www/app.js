@@ -321,6 +321,8 @@ function apriModifica(id) {
   modQtyCorrente = p.quantita;
   document.getElementById('mod-nome').value = p.nome || '';
   document.getElementById('mod-marca').value = p.marca || '';
+  const eanEl = document.getElementById('mod-ean');
+  if (eanEl) eanEl.value = (p.ean && !p.ean.startsWith('MANUAL-')) ? p.ean : '';
   document.getElementById('mod-qty-val').textContent = modQtyCorrente;
   document.getElementById('mod-scadenza').value = p.scadenza || '';
   document.getElementById('mod-posizione').value = p.posizione || 'Dispensa';
@@ -336,9 +338,12 @@ function cambiaQtyMod(delta) {
 
 async function salvaModifica() {
   const prezzo = document.getElementById('mod-prezzo').value;
+  const eanEl = document.getElementById('mod-ean');
+  const eanVal = eanEl ? eanEl.value.trim() : '';
   const payload = {
     nome: document.getElementById('mod-nome').value.trim() || 'Prodotto',
     marca: document.getElementById('mod-marca').value.trim(),
+    ean: eanVal,
     quantita: modQtyCorrente,
     scadenza: document.getElementById('mod-scadenza').value || null,
     posizione: document.getElementById('mod-posizione').value,
@@ -1208,11 +1213,11 @@ async function caricaStatistiche() {
       </div>`;
     }
 
-    // Chart trend 6 mesi (line chart)
+    // Chart trend 6 mesi (line chart) — wrap con altezza fissa per evitare loop
     if (s.trend_6mesi && Object.keys(s.trend_6mesi).length > 0) {
       html += `<div class="card card-body" style="margin-bottom:12px;">
         <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📈 Trend ultimi 6 mesi</div>
-        <canvas id="chart-trend" height="160"></canvas>
+        <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
       </div>`;
     }
 
@@ -1220,7 +1225,7 @@ async function caricaStatistiche() {
     if (s.per_posizione && s.per_posizione.length > 0) {
       html += `<div class="card card-body" style="margin-bottom:12px;">
         <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📍 Prodotti per posizione</div>
-        <div style="max-width:240px;margin:auto;"><canvas id="chart-posizioni" height="200"></canvas></div>
+        <div class="chart-wrap-sm"><canvas id="chart-posizioni"></canvas></div>
       </div>`;
     }
 
