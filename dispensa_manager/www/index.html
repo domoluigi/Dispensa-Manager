@@ -15,6 +15,16 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="shortcut icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<script>
+/* Anti-FOUC: applica .dark prima del primo paint (evita lampeggio bianco al refresh) */
+(function() {
+  try {
+    var stored = localStorage.getItem('dispensa_dark');
+    var isDark = stored === '1' || (stored === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (isDark) document.documentElement.classList.add('dark');
+  } catch(e) {}
+})();
+</script>
 <link rel="stylesheet" href="style.css?v=__VER__">
 <style>
 /* Stili bulk select */
