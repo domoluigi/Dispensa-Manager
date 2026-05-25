@@ -1,7 +1,13 @@
-from flask import Blueprint, request, jsonify
+import json
+import logging
+import os
+from datetime import datetime
+from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import get_jwt_identity
-from database import get_db, set_setting, get_api_key, regenerate_api_key
+from database import get_db, set_setting, get_api_key, regenerate_api_key, BACKUPS_DIR
 from auth import admin_required, hash_password
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
@@ -40,7 +46,6 @@ def create_user():
         existing = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
         if existing:
             return jsonify({"error": "Username già in uso"}), 409
-
         with conn:
             cur = conn.execute(
                 "INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)",
@@ -78,7 +83,6 @@ def update_user(user_id):
         values = list(fields.values()) + [user_id]
         with conn:
             conn.execute(f"UPDATE users SET {set_clause} WHERE id=?", values)
-
         return jsonify({"ok": True})
     finally:
         conn.close()
@@ -90,7 +94,6 @@ def delete_user(user_id):
     identity = get_jwt_identity()
     if str(user_id) == str(identity):
         return jsonify({"error": "Non puoi eliminare te stesso"}), 400
-
     conn = get_db()
     try:
         with conn:
@@ -145,7 +148,7 @@ def update_settings():
         conn.close()
 
 
-# ── API Key (automazioni HA) ───────────────────────────────────────────────────────
+# ── API Key ───────────────────────────────────────────────────────────────────
 
 @bp.get("/api-key")
 @admin_required
@@ -209,3 +212,149 @@ def unban_ip(ip):
         return jsonify({"ok": True})
     finally:
         conn.close()
+
+
+# ── Backup / Restore ──────────────────────────────────────────────────────────
+
+def _build_backup() -> dict:
+    """Costruisce dizionario con TUTTO il contenuto utile del DB (no password hash, no api_key)."""
+    conn = get_db()
+    try:
+        backup = {
+            "_meta": {
+                "version": "dispensa-manager-backup-v1",
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "schema_version": int(conn.execute("SELECT value FROM app_settings WHERE key='schema_version'").fetchone()["value"]),
+            },
+            "prodotti": [dict(r) for r in conn.execute("SELECT * FROM prodotti ORDER BY id").fetchall()],
+            "lista_spesa": [dict(r) for r in conn.execute("SELECT * FROM lista_spesa ORDER BY id").fetchall()],
+            "storico_movimenti": [dict(r) for r in conn.execute("SELECT * FROM storico_movimenti ORDER BY id").fetchall()],
+            "barcode_cache": [dict(r) for r in conn.execute("SELECT * FROM barcode_cache ORDER BY ean").fetchall()],
+            "app_settings": [
+                dict(r) for r in conn.execute(
+                    "SELECT key, value, description FROM app_settings WHERE key NOT IN ('jwt_secret_key', 'api_key', 'schema_version')"
+                ).fetchall()
+            ],
+            "users": [
+                dict(r) for r in conn.execute(
+                    "SELECT id, username, is_admin, is_active, created_at, last_login FROM users"
+                ).fetchall()
+            ],
+        }
+        return backup
+    finally:
+        conn.close()
+
+
+def _restore_backup(backup: dict) -> dict:
+    """Sovrascrive le tabelle con i dati del backup. ATTENZIONE: distruttivo!
+    Non tocca: users password_hash, jwt_secret_key, api_key."""
+    if backup.get("_meta", {}).get("version") != "dispensa-manager-backup-v1":
+        raise ValueError("Formato backup non valido o versione non supportata")
+
+    conn = get_db()
+    counts = {}
+    try:
+        with conn:
+            # Backup tabelle dati (NON utenti, NON segreti)
+            for table in ("prodotti", "lista_spesa", "storico_movimenti", "barcode_cache"):
+                conn.execute(f"DELETE FROM {table}")
+                rows = backup.get(table, [])
+                counts[table] = len(rows)
+                for row in rows:
+                    if not row:
+                        continue
+                    keys = list(row.keys())
+                    placeholders = ",".join("?" * len(keys))
+                    cols = ",".join(keys)
+                    conn.execute(
+                        f"INSERT INTO {table} ({cols}) VALUES ({placeholders})",
+                        [row[k] for k in keys],
+                    )
+            # Restore settings (no internal)
+            settings = backup.get("app_settings", [])
+            for s in settings:
+                if s.get("key") in ("schema_version", "jwt_secret_key", "api_key"):
+                    continue
+                set_setting(conn, s["key"], s["value"])
+            counts["app_settings"] = len(settings)
+        return counts
+    finally:
+        conn.close()
+
+
+@bp.get("/backup")
+@admin_required
+def download_backup():
+    """Ritorna backup JSON come file scaricabile."""
+    backup = _build_backup()
+    from io import BytesIO
+    buf = BytesIO()
+    buf.write(json.dumps(backup, indent=2, default=str, ensure_ascii=False).encode("utf-8"))
+    buf.seek(0)
+    filename = f"dispensa_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    return send_file(buf, mimetype="application/json", as_attachment=True, download_name=filename)
+
+
+@bp.post("/restore")
+@admin_required
+def upload_restore():
+    """Riceve backup JSON e lo applica. Distruttivo!
+    Body: {"backup": {...}, "confirm": "RIPRISTINA"}"""
+    data = request.get_json(silent=True) or {}
+    if data.get("confirm") != "RIPRISTINA":
+        return jsonify({"error": "Conferma mancante o errata (richiesto: 'RIPRISTINA')"}), 400
+    backup = data.get("backup")
+    if not backup or not isinstance(backup, dict):
+        return jsonify({"error": "Backup mancante o malformato"}), 400
+    try:
+        counts = _restore_backup(backup)
+        # Trigger aggiornamento sensori HA dopo ripristino
+        try:
+            from routes.products import aggiorna_sensori_ha
+            import threading
+            threading.Thread(target=aggiorna_sensori_ha, daemon=True).start()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "ripristinati": counts})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error("Errore ripristino backup: %s", e)
+        return jsonify({"error": "Errore durante il ripristino"}), 500
+
+
+@bp.get("/backup/auto-status")
+@admin_required
+def auto_backup_status():
+    """Stato del backup automatico (data ultimo, dimensione)."""
+    auto_path = os.path.join(BACKUPS_DIR, "auto_backup.json")
+    if not os.path.exists(auto_path):
+        return jsonify({"exists": False, "path": auto_path})
+    try:
+        stat = os.stat(auto_path)
+        return jsonify({
+            "exists": True,
+            "path": auto_path,
+            "size_bytes": stat.st_size,
+            "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "age_days": round((datetime.now().timestamp() - stat.st_mtime) / 86400, 1),
+        })
+    except Exception as e:
+        return jsonify({"exists": False, "error": str(e)})
+
+
+@bp.post("/backup/auto-now")
+@admin_required
+def trigger_auto_backup_now():
+    """Forza un backup automatico immediato."""
+    try:
+        auto_path = os.path.join(BACKUPS_DIR, "auto_backup.json")
+        os.makedirs(BACKUPS_DIR, exist_ok=True)
+        backup = _build_backup()
+        with open(auto_path, "w", encoding="utf-8") as f:
+            json.dump(backup, f, indent=2, default=str, ensure_ascii=False)
+        return jsonify({"ok": True, "path": auto_path, "size_bytes": os.path.getsize(auto_path)})
+    except Exception as e:
+        logger.error("Errore backup manuale auto: %s", e)
+        return jsonify({"error": str(e)}), 500
