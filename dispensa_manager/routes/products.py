@@ -4,12 +4,15 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, make_response
 from flask_jwt_extended import jwt_required
 import requests as http_requests
 
-from database import get_db, get_setting, get_ha_option, APP_VERSION
+from database import (
+    get_db, get_setting, get_ha_option, APP_VERSION,
+    save_image_to_fs, delete_image_from_fs,
+)
 from auth import api_key_or_jwt
 
 logger = logging.getLogger(__name__)
@@ -29,14 +32,14 @@ def _get_days_threshold(conn):
         return 3
 
 
-def log_movimento(nome, tipo, ean="", marca="", categoria="", quantita=1):
+def log_movimento(nome, tipo, ean="", marca="", categoria="", quantita=1, prezzo=None):
     conn = get_db()
     try:
         with conn:
             conn.execute(
-                "INSERT INTO storico_movimenti (ean, nome, marca, categoria, tipo, quantita) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (ean, nome, marca, categoria, tipo, quantita),
+                "INSERT INTO storico_movimenti (ean, nome, marca, categoria, tipo, quantita, prezzo) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (ean, nome, marca, categoria, tipo, quantita, prezzo),
             )
     except Exception as e:
         logger.error("Errore log movimento: %s", e)
@@ -122,15 +125,12 @@ def _async(fn, *args, **kwargs):
 
 
 def invia_telegram(testo, categoria=None):
-    """Invia messaggio Telegram. Tronca se supera limite (4096) e logga errori HTTP.
-    categoria opzionale ('acquisto', 'modifica', 'eliminazione') controlla se notifica
-    è abilitata via settings (notif_telegram_<categoria>). Se categoria=None invia sempre."""
+    """categoria opzionale ('acquisto', 'modifica', 'eliminazione') → check setting notif_telegram_<categoria>"""
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
     if not token or not chat_id_raw:
         logger.warning("Telegram non configurato (token o chat_id mancanti nelle opzioni HA)")
         return
-    # Controlla se la categoria specifica è abilitata
     if categoria:
         conn = get_db()
         try:
@@ -160,6 +160,16 @@ def invia_telegram(testo, categoria=None):
 
 def _pos_icon(pos):
     return {"Frigo": "\U0001f9ca", "Freezer": "❄️", "Dispensa": "\U0001f5c4️"}.get(pos, "\U0001f4e6")
+
+
+def _handle_immagine(immagine_url: str, prodotto_id: int) -> str:
+    """Se immagine è data-URL base64 la sposta su filesystem.
+    Se è URL esterna (http://...) o path /dispensa-images/... rimane invariata."""
+    if not immagine_url:
+        return ""
+    if immagine_url.startswith("data:"):
+        return save_image_to_fs(immagine_url, prodotto_id)
+    return immagine_url
 
 
 # ── Barcode ──────────────────────────────────────────────────────────────────
@@ -309,7 +319,7 @@ def prodotti_by_ean(ean):
     conn = get_db()
     try:
         items = conn.execute(
-            "SELECT id, nome, marca, quantita, scadenza, posizione FROM prodotti "
+            "SELECT id, nome, marca, quantita, scadenza, posizione, prezzo FROM prodotti "
             "WHERE ean=? AND quantita>0 ORDER BY scadenza ASC",
             (ean,),
         ).fetchall()
@@ -334,23 +344,33 @@ def lista_esauriti():
 def aggiungi_prodotto():
     data = request.get_json(silent=True) or {}
     immagine_url = data.get("immagine_url", "")
-    if immagine_url and immagine_url.startswith("data:") and len(immagine_url) > 600000:
-        immagine_url = ""
+    # Salva prima senza immagine pesante (verrà spostata su FS post-insert)
+    prezzo = data.get("prezzo")
+    try:
+        prezzo = float(prezzo) if prezzo not in (None, "") else None
+    except (ValueError, TypeError):
+        prezzo = None
 
     conn = get_db()
     try:
         with conn:
-            conn.execute(
-                "INSERT INTO prodotti (ean, nome, marca, categoria, immagine_url, quantita, scadenza, note, nutriments, nutriscore, posizione) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            cur = conn.execute(
+                "INSERT INTO prodotti (ean, nome, marca, categoria, immagine_url, quantita, scadenza, note, nutriments, nutriscore, posizione, prezzo) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     data.get("ean", ""), data.get("nome", "Prodotto"), data.get("marca", ""),
-                    data.get("categoria", ""), immagine_url, data.get("quantita", 1),
+                    data.get("categoria", ""), "", data.get("quantita", 1),
                     data.get("scadenza"), data.get("note", ""),
                     json.dumps(data.get("nutriments")) if data.get("nutriments") else None,
                     data.get("nutriscore", ""), data.get("posizione", "Dispensa"),
+                    prezzo,
                 ),
             )
+            new_id = cur.lastrowid
+            # Gestione immagine: data-URL → filesystem, URL esterna → invariata
+            final_url = _handle_immagine(immagine_url, new_id)
+            if final_url:
+                conn.execute("UPDATE prodotti SET immagine_url=? WHERE id=?", (final_url, new_id))
     finally:
         conn.close()
 
@@ -358,6 +378,7 @@ def aggiungi_prodotto():
         nome=data.get("nome", "Prodotto"), tipo="acquisto",
         ean=data.get("ean", ""), marca=data.get("marca", ""),
         categoria=data.get("categoria", ""), quantita=data.get("quantita", 1),
+        prezzo=prezzo,
     )
     _async(aggiorna_sensori_ha)
 
@@ -365,13 +386,11 @@ def aggiungi_prodotto():
     qty = data.get("quantita", 1)
     pos = data.get("posizione", "Dispensa")
     scad = data.get("scadenza")
-    scad_str = (
-        f"\n\U0001f4c5 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}"
-        if scad else ""
-    )
-    _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{nome}* ×{qty}\n{_pos_icon(pos)} {pos}{scad_str}", "acquisto")
+    scad_str = (f"\n\U0001f4c5 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}" if scad else "")
+    prezzo_str = f"\n💰 {prezzo:.2f}€" if prezzo else ""
+    _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{nome}* ×{qty}\n{_pos_icon(pos)} {pos}{scad_str}{prezzo_str}", "acquisto")
 
-    return jsonify({"ok": True}), 201
+    return jsonify({"ok": True, "id": new_id}), 201
 
 
 @bp.put("/api/prodotti/<int:id>")
@@ -386,11 +405,29 @@ def aggiorna_prodotto(id):
         p = conn.execute("SELECT * FROM prodotti WHERE id=?", (id,)).fetchone()
         if not p:
             return jsonify({"error": "Prodotto non trovato"}), 404
+
+        # Gestione immagine se passata (data-URL → FS, URL esterna → invariata)
+        if "immagine_url" in data:
+            old_url = p["immagine_url"] or ""
+            new_url_raw = data.get("immagine_url", "")
+            if new_url_raw and new_url_raw.startswith("data:"):
+                # Cancella vecchia se era su FS
+                if old_url and old_url.startswith("/dispensa-images/"):
+                    delete_image_from_fs(old_url)
+                data["immagine_url"] = save_image_to_fs(new_url_raw, id)
+            # Se new_url è URL normale, lascia stare data come è
+
         fields, values = [], []
-        for campo in ["nome", "marca", "quantita", "scadenza", "note", "posizione"]:
+        for campo in ["nome", "marca", "quantita", "scadenza", "note", "posizione", "immagine_url", "prezzo"]:
             if campo in data:
                 fields.append(f"{campo}=?")
-                values.append(data[campo])
+                val = data[campo]
+                if campo == "prezzo":
+                    try:
+                        val = float(val) if val not in (None, "") else None
+                    except (ValueError, TypeError):
+                        val = None
+                values.append(val)
         if fields:
             values.append(id)
             with conn:
@@ -404,13 +441,13 @@ def aggiorna_prodotto(id):
             log_movimento(
                 nome=p["nome"], tipo="consumo", ean=p["ean"] or "",
                 marca=p["marca"] or "", categoria=p["categoria"] or "",
-                quantita=-diff,
+                quantita=-diff, prezzo=p["prezzo"] if "prezzo" in p.keys() else None,
             )
         elif diff > 0:
             log_movimento(
                 nome=p["nome"], tipo="acquisto", ean=p["ean"] or "",
                 marca=p["marca"] or "", categoria=p["categoria"] or "",
-                quantita=diff,
+                quantita=diff, prezzo=p["prezzo"] if "prezzo" in p.keys() else None,
             )
     _async(aggiorna_sensori_ha)
 
@@ -451,11 +488,92 @@ def elimina_prodotto(id):
         log_movimento(
             nome=p["nome"], tipo="eliminato", ean=p["ean"] or "",
             marca=p["marca"] or "", categoria=p["categoria"] or "", quantita=p["quantita"],
+            prezzo=p["prezzo"] if "prezzo" in p.keys() else None,
         )
+        # Rimuovi immagine da FS se presente
+        if p["immagine_url"]:
+            delete_image_from_fs(p["immagine_url"])
         pos = p["posizione"] or "Dispensa"
         _async(invia_telegram, f"\U0001f5d1️ *Eliminato*\n\n*{p['nome']}*\n{_pos_icon(pos)} {pos}", "eliminazione")
     _async(aggiorna_sensori_ha)
     return jsonify({"ok": True})
+
+
+# ── Bulk operations (multi-select) ──────────────────────────────────────────
+
+@bp.post("/api/prodotti/bulk")
+@jwt_required()
+def bulk_action():
+    """Azione su multipli prodotti contemporaneamente.
+    Body: {"ids": [1,2,3], "action": "delete"|"set_posizione"|"extend_scadenza", "value": <dipende>}
+    """
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids", [])
+    action = data.get("action")
+    value = data.get("value")
+
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"error": "ids deve essere una lista non vuota"}), 400
+    if action not in ("delete", "set_posizione", "extend_scadenza"):
+        return jsonify({"error": f"Azione '{action}' non supportata"}), 400
+
+    # Sanifica ids → solo interi
+    ids = [int(i) for i in ids if isinstance(i, (int, str)) and str(i).isdigit()]
+    if not ids:
+        return jsonify({"error": "Nessun id valido"}), 400
+
+    conn = get_db()
+    affected = 0
+    try:
+        placeholders = ",".join("?" * len(ids))
+        prodotti = conn.execute(f"SELECT * FROM prodotti WHERE id IN ({placeholders})", ids).fetchall()
+
+        if action == "delete":
+            with conn:
+                conn.execute(f"DELETE FROM prodotti WHERE id IN ({placeholders})", ids)
+            # Log + image cleanup
+            for p in prodotti:
+                log_movimento(
+                    nome=p["nome"], tipo="eliminato", ean=p["ean"] or "",
+                    marca=p["marca"] or "", categoria=p["categoria"] or "",
+                    quantita=p["quantita"],
+                )
+                if p["immagine_url"]:
+                    delete_image_from_fs(p["immagine_url"])
+            affected = len(prodotti)
+            _async(invia_telegram, f"🗑️ *Eliminazione massiva*\n\n{affected} prodotti rimossi dalla dispensa", "eliminazione")
+
+        elif action == "set_posizione":
+            if value not in ("Dispensa", "Frigo", "Freezer"):
+                return jsonify({"error": "value deve essere Dispensa|Frigo|Freezer"}), 400
+            with conn:
+                cur = conn.execute(
+                    f"UPDATE prodotti SET posizione=? WHERE id IN ({placeholders})",
+                    [value] + ids,
+                )
+                affected = cur.rowcount
+            _async(invia_telegram, f"📍 *Spostamento massivo*\n\n{affected} prodotti → {value}", "modifica")
+
+        elif action == "extend_scadenza":
+            # value = giorni da aggiungere alla scadenza esistente
+            try:
+                giorni = int(value)
+            except (ValueError, TypeError):
+                return jsonify({"error": "value deve essere intero (giorni da aggiungere)"}), 400
+            with conn:
+                # Solo per prodotti con scadenza
+                cur = conn.execute(
+                    f"UPDATE prodotti SET scadenza=date(scadenza, '+{giorni} days') "
+                    f"WHERE id IN ({placeholders}) AND scadenza IS NOT NULL",
+                    ids,
+                )
+                affected = cur.rowcount
+            _async(invia_telegram, f"📅 *Modifica scadenze*\n\n{affected} prodotti: +{giorni} giorni", "modifica")
+    finally:
+        conn.close()
+
+    _async(aggiorna_sensori_ha)
+    return jsonify({"ok": True, "affected": affected, "action": action})
 
 
 # ── Export / Statistiche ─────────────────────────────────────────────────────
@@ -471,12 +589,14 @@ def export_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["ID", "Nome", "Marca", "Categoria", "Quantità", "Scadenza", "Posizione", "EAN", "Note", "Data inserimento"])
+    writer.writerow(["ID", "Nome", "Marca", "Categoria", "Quantità", "Scadenza", "Posizione", "EAN", "Note", "Prezzo", "Data inserimento"])
     for p in prodotti:
         writer.writerow([
             p["id"], p["nome"], p["marca"] or "", p["categoria"] or "",
             p["quantita"], p["scadenza"] or "", p["posizione"] or "",
-            p["ean"] or "", p["note"] or "", p["data_inserimento"] or "",
+            p["ean"] or "", p["note"] or "",
+            p["prezzo"] if "prezzo" in p.keys() and p["prezzo"] else "",
+            p["data_inserimento"] or "",
         ])
 
     output.seek(0)
@@ -489,17 +609,29 @@ def export_csv():
 @bp.get("/api/statistiche")
 @jwt_required()
 def statistiche():
+    """Statistiche aggregate con focus anti-spreco e trend temporali."""
     conn = get_db()
     try:
         oggi = datetime.now().date()
-        mese_fa = oggi.replace(day=1).strftime("%Y-%m-%d")
+        mese_corrente = oggi.replace(day=1).strftime("%Y-%m-%d")
+        sei_mesi_fa = (oggi - timedelta(days=180)).strftime("%Y-%m-%d")
+        anno_fa = (oggi - timedelta(days=365)).strftime("%Y-%m-%d")
 
+        # Totali assoluti
         acquisti = conn.execute("SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='acquisto'").fetchone()["n"]
         consumi = conn.execute("SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='consumo'").fetchone()["n"]
         eliminati = conn.execute("SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='eliminato'").fetchone()["n"]
         acquisti_mese = conn.execute(
-            "SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='acquisto' AND data>=?", (mese_fa,)
+            "SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='acquisto' AND data>=?", (mese_corrente,)
         ).fetchone()["n"]
+        eliminati_mese = conn.execute(
+            "SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='eliminato' AND data>=?", (mese_corrente,)
+        ).fetchone()["n"]
+        consumi_mese = conn.execute(
+            "SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='consumo' AND data>=?", (mese_corrente,)
+        ).fetchone()["n"]
+
+        # Top 5
         top_acquistati = conn.execute(
             "SELECT nome, marca, SUM(quantita) as totale FROM storico_movimenti WHERE tipo='acquisto' "
             "GROUP BY ean, nome, marca ORDER BY totale DESC LIMIT 5"
@@ -508,15 +640,76 @@ def statistiche():
             "SELECT nome, marca, SUM(quantita) as totale FROM storico_movimenti WHERE tipo='consumo' "
             "GROUP BY ean, nome, marca ORDER BY totale DESC LIMIT 5"
         ).fetchall()
+        top_sprecati = conn.execute(
+            "SELECT nome, marca, SUM(quantita) as totale FROM storico_movimenti WHERE tipo='eliminato' "
+            "GROUP BY ean, nome, marca ORDER BY totale DESC LIMIT 5"
+        ).fetchall()
         per_posizione = conn.execute(
             "SELECT posizione, COUNT(*) as n FROM prodotti WHERE quantita>0 GROUP BY posizione"
         ).fetchall()
 
+        # Trend mensile ultimi 6 mesi (per chart line)
+        trend_rows = conn.execute(
+            "SELECT strftime('%Y-%m', data) as mese, tipo, COUNT(*) as n "
+            "FROM storico_movimenti WHERE data >= ? "
+            "GROUP BY mese, tipo ORDER BY mese ASC",
+            (sei_mesi_fa,),
+        ).fetchall()
+        trend = {}
+        for r in trend_rows:
+            mese = r["mese"]
+            if mese not in trend:
+                trend[mese] = {"acquisto": 0, "consumo": 0, "eliminato": 0}
+            trend[mese][r["tipo"]] = r["n"]
+
+        # Anti-spreco: % spreco vs consumi totali ultimi 6 mesi
+        spreco_6m = conn.execute(
+            "SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='eliminato' AND data>=?", (sei_mesi_fa,)
+        ).fetchone()["n"]
+        consumo_6m = conn.execute(
+            "SELECT COUNT(*) as n FROM storico_movimenti WHERE tipo='consumo' AND data>=?", (sei_mesi_fa,)
+        ).fetchone()["n"]
+        totale_6m = spreco_6m + consumo_6m
+        spreco_pct = round((spreco_6m / totale_6m * 100), 1) if totale_6m > 0 else 0
+
+        # Categoria più sprecata (ultimi 6 mesi)
+        top_categorie_sprecate = conn.execute(
+            "SELECT categoria, COUNT(*) as n FROM storico_movimenti "
+            "WHERE tipo='eliminato' AND data>=? AND categoria != '' "
+            "GROUP BY categoria ORDER BY n DESC LIMIT 3",
+            (sei_mesi_fa,),
+        ).fetchall()
+
+        # Spesa stimata mese corrente (solo se prezzi presenti)
+        spesa_mese = conn.execute(
+            "SELECT COALESCE(SUM(quantita * prezzo), 0) as totale FROM storico_movimenti "
+            "WHERE tipo='acquisto' AND data>=? AND prezzo IS NOT NULL", (mese_corrente,)
+        ).fetchone()["totale"]
+        spreco_mese_eur = conn.execute(
+            "SELECT COALESCE(SUM(quantita * prezzo), 0) as totale FROM storico_movimenti "
+            "WHERE tipo='eliminato' AND data>=? AND prezzo IS NOT NULL", (mese_corrente,)
+        ).fetchone()["totale"]
+
         return jsonify({
-            "totali": {"acquisti": acquisti, "consumi": consumi, "eliminati": eliminati, "acquisti_mese": acquisti_mese},
+            "totali": {
+                "acquisti": acquisti, "consumi": consumi, "eliminati": eliminati,
+                "acquisti_mese": acquisti_mese, "eliminati_mese": eliminati_mese, "consumi_mese": consumi_mese,
+            },
             "top_acquistati": [dict(r) for r in top_acquistati],
             "top_consumati": [dict(r) for r in top_consumati],
+            "top_sprecati": [dict(r) for r in top_sprecati],
             "per_posizione": [dict(r) for r in per_posizione],
+            "trend_6mesi": trend,
+            "spreco": {
+                "percentuale": spreco_pct,
+                "eliminati_6m": spreco_6m,
+                "consumati_6m": consumo_6m,
+                "top_categorie": [dict(r) for r in top_categorie_sprecate],
+            },
+            "spesa_stimata": {
+                "mese_corrente": round(spesa_mese, 2),
+                "spreco_mese_corrente": round(spreco_mese_eur, 2),
+            },
         })
     finally:
         conn.close()
