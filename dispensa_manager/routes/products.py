@@ -121,13 +121,25 @@ def _async(fn, *args, **kwargs):
     threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True).start()
 
 
-def invia_telegram(testo):
-    """Invia messaggio Telegram. Tronca se supera limite (4096) e logga errori HTTP."""
+def invia_telegram(testo, categoria=None):
+    """Invia messaggio Telegram. Tronca se supera limite (4096) e logga errori HTTP.
+    categoria opzionale ('acquisto', 'modifica', 'eliminazione') controlla se notifica
+    è abilitata via settings (notif_telegram_<categoria>). Se categoria=None invia sempre."""
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
     if not token or not chat_id_raw:
         logger.warning("Telegram non configurato (token o chat_id mancanti nelle opzioni HA)")
         return
+    # Controlla se la categoria specifica è abilitata
+    if categoria:
+        conn = get_db()
+        try:
+            enabled = get_setting(conn, f"notif_telegram_{categoria}", "1")
+            if enabled != "1":
+                logger.info("Notifica Telegram '%s' disabilitata da settings", categoria)
+                return
+        finally:
+            conn.close()
     if len(testo) > TELEGRAM_MAX_LEN:
         logger.warning("Messaggio Telegram troppo lungo (%d char) — troncato a %d", len(testo), TELEGRAM_MAX_LEN)
         testo = testo[:TELEGRAM_MAX_LEN - 60] + "\n\n_…messaggio troncato, apri l'app per il dettaglio_"
@@ -141,7 +153,7 @@ def invia_telegram(testo):
             if r.status_code != 200:
                 logger.error("Telegram chat %s respinto (HTTP %d): %s", cid, r.status_code, r.text[:300])
             else:
-                logger.info("Telegram chat %s OK (%d char)", cid, len(testo))
+                logger.info("Telegram chat %s OK (%d char, cat=%s)", cid, len(testo), categoria or "default")
         except Exception as e:
             logger.error("Errore Telegram %s: %s", cid, e)
 
@@ -357,7 +369,7 @@ def aggiungi_prodotto():
         f"\n\U0001f4c5 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}"
         if scad else ""
     )
-    _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{nome}* ×{qty}\n{_pos_icon(pos)} {pos}{scad_str}")
+    _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{nome}* ×{qty}\n{_pos_icon(pos)} {pos}{scad_str}", "acquisto")
 
     return jsonify({"ok": True}), 201
 
@@ -418,7 +430,7 @@ def aggiorna_prodotto(id):
             cambiamenti.append("Note aggiornate")
         if cambiamenti:
             corpo = "\n".join(f"• {c}" for c in cambiamenti)
-            _async(invia_telegram, f"✏️ *Modificato: {nome}*\n\n{corpo}")
+            _async(invia_telegram, f"✏️ *Modificato: {nome}*\n\n{corpo}", "modifica")
 
     return jsonify({"ok": True})
 
@@ -441,7 +453,7 @@ def elimina_prodotto(id):
             marca=p["marca"] or "", categoria=p["categoria"] or "", quantita=p["quantita"],
         )
         pos = p["posizione"] or "Dispensa"
-        _async(invia_telegram, f"\U0001f5d1️ *Eliminato*\n\n*{p['nome']}*\n{_pos_icon(pos)} {pos}")
+        _async(invia_telegram, f"\U0001f5d1️ *Eliminato*\n\n*{p['nome']}*\n{_pos_icon(pos)} {pos}", "eliminazione")
     _async(aggiorna_sensori_ha)
     return jsonify({"ok": True})
 
@@ -597,9 +609,7 @@ def test_telegram():
 @bp.get("/api/report")
 @api_key_or_jwt
 def report_dispensa():
-    """Report riassuntivo dispensa via Telegram.
-    NON elenca tutti i prodotti OK (sarebbe troppo lungo per dispense grandi).
-    Mostra: totali + scaduti + in scadenza + esauriti (con dettagli)."""
+    """Report riassuntivo dispensa via Telegram (compatto, non elenca tutti i prodotti OK)."""
     token = get_ha_option("telegram_token", "")
     chat_id_raw = get_ha_option("telegram_chat_id", "")
 
@@ -615,7 +625,7 @@ def report_dispensa():
 
     oggi = datetime.now().date()
     in_scadenza, scaduti, esauriti = [], [], []
-    totale_ok = 0  # prodotti attivi con scadenza ok o senza scadenza
+    totale_ok = 0
 
     for p in prodotti:
         if p["quantita"] <= 0:
