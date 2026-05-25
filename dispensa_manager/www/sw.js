@@ -1,9 +1,7 @@
-const CACHE = 'dispensa-v9';
+const CACHE = 'dispensa-v10';
 
 const STATIC_ASSETS = [
   'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
-  'style.css',
-  'app.js',
 ];
 
 self.addEventListener('install', e => {
@@ -31,7 +29,12 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  if (url.endsWith('/') || url.includes('index.html')) {
+  // Network-first per HTML, CSS e JS dell'app (no flash di vecchie versioni)
+  const isAppAsset = url.endsWith('/') || url.includes('index.html')
+    || url.endsWith('style.css') || url.includes('style.css?')
+    || url.endsWith('app.js') || url.includes('app.js?');
+
+  if (isAppAsset) {
     e.respondWith(
       fetch(e.request)
         .then(r => {
@@ -39,12 +42,12 @@ self.addEventListener('fetch', e => {
           caches.open(CACHE).then(c => c.put(e.request, clone));
           return r;
         })
-        .catch(() => caches.match(e.request))
+        .catch(() => caches.match(e.request, { ignoreSearch: true }))
     );
     return;
   }
 
-  // ignoreSearch:true → cache hit anche con querystring di cache-busting (?v=2.0.x)
+  // Cache-first per le altre risorse statiche (librerie CDN, immagini)
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request))
   );
