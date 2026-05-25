@@ -418,7 +418,7 @@ def aggiorna_prodotto(id):
             # Se new_url è URL normale, lascia stare data come è
 
         fields, values = [], []
-        for campo in ["nome", "marca", "quantita", "scadenza", "note", "posizione", "immagine_url", "prezzo"]:
+        for campo in ["nome", "marca", "ean", "quantita", "scadenza", "note", "posizione", "immagine_url", "prezzo"]:
             if campo in data:
                 fields.append(f"{campo}=?")
                 val = data[campo]
