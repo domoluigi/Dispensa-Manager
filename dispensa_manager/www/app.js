@@ -141,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') document.getElementById('login-password')?.focus();
   });
 });
-// ── Fine auth helpers ─────────────────────────────────────────────────────────
 
 // ── PWA install ──────────────────────────────────────────────────────────────
 let deferredInstallPrompt = null;
@@ -149,7 +148,7 @@ let deferredInstallPrompt = null;
 function isStandalonePWA() {
   return window.matchMedia('(display-mode: standalone)').matches
       || window.matchMedia('(display-mode: fullscreen)').matches
-      || window.navigator.standalone === true;  // iOS Safari
+      || window.navigator.standalone === true;
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -186,17 +185,11 @@ function updatePWAInstallUI() {
 }
 
 async function installaPWA() {
-  if (!deferredInstallPrompt) {
-    mostraIstruzioniInstall();
-    return;
-  }
+  if (!deferredInstallPrompt) { mostraIstruzioniInstall(); return; }
   deferredInstallPrompt.prompt();
   const { outcome } = await deferredInstallPrompt.userChoice;
-  if (outcome === 'accepted') {
-    toast('⏳ Installazione in corso...');
-  } else {
-    toast('Installazione annullata');
-  }
+  if (outcome === 'accepted') toast('⏳ Installazione in corso...');
+  else toast('Installazione annullata');
   deferredInstallPrompt = null;
   updatePWAInstallUI();
 }
@@ -211,55 +204,20 @@ function mostraIstruzioniInstall() {
 
   let html = '';
   if (isIOS) {
-    html = `
-      <p><strong>iOS (Safari):</strong></p>
-      <ol style="margin-left:18px;">
-        <li>Tocca l'icona <strong>Condividi</strong> ⬆️ in basso</li>
-        <li>Scorri e tocca <strong>"Aggiungi alla schermata Home"</strong></li>
-        <li>Conferma con <strong>"Aggiungi"</strong> in alto a destra</li>
-      </ol>
-      <p style="color:var(--muted);font-size:12px;margin-top:8px;">⚠️ Su iOS funziona solo con Safari (non Chrome/Firefox).</p>
-    `;
+    html = `<p><strong>iOS (Safari):</strong></p><ol style="margin-left:18px;"><li>Tocca l'icona <strong>Condividi</strong> ⬆️ in basso</li><li>Scorri e tocca <strong>"Aggiungi alla schermata Home"</strong></li><li>Conferma con <strong>"Aggiungi"</strong></li></ol><p style="color:var(--muted);font-size:12px;margin-top:8px;">⚠️ Su iOS funziona solo con Safari.</p>`;
   } else if (isAndroid && isChrome) {
-    html = `
-      <p><strong>Android (Chrome):</strong></p>
-      <ol style="margin-left:18px;">
-        <li>Tocca il menu <strong>⋮</strong> in alto a destra</li>
-        <li>Tocca <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong></li>
-        <li>Conferma con <strong>"Installa"</strong></li>
-      </ol>
-      <p style="color:var(--muted);font-size:12px;margin-top:8px;">💡 Se il pulsante non appare, ricarica la pagina (sito già installato?).</p>
-    `;
+    html = `<p><strong>Android (Chrome):</strong></p><ol style="margin-left:18px;"><li>Tocca il menu <strong>⋮</strong> in alto a destra</li><li>Tocca <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong></li><li>Conferma con <strong>"Installa"</strong></li></ol>`;
   } else if (isFirefox) {
-    html = `
-      <p><strong>Firefox:</strong></p>
-      <ol style="margin-left:18px;">
-        <li>Tocca il menu <strong>⋮</strong></li>
-        <li>Tocca <strong>"Installa"</strong></li>
-      </ol>
-      <p style="color:var(--muted);font-size:12px;margin-top:8px;">💡 Firefox supporta PWA solo su Android, non su desktop.</p>
-    `;
+    html = `<p><strong>Firefox:</strong></p><ol style="margin-left:18px;"><li>Tocca il menu <strong>⋮</strong></li><li>Tocca <strong>"Installa"</strong></li></ol>`;
   } else if (isSafari) {
-    html = `
-      <p><strong>Safari (Mac):</strong></p>
-      <ol style="margin-left:18px;">
-        <li>Menu <strong>File → Aggiungi al Dock</strong></li>
-      </ol>
-    `;
+    html = `<p><strong>Safari (Mac):</strong></p><ol style="margin-left:18px;"><li>Menu <strong>File → Aggiungi al Dock</strong></li></ol>`;
   } else {
-    html = `
-      <p><strong>Browser desktop (Chrome/Edge):</strong></p>
-      <ol style="margin-left:18px;">
-        <li>Clicca l'icona <strong>⊕ Installa</strong> nella barra degli indirizzi</li>
-        <li>Oppure menu <strong>⋮ → Installa Dispensa Manager</strong></li>
-      </ol>
-    `;
+    html = `<p><strong>Browser desktop (Chrome/Edge):</strong></p><ol style="margin-left:18px;"><li>Clicca <strong>⊕ Installa</strong> nella barra indirizzi</li><li>Oppure menu <strong>⋮ → Installa Dispensa Manager</strong></li></ol>`;
   }
   document.getElementById('modal-install-content').innerHTML = html;
   openModal('modal-install-help');
 }
 
-// Verifica stato all'avvio (timeout per dare tempo al beforeinstallprompt di arrivare)
 setTimeout(updatePWAInstallUI, 1500);
 // ── Fine PWA install ──────────────────────────────────────────────────────────
 
@@ -347,6 +305,13 @@ function setFiltro(f) {
   applicaFiltroSort();
 }
 
+// Search debouncing — aspetta 200ms prima di filtrare durante typing
+let _searchTimer = null;
+function ricercaDebounce() {
+  if (_searchTimer) clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(applicaFiltroSort, 200);
+}
+
 function applicaFiltroSort() {
   const q = (document.getElementById('ricerca-input')?.value || '').toLowerCase().trim();
   const ord = document.getElementById('sort-select')?.value || 'inserimento';
@@ -398,10 +363,7 @@ function applicaFiltroSort() {
   renderInventario(attivi, esauriti);
 }
 
-function avviaScannerRicerca() {
-  scanMode = 'search';
-  showScreen('screen-scan');
-}
+function avviaScannerRicerca() { scanMode = 'search'; showScreen('screen-scan'); }
 
 function cercaNellaDispensa(ean) {
   const trovato = prodottiCache.find(p => p.ean === ean);
@@ -477,11 +439,26 @@ async function salvaModifica() {
   }
 }
 
+// Dark mode — supporta "auto" (segue sistema) se localStorage non settato
 function initDarkMode() {
-  const isDark = localStorage.getItem('dispensa_dark') === '1';
-  if (isDark) document.documentElement.classList.add('dark');
+  const stored = localStorage.getItem('dispensa_dark');
+  let isDark;
+  if (stored === '1') isDark = true;
+  else if (stored === '0') isDark = false;
+  else isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.classList.toggle('dark', isDark);
   const btn = document.getElementById('dark-toggle');
   if (btn) btn.classList.toggle('on', isDark);
+  // Ascolta cambi sistema solo se siamo in modalità auto
+  if (!stored && window.matchMedia('(prefers-color-scheme: dark)').addEventListener) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+      if (!localStorage.getItem('dispensa_dark')) {
+        document.documentElement.classList.toggle('dark', e.matches);
+        const b = document.getElementById('dark-toggle');
+        if (b) b.classList.toggle('on', e.matches);
+      }
+    });
+  }
 }
 
 function toggleDarkMode() {
@@ -489,7 +466,28 @@ function toggleDarkMode() {
   localStorage.setItem('dispensa_dark', isDark ? '1' : '0');
   const btn = document.getElementById('dark-toggle');
   if (btn) btn.classList.toggle('on', isDark);
+  const info = document.getElementById('dark-mode-info');
+  if (info) info.textContent = 'Impostato manualmente. Tocca a lungo per tornare ad automatico.';
+  // Long-press sul toggle resetta a "auto"
 }
+
+// Long-press sul toggle per resettare a "auto"
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('dark-toggle');
+  if (!btn) return;
+  let _lpTimer = null;
+  btn.addEventListener('touchstart', () => {
+    _lpTimer = setTimeout(() => {
+      localStorage.removeItem('dispensa_dark');
+      initDarkMode();
+      const info = document.getElementById('dark-mode-info');
+      if (info) info.textContent = 'Segue automaticamente il tema di sistema. Tocca per sovrascrivere.';
+      toast('🌗 Tema automatico (sistema)');
+    }, 800);
+  }, { passive: true });
+  btn.addEventListener('touchend', () => { if (_lpTimer) clearTimeout(_lpTimer); });
+  btn.addEventListener('touchcancel', () => { if (_lpTimer) clearTimeout(_lpTimer); });
+});
 
 function esportaCSV() {
   if (!prodottiCache.length) { toast('Nessun prodotto da esportare'); return; }
@@ -737,9 +735,7 @@ function fermaScanner() {
   if (video && video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
 }
 
-function avviaFotoScan() {
-  document.getElementById('barcode-file-input').click();
-}
+function avviaFotoScan() { document.getElementById('barcode-file-input').click(); }
 
 async function scansionaFoto(input) {
   const file = input.files[0];
@@ -765,8 +761,32 @@ async function scansionaFoto(input) {
   }
 }
 
+// ── Scan duplicato: se il barcode è già in dispensa, propone di incrementare ─
+let _scanDuplicateEan = null;
+let _scanDuplicateProdotti = null;
+
 async function cercaProdotto(ean) {
   document.getElementById('scan-status').textContent = 'Ricerca prodotto...';
+  // Step 1: controlla se il prodotto esiste già in dispensa (solo quantita > 0)
+  try {
+    const r1 = await apiFetch(`${API_BASE()}/api/prodotti/by-ean/${encodeURIComponent(ean)}`);
+    if (r1.ok) {
+      const esistenti = await r1.json();
+      if (Array.isArray(esistenti) && esistenti.length > 0) {
+        _scanDuplicateEan = ean;
+        _scanDuplicateProdotti = esistenti;
+        mostraModalDuplicato(esistenti);
+        return;
+      }
+    }
+  } catch(e) {
+    console.warn('Errore check duplicato (continuo):', e);
+  }
+  // Step 2: non esiste in dispensa → flusso normale (cerca su DB online/cache)
+  await cercaProdottoOnline(ean);
+}
+
+async function cercaProdottoOnline(ean) {
   try {
     const r = await apiFetch(`${API_BASE()}/api/barcode/${ean}`);
     const data = await r.json();
@@ -774,6 +794,48 @@ async function cercaProdotto(ean) {
   } catch(e) {
     apriConferma({ trovato: false, ean, nome: '', marca: '', categoria: '', immagine_url: '' });
   }
+}
+
+function mostraModalDuplicato(esistenti) {
+  const totale = esistenti.reduce((acc, p) => acc + (p.quantita || 0), 0);
+  const primo = esistenti[0];
+  let html = `<p>Hai già <strong>${totale}</strong> <strong>${primo.nome}</strong> in dispensa:</p><ul style="margin:10px 0 10px 20px;line-height:1.8;">`;
+  esistenti.forEach(p => {
+    const pos = p.posizione || 'Dispensa';
+    const scadStr = p.scadenza ? ' — scade <em>' + new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'short',year:'numeric'}) + '</em>' : '';
+    html += `<li>${pos}: <strong>${p.quantita}</strong> pz${scadStr}</li>`;
+  });
+  html += '</ul><p style="color:var(--muted);font-size:13px;margin-top:8px;">Vuoi aggiungere +1 al primo o creare una nuova voce (es. lotto/scadenza diversa)?</p>';
+  document.getElementById('modal-dup-content').innerHTML = html;
+  openModal('modal-scan-duplicato');
+}
+
+async function aggiungiAEsistente() {
+  closeModal('modal-scan-duplicato');
+  if (!_scanDuplicateProdotti || _scanDuplicateProdotti.length === 0) return;
+  const primo = _scanDuplicateProdotti[0];
+  const nuovaQty = primo.quantita + 1;
+  try {
+    await apiFetch(`${API_BASE()}/api/prodotti/${primo.id}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({quantita: nuovaQty})
+    });
+    toast(`✅ ${primo.nome}: ${primo.quantita} → ${nuovaQty}`);
+    showScreen('screen-inventario');
+  } catch(e) {
+    toast('Errore aggiornamento');
+  }
+  _scanDuplicateEan = null;
+  _scanDuplicateProdotti = null;
+}
+
+function creaNuovoDopoDuplicato() {
+  closeModal('modal-scan-duplicato');
+  const ean = _scanDuplicateEan;
+  _scanDuplicateEan = null;
+  _scanDuplicateProdotti = null;
+  if (ean) cercaProdottoOnline(ean);
 }
 
 function suggerisciDaCategoria(categoria) {
@@ -944,11 +1006,17 @@ function renderListaSpesa(items) {
   let html = '';
   items.forEach(item => {
     const done = item.completato === 1;
+    const qty = item.quantita || 1;
     html += `<div class="spesa-item">
-      <div class="spesa-check ${done ? 'done' : ''}" onclick="toggleSpesa(${item.id}, ${done ? 0 : 1})"></div>
+      <div class="spesa-check ${done ? 'done' : ''}" onclick="toggleSpesa(${item.id}, ${done ? 0 : 1}, ${qty})"></div>
       <div class="spesa-info" style="flex:1;min-width:0;">
         <div class="spesa-nome ${done ? 'done' : ''}">${item.nome}</div>
         ${item.marca ? `<div style="font-size:12px;color:var(--muted);">${item.marca}</div>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-right:4px;" onclick="event.stopPropagation()">
+        <div class="quick-btn" style="width:28px;height:28px;font-size:14px;" onclick="cambiaQtySpesa(${item.id}, ${qty - 1}, ${item.completato})">−</div>
+        <span style="font-weight:600;min-width:22px;text-align:center;font-size:13px;color:var(--text);">${qty}</span>
+        <div class="quick-btn" style="width:28px;height:28px;font-size:14px;" onclick="cambiaQtySpesa(${item.id}, ${qty + 1}, ${item.completato})">+</div>
       </div>
       <div class="spesa-del" onclick="eliminaSpesa(${item.id})">✕</div>
     </div>`;
@@ -956,9 +1024,23 @@ function renderListaSpesa(items) {
   document.getElementById('lista-spesa').innerHTML = html;
 }
 
-async function toggleSpesa(id, completato) {
+async function cambiaQtySpesa(id, nuovaQty, completato) {
+  if (nuovaQty < 1) {
+    // Sotto 1 → elimina
+    if (confirm('Quantità a 0: rimuovere dalla lista?')) await eliminaSpesa(id);
+    return;
+  }
   await apiFetch(`${API_BASE()}/api/lista-spesa/${id}`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({completato, quantita: 1})
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ completato: completato || 0, quantita: nuovaQty })
+  });
+  caricaListaSpesa();
+}
+
+async function toggleSpesa(id, completato, quantita) {
+  await apiFetch(`${API_BASE()}/api/lista-spesa/${id}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ completato, quantita: quantita || 1 })
   });
   caricaListaSpesa();
 }
@@ -1120,16 +1202,11 @@ function confermaManualeOCR() {
   }
 }
 
-function estraiDataLibera(input) {
-  const t = input.trim().replace(/\s+/g, ' ');
-  return estraiDataScadenza(t);
-}
+function estraiDataLibera(input) { const t = input.trim().replace(/\s+/g, ' '); return estraiDataScadenza(t); }
 
 function estraiDataScadenza(testo) {
   if (!testo) return null;
-  let t = testo.toUpperCase()
-    .replace(/[Oo]/g, '0').replace(/[Il\|]/g, '1').replace(/[Ss]/g, '5')
-    .replace(/[Bb]/g, '8').replace(/\r/g, ' ').replace(/\n/g, ' ');
+  let t = testo.toUpperCase().replace(/[Oo]/g, '0').replace(/[Il\|]/g, '1').replace(/[Ss]/g, '5').replace(/[Bb]/g, '8').replace(/\r/g, ' ').replace(/\n/g, ' ');
   t = t.replace(/\b(EXP|SCAD|TMC|BB|USE BY|BEST BY|CONSUMARE ENTRO|CONS\.?\s*ENT\.?|LOT|LOTTO|L\.?)\s*/g, ' ');
   let m = t.match(/\b(\d{2})(\d{2})(\d{2})\b/);
   if (m) { const [, g, ms, aa] = m; const a = '20' + aa; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
@@ -1170,16 +1247,76 @@ function formatISO(data) {
   return `${y}-${m}-${d}`;
 }
 
-function formatDataIT(iso) {
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
-}
-// ── Fine OCR ──────────────────────────────────────────────────────────────────
+function formatDataIT(iso) { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; }
 
 function salvaImpostazioni() {
   const giorni = document.getElementById('set-giorni').value;
   if (giorni) localStorage.setItem('dispensa_giorni', giorni);
   toast('Impostazioni salvate');
+}
+
+// ── Pull-to-refresh ──────────────────────────────────────────────────────────
+let _ptrStartY = 0;
+let _ptrCurrent = 0;
+let _ptrActive = false;
+let _ptrIndicator = null;
+const PTR_THRESHOLD = 70;
+const PTR_MAX = 100;
+const PTR_SCREENS = ['screen-inventario', 'screen-spesa', 'screen-statistiche'];
+
+function initPullToRefresh() {
+  // Disabilita PTR nativo del browser
+  document.body.style.overscrollBehaviorY = 'contain';
+  // Crea indicatore
+  _ptrIndicator = document.createElement('div');
+  _ptrIndicator.id = 'ptr-indicator';
+  _ptrIndicator.style.cssText = 'position:fixed;top:-50px;left:50%;transform:translateX(-50%) rotate(0deg);width:40px;height:40px;background:var(--surface);border:0.5px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:9000;transition:top 0.2s,transform 0.1s;font-size:18px;color:var(--text);box-shadow:0 2px 12px rgba(0,0,0,0.18);pointer-events:none;';
+  _ptrIndicator.textContent = '↓';
+  document.body.appendChild(_ptrIndicator);
+
+  document.addEventListener('touchstart', e => {
+    const active = document.querySelector('.screen.active');
+    if (!active || !PTR_SCREENS.includes(active.id)) return;
+    const scroller = active.querySelector('.content');
+    if (!scroller || scroller.scrollTop > 0) return;
+    _ptrStartY = e.touches[0].clientY;
+    _ptrActive = true;
+    _ptrCurrent = 0;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!_ptrActive) return;
+    _ptrCurrent = e.touches[0].clientY - _ptrStartY;
+    if (_ptrCurrent <= 0) {
+      _ptrIndicator.style.top = '-50px';
+      return;
+    }
+    const pos = Math.min(_ptrCurrent / 2, PTR_MAX) - 50;
+    _ptrIndicator.style.top = pos + 'px';
+    _ptrIndicator.textContent = _ptrCurrent > PTR_THRESHOLD ? '↻' : '↓';
+    _ptrIndicator.style.transform = `translateX(-50%) rotate(${_ptrCurrent * 1.5}deg)`;
+  }, { passive: true });
+
+  document.addEventListener('touchend', async () => {
+    if (!_ptrActive) return;
+    _ptrActive = false;
+    if (_ptrCurrent > PTR_THRESHOLD) {
+      _ptrIndicator.textContent = '⏳';
+      _ptrIndicator.style.top = '20px';
+      _ptrIndicator.style.transform = 'translateX(-50%) rotate(0deg)';
+      const active = document.querySelector('.screen.active');
+      try {
+        if (active?.id === 'screen-inventario') await caricaInventario();
+        else if (active?.id === 'screen-spesa') await caricaListaSpesa();
+        else if (active?.id === 'screen-statistiche') await caricaStatistiche();
+      } catch(e) {}
+      setTimeout(() => { _ptrIndicator.style.top = '-50px'; }, 400);
+    } else {
+      _ptrIndicator.style.top = '-50px';
+      _ptrIndicator.style.transform = 'translateX(-50%) rotate(0deg)';
+    }
+    _ptrCurrent = 0;
+  }, { passive: true });
 }
 
 const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0';
@@ -1213,10 +1350,10 @@ async function applicaAggiornamento() {
 document.getElementById('set-giorni').value = localStorage.getItem('dispensa_giorni') || '3';
 initDarkMode();
 initAuth().then(() => caricaInventario());
+initPullToRefresh();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js')
-    .catch(err => console.warn('SW non registrato:', err));
+  navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW non registrato:', err));
 }
 
 checkForUpdates();
@@ -1228,7 +1365,6 @@ function applyDeepLink() {
   const filtro = params.get('filter');
   const validi = ['tutti', 'scadenza', 'scaduti', 'frigo', 'freezer', 'dispensa'];
   if (filtro && validi.indexOf(filtro) !== -1) setFiltro(filtro);
-  // PWA shortcut deep links
   const action = params.get('action');
   if (action === 'scan') { scanMode = 'add'; showScreen('screen-scan'); }
   const tab = params.get('tab');
@@ -1262,19 +1398,49 @@ async function caricaImpostazioniAdmin() {
   const r = await apiFetch(`${API_BASE()}/api/admin/settings`);
   const settings = await r.json();
   const el = document.getElementById('admin-settings-form');
-  el.innerHTML = settings.map(s => `
-    <div class="setting-key">${s.description || s.key}</div>
-    <input class="setting-input" type="${s.key.includes('password') || s.key.includes('token') ? 'password' : 'text'}"
-      id="setting-${s.key}" value="${s.value}" placeholder="${s.key}">
-  `).join('');
+  // Separa toggle (notif_*) da input regolari, mostra toggle in cima raggruppati
+  const toggles = settings.filter(s => s.key.startsWith('notif_'));
+  const inputs = settings.filter(s => !s.key.startsWith('notif_'));
+  let html = '';
+  if (toggles.length) {
+    html += '<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">🔔 Notifiche Telegram</div>';
+    toggles.forEach(s => {
+      const on = s.value === '1';
+      html += `
+        <div class="setting-row" style="padding:10px 0;">
+          <span style="font-size:14px;flex:1;">${s.description || s.key}</span>
+          <button class="toggle ${on ? 'on' : ''}" id="setting-${s.key}" data-key="${s.key}" data-value="${on ? '1' : '0'}" data-istoggle="1" onclick="toggleNotif(this)"></button>
+        </div>
+      `;
+    });
+    html += '<div style="height:16px;"></div>';
+  }
+  inputs.forEach(s => {
+    html += `
+      <div class="setting-key">${s.description || s.key}</div>
+      <input class="setting-input" type="${s.key.includes('password') || s.key.includes('token') ? 'password' : 'text'}"
+        id="setting-${s.key}" value="${s.value}" placeholder="${s.key}">
+    `;
+  });
+  el.innerHTML = html;
+}
+
+function toggleNotif(btn) {
+  const on = btn.classList.toggle('on');
+  btn.dataset.value = on ? '1' : '0';
 }
 
 async function salvaImpostazioniAdmin() {
-  const inputs = document.querySelectorAll('#admin-settings-form .setting-input');
   const payload = {};
-  inputs.forEach(inp => {
+  // Text inputs
+  document.querySelectorAll('#admin-settings-form .setting-input').forEach(inp => {
     const key = inp.id.replace('setting-', '');
     payload[key] = inp.value;
+  });
+  // Toggles (notif_*)
+  document.querySelectorAll('#admin-settings-form [data-istoggle="1"]').forEach(t => {
+    const key = t.id.replace('setting-', '');
+    payload[key] = t.dataset.value;
   });
   const r = await apiFetch(`${API_BASE()}/api/admin/settings`, {
     method: 'PATCH',
@@ -1406,7 +1572,7 @@ async function banIP() {
   }
 }
 
-// ── API Key (automazioni HA) ──────────────────────────────────────────────────
+// ── API Key ───────────────────────────────────────────────────────────────────
 async function caricaApiKey() {
   try {
     const r = await apiFetch(`${API_BASE()}/api/admin/api-key`);
@@ -1415,25 +1581,17 @@ async function caricaApiKey() {
       const el = document.getElementById('api-key-display');
       if (el) el.value = data.api_key || '';
     }
-  } catch(e) {
-    console.warn('Errore caricamento API key:', e);
-  }
+  } catch(e) { console.warn('Errore caricamento API key:', e); }
 }
 
 function copiaApiKey() {
   const el = document.getElementById('api-key-display');
   if (!el || !el.value) { toast('Nessuna API key da copiare'); return; }
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(el.value).then(() => {
-      toast('🔑 API key copiata!');
-    }).catch(() => {
-      el.select(); document.execCommand('copy');
-      toast('🔑 API key copiata!');
+    navigator.clipboard.writeText(el.value).then(() => { toast('🔑 API key copiata!'); }).catch(() => {
+      el.select(); document.execCommand('copy'); toast('🔑 API key copiata!');
     });
-  } else {
-    el.select(); document.execCommand('copy');
-    toast('🔑 API key copiata!');
-  }
+  } else { el.select(); document.execCommand('copy'); toast('🔑 API key copiata!'); }
 }
 
 function apriRigeneraApiKey() {
