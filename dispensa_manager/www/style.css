@@ -45,10 +45,15 @@ body {
   padding: 10px 4px 6px; cursor: pointer; gap: 3px;
   touch-action: manipulation; user-select: none; -webkit-user-select: none;
 }
-.tab svg { width: 24px; height: 24px; stroke: var(--hint); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.15s; }
-.tab span { font-size: 10px; color: var(--hint); transition: color 0.15s; }
+.tab svg { width: 24px; height: 24px; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.15s; }
+.tab span { font-size: 10px; color: var(--muted); transition: color 0.15s; }
 .tab.active svg { stroke: var(--green); }
 .tab.active span { color: var(--green); }
+/* Tab icons inattive: piu chiare in dark mode per leggibilita */
+.dark .tab svg { stroke: #b8b8ae; stroke-width: 2; }
+.dark .tab span { color: #b8b8ae; }
+.dark .tab.active svg { stroke: var(--green); }
+.dark .tab.active span { color: var(--green); }
 
 .card { background: var(--surface); border-radius: 16px; border: 0.5px solid var(--border); overflow: hidden; margin-bottom: 12px; }
 .card-body { padding: 16px; }
