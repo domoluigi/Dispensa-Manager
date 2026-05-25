@@ -11,8 +11,6 @@ HA_MANAGED_KEYS = ("telegram_token", "telegram_chat_id", "cloudflare_url")
 INTERNAL_KEYS = ("schema_version", "jwt_secret_key", "api_key")
 
 
-# ── Utenti ────────────────────────────────────────────────────────────────────────────
-
 @bp.get("/users")
 @admin_required
 def list_users():
@@ -131,6 +129,7 @@ def update_settings():
     ALLOWED_KEYS = {
         "giorni_alert_scadenza", "soglia_scorte_minime",
         "max_login_attempts", "ban_window_minutes",
+        "notif_telegram_acquisto", "notif_telegram_modifica", "notif_telegram_eliminazione",
     }
     invalid = set(data.keys()) - ALLOWED_KEYS
     if invalid:
