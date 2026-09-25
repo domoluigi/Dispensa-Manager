@@ -16,6 +16,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger(__name__)
 
 OPTIONS_PATH = "/data/options.json"
+
+# CDN usate da index.html: Chart.js (jsdelivr), ZXing e Tesseract (unpkg);
+# Tesseract scarica core WASM e dati lingua da jsdelivr e usa worker blob:.
+_CDN = "https://cdn.jsdelivr.net https://unpkg.com"
+CSP = "; ".join([
+    "default-src 'self'",
+    f"script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: {_CDN}",
+    f"worker-src 'self' blob: {_CDN}",
+    f"connect-src 'self' blob: data: {_CDN} https://tessdata.projectnaptha.com",
+    "img-src 'self' data: blob: https:",
+    "style-src 'self' 'unsafe-inline'",
+    "media-src 'self' blob: mediastream:",
+    "font-src 'self' data:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+])
 _JWT_SECRET_CACHE = None
 
 # Backup automatico ogni 7 giorni (controllato ogni ora, sovrascrive auto_backup.json)
@@ -108,11 +126,28 @@ def create_app():
     # Limite upload (per restore backup): 64 MB
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
 
-    CORS(app, resources={r"/api/*": {
-        "origins": "*",
-        "allow_headers": ["Content-Type", "Authorization", "x-jarvis-token", "x-api-key"],
-        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    }})
+    # CORS (v2.0.19): il frontend chiama l'API sulla STESSA origine (tunnel o
+    # Ingress), quindi di norma non serve. Si abilita solo per l'origine
+    # indicata in cloudflare_url (frontend servito da un dominio diverso).
+    cf_origin = get_ha_option("cloudflare_url", "").rstrip("/")
+    if cf_origin:
+        CORS(app, resources={r"/api/*": {
+            "origins": [cf_origin],
+            "allow_headers": ["Content-Type", "Authorization", "x-api-key"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        }})
+
+    @app.after_request
+    def security_headers(resp):
+        """Header di sicurezza (v2.0.19). La CSP ammette script inline (handler
+        onclick e script anti-FOUC) ma limita da dove si caricano script e
+        dove si inviano dati: un eventuale XSS non puo' esfiltrare verso
+        domini terzi via fetch/XHR."""
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("Referrer-Policy", "same-origin")
+        resp.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
+        resp.headers.setdefault("Content-Security-Policy", CSP)
+        return resp
 
     JWTManager(app)
 
@@ -196,4 +231,7 @@ if __name__ == "__main__":
     # Backup automatico ogni 7 giorni
     threading.Thread(target=_auto_backup_loop, daemon=True).start()
     app = create_app()
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    # v2.0.19: server WSGI di produzione (Waitress) al posto del server di
+    # sviluppo di Flask, che non va esposto su Internet.
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=5000, threads=8, ident="Dispensa")

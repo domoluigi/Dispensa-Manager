@@ -8,6 +8,17 @@ const AUTH_KEY = 'dispensa_access';
 const REFRESH_KEY = 'dispensa_refresh';
 const USER_KEY = 'dispensa_user';
 
+// ── Escape per HTML (v2.0.19) ────────────────────────────────────────────────
+// Ogni dato variabile (nomi da Open Food Facts, input utente, EAN letti dalla
+// fotocamera) passa da qui prima di finire in innerHTML.
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+// Argomento stringa sicuro dentro un attributo onclick="fn(...)".
+function jsArg(v) { return esc(JSON.stringify(String(v ?? ''))); }
+// URL immagine: solo http(s) o percorsi relativi, mai javascript:/data:.
+function safeUrl(u) { const s = String(u ?? '').trim(); return /^(https?:\/\/|\/)/i.test(s) ? esc(s) : ''; }
+
 function getAccessToken() { return localStorage.getItem(AUTH_KEY) || ''; }
 function getRefreshToken() { return localStorage.getItem(REFRESH_KEY) || ''; }
 function getCurrentUser() { try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); } catch { return null; } }
@@ -209,7 +220,7 @@ function toastUndo(msg, undoFn, durata = 4000) {
   const t = document.getElementById('toast');
   if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
   _undoFn = undoFn;
-  t.innerHTML = `<span>${msg}</span><button class="toast-undo-btn" onclick="_eseguiUndo()">Annulla</button>`;
+  t.innerHTML = `<span>${esc(msg)}</span><button class="toast-undo-btn" onclick="_eseguiUndo()">Annulla</button>`;
   t.classList.add('show', 'with-undo');
   _undoTimer = setTimeout(() => { t.classList.remove('show', 'with-undo'); _undoFn = null; _undoTimer = null; }, durata);
 }
@@ -447,8 +458,8 @@ function renderInventario(attivi, esauriti) {
         <div class="bulk-check"></div>
         <div class="prod-dot ${dotClass}"></div>
         <div class="prod-info">
-          <div class="prod-nome">${p.nome}</div>
-          <div class="prod-meta">${p.marca ? p.marca + ' · ' : ''}${p.posizione ? p.posizione + (metaText ? ' · ' : '') : ''}${metaText}</div>
+          <div class="prod-nome">${esc(p.nome)}</div>
+          <div class="prod-meta">${p.marca ? esc(p.marca) + ' · ' : ''}${p.posizione ? esc(p.posizione) + (metaText ? ' · ' : '') : ''}${metaText}</div>
           ${badgeHtml}
         </div>
         <div class="prod-actions" onclick="event.stopPropagation()">
@@ -476,8 +487,8 @@ function renderInventario(attivi, esauriti) {
       esauritiHtml += `<div class="prod-item esaurito" data-id="${p.id}" onclick="apriDettaglio(${p.id})">
         <div class="prod-dot dot-out"></div>
         <div class="prod-info">
-          <div class="prod-nome esaurito-text">${p.nome}</div>
-          <div class="prod-meta">${p.marca ? p.marca + ' · ' : ''}${p.posizione || 'Dispensa'}</div>
+          <div class="prod-nome esaurito-text">${esc(p.nome)}</div>
+          <div class="prod-meta">${p.marca ? esc(p.marca) + ' · ' : ''}${esc(p.posizione || 'Dispensa')}</div>
         </div>
         <div class="prod-actions" onclick="event.stopPropagation()">
           <div class="quick-btn" onclick="aggiungiRapido(${p.id},0)">+</div>
@@ -639,7 +650,7 @@ function renderNutriments(p) {
   let nsHtml = '';
   if (p.nutriscore) {
     const color = nsColor[p.nutriscore] || 'var(--text)';
-    nsHtml = '<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:' + color + '">● ' + p.nutriscore + '</strong></div>';
+    nsHtml = '<div style="margin-top:12px;font-size:13px;color:var(--muted);">Nutri-Score: <strong style="font-size:16px;color:' + color + '">● ' + esc(p.nutriscore) + '</strong></div>';
   }
   return '<div class="card card-body" style="margin-top:8px;"><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;">📊 Valori nutrizionali per 100g</div><table style="width:100%;font-size:13px;border-collapse:collapse;">' + rows + '</table>' + nsHtml + '</div>';
 }
@@ -651,21 +662,21 @@ function apriDettaglio(id) {
   document.getElementById('det-title').textContent = p.nome;
   const scadFormatted = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'long',year:'numeric'}) : 'Non specificata';
   const isEsaurito = p.quantita <= 0;
-  const imgHtml = p.immagine_url ? '<img src="' + p.immagine_url + '" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);" onerror="this.style.display=\'none\'">' : '';
+  const imgHtml = p.immagine_url ? '<img src="' + safeUrl(p.immagine_url) + '" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);" onerror="this.style.display=\'none\'">' : '';
   const esauritoHtml = isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">□ Prodotto esaurito — rimane nel database</div>' : '';
   const posizioneLabel = p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa';
   const eanLabel = p.ean ? (p.ean.startsWith('MANUAL-') ? '—' : p.ean) : '—';
   const prezzoRow = p.prezzo ? `<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Prezzo</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);color:var(--green-d);">${Number(p.prezzo).toFixed(2)}€</td></tr>` : '';
   document.getElementById('det-content').innerHTML =
     '<div class="card card-body">' + imgHtml
-    + '<div style="font-size:20px;font-weight:700;margin-bottom:4px;">' + p.nome + '</div>'
-    + '<div style="font-size:14px;color:var(--muted);margin-bottom:20px;">' + (p.marca || '') + (p.categoria ? ' · ' + p.categoria : '') + '</div>'
+    + '<div style="font-size:20px;font-weight:700;margin-bottom:4px;">' + esc(p.nome) + '</div>'
+    + '<div style="font-size:14px;color:var(--muted);margin-bottom:20px;">' + esc(p.marca || '') + (p.categoria ? ' · ' + esc(p.categoria) : '') + '</div>'
     + esauritoHtml + '<table style="width:100%;font-size:14px;border-collapse:collapse;">'
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Posizione</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + posizioneLabel + '</td></tr>'
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Quantità</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + p.quantita + '</td></tr>'
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Scadenza</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + scadFormatted + '</td></tr>'
     + prezzoRow
-    + '<tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">' + eanLabel + '</td></tr></table></div>'
+    + '<tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">' + esc(eanLabel) + '</td></tr></table></div>'
     + renderNutriments(p)
     + '<div class="card card-body" style="margin-top:8px;"><div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>'
     + '<div class="qty-row" style="margin-bottom:12px;"><div class="qty-btn" onclick="cambiaQtyDet(-1)">−</div><div class="qty-val" id="det-qty-delta">1</div><div class="qty-btn" onclick="cambiaQtyDet(1)">+</div></div>'
@@ -813,7 +824,7 @@ function onBarcodeDetected(ean) {
   navigator.vibrate?.(150);
   beep();
   document.getElementById('scan-status').className = 'scan-found';
-  document.getElementById('scan-status').innerHTML = `✅ Codice letto: <code>${ean}</code>`;
+  document.getElementById('scan-status').innerHTML = `✅ Codice letto: <code>${esc(ean)}</code>`;
   setTimeout(() => {
     if (scanMode === 'search') cercaNellaDispensa(ean);
     else cercaProdotto(ean);
@@ -859,13 +870,13 @@ let _scanDuplicateProdotti = null;
 async function cercaProdotto(ean) {
   const statusEl = document.getElementById('scan-status');
   statusEl.className = '';
-  statusEl.innerHTML = `✅ Codice: <code>${ean}</code><br><span style="font-size:12px;color:var(--muted);">🔍 Controllo se è in dispensa...</span>`;
+  statusEl.innerHTML = `✅ Codice: <code>${esc(ean)}</code><br><span style="font-size:12px;color:var(--muted);">🔍 Controllo se è in dispensa...</span>`;
   try {
     const r1 = await apiFetch(`${API_BASE()}/api/prodotti/by-ean/${encodeURIComponent(ean)}`);
     if (r1.ok) {
       const esistenti = await r1.json();
       if (Array.isArray(esistenti) && esistenti.length > 0) {
-        statusEl.innerHTML = `✅ Codice: <code>${ean}</code><br><span style="font-size:12px;color:var(--green-d);font-weight:600;">📦 Già in dispensa!</span>`;
+        statusEl.innerHTML = `✅ Codice: <code>${esc(ean)}</code><br><span style="font-size:12px;color:var(--green-d);font-weight:600;">📦 Già in dispensa!</span>`;
         _scanDuplicateEan = ean;
         _scanDuplicateProdotti = esistenti;
         setTimeout(() => mostraModalDuplicato(esistenti), 350);
@@ -873,20 +884,20 @@ async function cercaProdotto(ean) {
       }
     }
   } catch(e) { console.warn('Errore check duplicato:', e); }
-  statusEl.innerHTML = `✅ Codice: <code>${ean}</code><br><span style="font-size:12px;color:var(--muted);">🌐 Cerco su database online...</span>`;
+  statusEl.innerHTML = `✅ Codice: <code>${esc(ean)}</code><br><span style="font-size:12px;color:var(--muted);">🌐 Cerco su database online...</span>`;
   await cercaProdottoOnline(ean);
 }
 
 async function cercaProdottoOnline(ean) {
   const statusEl = document.getElementById('scan-status');
   try {
-    const r = await apiFetch(`${API_BASE()}/api/barcode/${ean}`);
+    const r = await apiFetch(`${API_BASE()}/api/barcode/${encodeURIComponent(ean)}`);
     const data = await r.json();
     if (data.trovato) {
       const fonte = data.fonte === 'cache_locale' ? '💾 cache locale' : '🌐 Open Food Facts';
-      statusEl.innerHTML = `✅ Trovato! <strong>${data.nome}</strong><br><span style="font-size:12px;color:var(--green-d);">${fonte}</span>`;
+      statusEl.innerHTML = `✅ Trovato! <strong>${esc(data.nome)}</strong><br><span style="font-size:12px;color:var(--green-d);">${fonte}</span>`;
     } else {
-      statusEl.innerHTML = `⚠️ Non trovato online (${ean})<br><span style="font-size:12px;">Inserisci dettagli manualmente</span>`;
+      statusEl.innerHTML = `⚠️ Non trovato online (${esc(ean)})<br><span style="font-size:12px;">Inserisci dettagli manualmente</span>`;
     }
     setTimeout(() => apriConferma(data), 600);
   } catch(e) {
@@ -897,11 +908,11 @@ async function cercaProdottoOnline(ean) {
 function mostraModalDuplicato(esistenti) {
   const totale = esistenti.reduce((acc, p) => acc + (p.quantita || 0), 0);
   const primo = esistenti[0];
-  let html = `<p>Hai già <strong>${totale}</strong> <strong>${primo.nome}</strong>:</p><ul style="margin:10px 0 10px 20px;line-height:1.8;">`;
+  let html = `<p>Hai già <strong>${totale}</strong> <strong>${esc(primo.nome)}</strong>:</p><ul style="margin:10px 0 10px 20px;line-height:1.8;">`;
   esistenti.forEach(p => {
     const pos = p.posizione || 'Dispensa';
     const scadStr = p.scadenza ? ' — scade <em>' + new Date(p.scadenza).toLocaleDateString('it-IT', {day:'numeric',month:'short',year:'numeric'}) + '</em>' : '';
-    html += `<li>${pos}: <strong>${p.quantita}</strong> pz${scadStr}</li>`;
+    html += `<li>${esc(pos)}: <strong>${p.quantita}</strong> pz${scadStr}</li>`;
   });
   html += '</ul>';
   document.getElementById('modal-dup-content').innerHTML = html;
@@ -1099,8 +1110,8 @@ function renderListaSpesa(items) {
     html += `<div class="spesa-item">
       <div class="spesa-check ${done ? 'done' : ''}" onclick="toggleSpesa(${item.id}, ${done ? 0 : 1}, ${qty})"></div>
       <div class="spesa-info" style="flex:1;min-width:0;">
-        <div class="spesa-nome ${done ? 'done' : ''}">${item.nome}</div>
-        ${item.marca ? `<div style="font-size:12px;color:var(--muted);">${item.marca}</div>` : ''}
+        <div class="spesa-nome ${done ? 'done' : ''}">${esc(item.nome)}</div>
+        ${item.marca ? `<div style="font-size:12px;color:var(--muted);">${esc(item.marca)}</div>` : ''}
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-right:4px;" onclick="event.stopPropagation()">
         <div class="quick-btn" style="width:28px;height:28px;font-size:14px;" onclick="cambiaQtySpesa(${item.id}, ${qty - 1}, ${item.completato})">−</div>
@@ -1196,7 +1207,7 @@ async function caricaStatistiche() {
       if (spreco.top_categorie && spreco.top_categorie.length) {
         html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Categorie più sprecate:</div>`;
         spreco.top_categorie.forEach(c => {
-          html += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;"><span>${c.categoria}</span><strong style="color:var(--red);">×${c.n}</strong></div>`;
+          html += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;"><span>${esc(c.categoria)}</span><strong style="color:var(--red);">×${c.n}</strong></div>`;
         });
       }
       html += `</div>`;
@@ -1565,12 +1576,12 @@ async function caricaUtenti() {
   const el = document.getElementById('admin-users-list');
   el.innerHTML = users.map(u => `
     <div class="user-row" id="user-row-${u.id}">
-      <div class="user-name">${u.username}</div>
+      <div class="user-name">${esc(u.username)}</div>
       ${u.is_admin ? '<span class="user-badge admin-badge">admin</span>' : ''}
       ${!u.is_active ? '<span class="user-badge inactive">disabilitato</span>' : ''}
       <div style="display:flex;gap:6px">
-        <button class="btn-sm btn-sm-green" onclick="editUser(${u.id},'${u.username}',${u.is_admin},${u.is_active})">Modifica</button>
-        <button class="btn-sm btn-sm-red" onclick="deleteUser(${u.id},'${u.username}')">Elimina</button>
+        <button class="btn-sm btn-sm-green" onclick="editUser(${u.id},${jsArg(u.username)},${u.is_admin},${u.is_active})">Modifica</button>
+        <button class="btn-sm btn-sm-red" onclick="deleteUser(${u.id},${jsArg(u.username)})">Elimina</button>
       </div>
     </div>`).join('');
 }
@@ -1587,15 +1598,15 @@ async function caricaImpostazioniAdmin() {
     toggles.forEach(s => {
       const on = s.value === '1';
       html += `<div class="setting-row" style="padding:10px 0;">
-          <span style="font-size:14px;flex:1;">${s.description || s.key}</span>
+          <span style="font-size:14px;flex:1;">${esc(s.description || s.key)}</span>
           <button class="toggle ${on ? 'on' : ''}" id="setting-${s.key}" data-key="${s.key}" data-value="${on ? '1' : '0'}" data-istoggle="1" onclick="toggleNotif(this)"></button>
         </div>`;
     });
     html += '<div style="height:16px;"></div>';
   }
   inputs.forEach(s => {
-    html += `<div class="setting-key">${s.description || s.key}</div>
-      <input class="setting-input" type="${s.key.includes('password') || s.key.includes('token') ? 'password' : 'text'}" id="setting-${s.key}" value="${s.value}" placeholder="${s.key}">`;
+    html += `<div class="setting-key">${esc(s.description || s.key)}</div>
+      <input class="setting-input" type="${s.key.includes('password') || s.key.includes('token') ? 'password' : 'text'}" id="setting-${esc(s.key)}" value="${esc(s.value)}" placeholder="${esc(s.key)}">`;
   });
   el.innerHTML = html;
 }
@@ -1690,10 +1701,10 @@ async function caricaIPBans() {
   el.innerHTML = bans.map(b => `
     <div class="ip-ban-row">
       <div style="flex:1;min-width:0;">
-        <div class="ip-ban-ip">${b.ip}</div>
+        <div class="ip-ban-ip">${esc(b.ip)}</div>
         <div class="ip-ban-info">${b.failed_attempts} tentativi falliti – ${new Date(b.banned_at).toLocaleString('it-IT')}</div>
       </div>
-      <button class="btn-sm btn-sm-green" onclick="unbanIP('${b.ip}')">Sblocca</button>
+      <button class="btn-sm btn-sm-green" onclick="unbanIP(${jsArg(b.ip)})">Sblocca</button>
     </div>`).join('');
 }
 
