@@ -1,4 +1,5 @@
 import bcrypt
+import ipaddress
 import logging
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -34,14 +35,32 @@ def check_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
+# Rete interna degli add-on HA (hassio): da qui arrivano cloudflared e Ingress.
+# Solo questi proxy possono dichiarare l'IP del client via header; un client
+# in LAN sulla porta 5000 non puo' falsificare CF-Connecting-IP/X-Forwarded-For
+# per aggirare il ban (v2.0.19).
+TRUSTED_PROXIES = [ipaddress.ip_network("172.30.32.0/23")]
+
+
+def _from_trusted_proxy(addr: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return False
+    return any(ip in net for net in TRUSTED_PROXIES)
+
+
 def get_client_ip() -> str:
+    remote = request.remote_addr or "0.0.0.0"
+    if not _from_trusted_proxy(remote):
+        return remote
     cf_ip = request.headers.get("CF-Connecting-IP")
     if cf_ip:
         return cf_ip.strip()
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
-    return request.remote_addr or "0.0.0.0"
+    return remote
 
 
 def is_ip_banned(conn, ip: str) -> bool:
