@@ -35,8 +35,8 @@ options:
   cloudflare_url: ""
 
 schema:
-  jwt_secret_key: str?
-  telegram_token: str?
+  jwt_secret_key: password?
+  telegram_token: password?
   telegram_chat_id: str?
   giorni_alert_scadenza: int?
   cloudflare_url: str?
@@ -44,3 +44,5 @@ schema:
 # telegram_token, telegram_chat_id e cloudflare_url sono gestiti SOLO da qui.
 # Le altre impostazioni si modificano dal pannello Admin dell'app.
 # jwt_secret_key: lasciare vuoto → generato automaticamente e persistito nel DB.
+# telegram_token e jwt_secret_key sono di tipo password (mascherati nel form).
+# Consigliato: telegram_token: "!secret nome_chiave" per tenerlo in secrets.yaml.

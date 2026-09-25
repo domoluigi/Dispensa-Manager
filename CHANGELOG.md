@@ -13,6 +13,7 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 - **Header di sicurezza** su tutte le risposte: Content-Security-Policy (script solo da self, jsdelivr e unpkg; `connect-src` limitato; `frame-ancestors 'self'` compatibile con Ingress), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy` (fotocamera solo per l'app).
 - **IP del client**: `CF-Connecting-IP` e `X-Forwarded-For` sono considerati solo se la richiesta arriva dalla rete interna degli add-on (cloudflared, Ingress). Dalla LAN (porta 5000) non si possono più falsificare per aggirare il ban.
 - **Server di produzione**: Flask ora gira su Waitress invece del server di sviluppo Werkzeug.
+- **Opzioni add-on**: `telegram_token` e `jwt_secret_key` diventano di tipo `password` (mascherati nel form di configurazione). Supportato `!secret nome` per tenere il token in `secrets.yaml`.
 
 ### Modificato
 - Service Worker cache `dispensa-v11` per forzare il ricaricamento di `app.js`.
