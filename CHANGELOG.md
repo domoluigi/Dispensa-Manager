@@ -5,6 +5,16 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.0.20] — 2026-10-03
+
+### Aggiunto
+- **HTTPS in LAN** (opzione `ssl`): con `ssl: true` l'add-on avvia anche un server HTTPS sulla porta **5443** (Cheroot) con `certfile`/`keyfile` letti da `/ssl`, per esempio il certificato dell'add-on Let's Encrypt. Serve alla fotocamera: il browser concede `getUserMedia` (scanner barcode, OCR scadenze) solo in un contesto sicuro, quindi su `http://IP:5000` non funzionava. La porta 5000 resta HTTP per Ingress. Dopo un rinnovo del certificato l'add-on va riavviato.
+
+### Corretto
+- **`cf-url` iniettato solo sul dominio esterno**: se la pagina non è servita dal dominio di `cloudflare_url` (LAN, Ingress) il frontend chiama l'API sulla stessa origine invece del tunnel, dove il login di Cloudflare Access falliva.
+
+---
+
 ## [2.0.19] — 2026-09-25
 
 ### Sicurezza
