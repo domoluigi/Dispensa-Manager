@@ -1,5 +1,5 @@
 name: Dispensa Manager
-version: "2.0.20"
+version: "2.0.21"
 slug: dispensa_manager
 description: Gestione dispensa con barcode scanner, scadenze, lista spesa e autenticazione utenti.
 url: https://github.com/domoluigi/Dispensa-Manager
@@ -31,29 +31,25 @@ map:
   - ssl:ro
 
 options:
-  jwt_secret_key: ""
   telegram_token: ""
   telegram_chat_id: ""
   giorni_alert_scadenza: 3
-  cloudflare_url: ""
   ssl: false
   certfile: fullchain.pem
   keyfile: privkey.pem
 
 schema:
-  jwt_secret_key: password?
   telegram_token: password?
   telegram_chat_id: str?
   giorni_alert_scadenza: int?
-  cloudflare_url: str?
   ssl: bool?
   certfile: str?
   keyfile: str?
 
-# telegram_token, telegram_chat_id e cloudflare_url sono gestiti SOLO da qui.
+# telegram_token e telegram_chat_id sono gestiti SOLO da qui.
 # Le altre impostazioni si modificano dal pannello Admin dell'app.
-# jwt_secret_key: lasciare vuoto → generato automaticamente e persistito nel DB.
+# La chiave JWT viene generata al primo avvio e conservata nel DB (dalla 2.0.21 non e' piu' un'opzione).
 # ssl: true avvia anche HTTPS sulla porta 5443 con certfile/keyfile presi da /ssl
 # (es. il certificato dell'add-on Let's Encrypt). Riavviare dopo un rinnovo.
-# telegram_token e jwt_secret_key sono di tipo password (mascherati nel form).
+# telegram_token e' di tipo password (mascherato nel form).
 # Consigliato: telegram_token: "!secret nome_chiave" per tenerlo in secrets.yaml.

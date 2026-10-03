@@ -5,6 +5,13 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.0.21] — 2026-10-03
+
+### Rimosso
+- **Opzioni `jwt_secret_key` e `cloudflare_url`** dalla configurazione dell'add-on. La chiave JWT si genera al primo avvio e resta nel database (il codice la cercava gia' li' se l'opzione era vuota). `cloudflare_url` non serve piu': Dispensa si usa in LAN su HTTPS (porta 5443) e da fuori tramite VPN, senza tunnel Cloudflare; senza opzione il CORS resta spento e l'API e' sempre sulla stessa origine.
+
+---
+
 ## [2.0.20] — 2026-10-03
 
 ### Aggiunto
