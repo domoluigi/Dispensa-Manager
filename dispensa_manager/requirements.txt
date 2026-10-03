@@ -4,3 +4,4 @@ flask-jwt-extended>=4.6.0
 bcrypt>=4.1.0
 requests>=2.31.0
 waitress>=3.0.0
+cheroot>=10.0.0

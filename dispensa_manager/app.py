@@ -5,6 +5,7 @@ import logging
 import threading
 import json
 from datetime import timedelta, datetime
+from urllib.parse import urlparse
 from flask import Flask, jsonify, make_response, send_from_directory, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -114,6 +115,25 @@ def _auto_backup_loop():
         time.sleep(AUTO_BACKUP_CHECK_INTERVAL_SECONDS)
 
 
+def _start_https(app):
+    """v2.0.20: HTTPS in LAN sulla porta 5443 con il certificato di /ssl.
+    Serve alla fotocamera: il browser concede getUserMedia solo in un
+    contesto sicuro. La porta 5000 resta HTTP per Ingress."""
+    if get_ha_option("ssl", "false").lower() not in ("true", "1"):
+        return
+    cert = os.path.join("/ssl", get_ha_option("certfile", "fullchain.pem"))
+    key = os.path.join("/ssl", get_ha_option("keyfile", "privkey.pem"))
+    if not (os.path.isfile(cert) and os.path.isfile(key)):
+        logger.error("HTTPS non avviato: mancano %s o %s", cert, key)
+        return
+    from cheroot import wsgi
+    from cheroot.ssl.builtin import BuiltinSSLAdapter
+    server = wsgi.Server(("0.0.0.0", 5443), app, numthreads=8, server_name="Dispensa")
+    server.ssl_adapter = BuiltinSSLAdapter(cert, key)
+    threading.Thread(target=server.start, daemon=True).start()
+    logger.info("HTTPS attivo sulla porta 5443 (%s)", os.path.basename(cert))
+
+
 def create_app():
     app = Flask(__name__)
 
@@ -171,6 +191,12 @@ def create_app():
     @app.route("/")
     def index():
         cf_url = get_ha_option("cloudflare_url", "").rstrip("/")
+        # v2.0.20: l'URL esterno si inietta solo se la pagina e' servita da
+        # quel dominio. Da LAN (HTTPS 5443) o Ingress l'API resta sulla stessa
+        # origine: altrimenti il frontend chiamerebbe il tunnel e il login
+        # (Cloudflare Access) fallirebbe.
+        if cf_url and urlparse(cf_url).netloc.lower() != request.host.lower():
+            cf_url = ""
         try:
             with open(os.path.join(WWW_DIR, "index.html"), "r", encoding="utf-8-sig") as fh:
                 html = fh.read()
@@ -231,6 +257,12 @@ if __name__ == "__main__":
     # Backup automatico ogni 7 giorni
     threading.Thread(target=_auto_backup_loop, daemon=True).start()
     app = create_app()
+    # v2.0.20: HTTPS opzionale in parallelo (porta 5443); un errore qui non
+    # deve impedire l'avvio della porta 5000
+    try:
+        _start_https(app)
+    except Exception as e:
+        logger.error("HTTPS non avviato: %s", e)
     # v2.0.19: server WSGI di produzione (Waitress) al posto del server di
     # sviluppo di Flask, che non va esposto su Internet.
     from waitress import serve
