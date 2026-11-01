@@ -21,6 +21,10 @@ body {
 .screen { display: none; flex-direction: column; min-height: 100dvh; }
 .screen.active { display: flex; }
 
+/* Controlli nativi (checkbox, scrollbar) in tema scuro, con l'accento dell'app */
+.dark { color-scheme: dark; }
+input[type="checkbox"] { accent-color: var(--green); width: 20px; height: 20px; flex-shrink: 0; }
+
 .topbar {
   background: var(--surface); border-bottom: 0.5px solid var(--border);
   padding: calc(var(--safe-top) + 8px) 16px 12px;
@@ -40,6 +44,7 @@ body {
   box-shadow: 0 -1px 8px rgba(0,0,0,0.06);
 }
 .dark .tab-bar { box-shadow: 0 -1px 8px rgba(0,0,0,0.4); }
+.tab:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; border-radius: 10px; }
 .tab {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   padding: 10px 4px 6px; cursor: pointer; gap: 3px;
@@ -233,6 +238,9 @@ body {
 .spesa-check.done::after { content: '\2713'; color: white; font-size: 13px; font-weight: 700; }
 .spesa-nome { flex: 1; font-size: 15px; font-weight: 500; }
 .spesa-nome.done { text-decoration: line-through; color: var(--hint); }
+/* Aree di tocco: i controlli piccoli restano com'erano alla vista ma si toccano meglio (zona invisibile di 7 px intorno) */
+.quick-btn, .spesa-check, .toggle { position: relative; }
+.quick-btn::before, .spesa-check::before, .toggle::before { content: ''; position: absolute; inset: -7px; }
 .spesa-del { font-size: 18px; color: var(--hint); cursor: pointer; padding: 8px; touch-action: manipulation; }
 
 .dark { --bg: #111110; --surface: #1c1c1a; --text: #f0efe8; --muted: #9e9e94; --hint: #6b6b63; --border: rgba(255,255,255,0.10); --green-l: rgba(29,158,117,0.15); --amber-l: rgba(186,117,23,0.15); --red-l: rgba(163,45,45,0.15); --gray-l: rgba(136,135,128,0.12); }
@@ -344,4 +352,10 @@ body {
   .metric-row { grid-template-columns: repeat(2, 1fr); }
   .metric-val { font-size: 20px; }
   .topbar-title { font-size: 15px; }
+}
+
+/* Schermo largo (PC, tablet orizzontale): colonna centrale come sul telefono, invece di righe lunghe un metro */
+@media (min-width: 700px) {
+  .screen { max-width: 640px; margin: 0 auto; box-shadow: 0 0 0 0.5px var(--border); }
+  .tab-bar { left: 50%; right: auto; width: 100%; max-width: 640px; transform: translateX(-50%); }
 }
