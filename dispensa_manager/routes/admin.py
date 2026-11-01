@@ -1,11 +1,14 @@
+import base64
+import binascii
 import glob
 import json
 import logging
 import os
-from datetime import datetime
+import re
+from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import get_jwt_identity
-from database import get_db, set_setting, get_api_key, regenerate_api_key, BACKUPS_DIR
+from database import get_db, set_setting, get_api_key, regenerate_api_key, BACKUPS_DIR, IMAGES_DIR
 from auth import admin_required, hash_password
 
 logger = logging.getLogger(__name__)
@@ -148,10 +151,17 @@ def update_settings():
         "giorni_alert_scadenza", "soglia_scorte_minime",
         "max_login_attempts", "ban_window_minutes",
         "notif_telegram_acquisto", "notif_telegram_modifica", "notif_telegram_eliminazione",
+        "ban_durata_minuti",
     }
     invalid = set(data.keys()) - ALLOWED_KEYS
     if invalid:
         return jsonify({"error": f"Chiavi non ammesse: {invalid}"}), 400
+    if "ban_durata_minuti" in data:
+        try:
+            if not 0 <= int(data["ban_durata_minuti"]) <= 525600:
+                raise ValueError
+        except (ValueError, TypeError):
+            return jsonify({"error": "ban_durata_minuti: intero da 0 (permanente) a 525600"}), 400
 
     conn = get_db()
     try:
@@ -185,8 +195,11 @@ def regenerate_api_key_endpoint():
 def list_ip_bans():
     conn = get_db()
     try:
+        ora = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        with conn:   # i ban scaduti non si mostrano e si tolgono
+            conn.execute("DELETE FROM ip_bans WHERE scade_il IS NOT NULL AND scade_il <= ?", (ora,))
         rows = conn.execute("""
-            SELECT b.ip, b.banned_at, b.reason,
+            SELECT b.ip, b.banned_at, b.reason, b.scade_il,
                    (SELECT COUNT(*) FROM login_attempts WHERE ip=b.ip AND success=0) AS failed_attempts,
                    (SELECT MAX(attempted_at) FROM login_attempts WHERE ip=b.ip AND success=0) AS last_attempt
             FROM ip_bans b ORDER BY b.banned_at DESC
@@ -204,12 +217,21 @@ def ban_ip():
     reason = (data.get("reason") or "Ban manuale da admin").strip()
     if not ip:
         return jsonify({"error": "IP richiesto"}), 400
+    scade = None   # un ban manuale e' permanente, salvo "minuti" nella richiesta
+    if data.get("minuti") not in (None, "", 0):
+        try:
+            minuti = int(data["minuti"])
+            if not 1 <= minuti <= 525600:
+                raise ValueError
+        except (ValueError, TypeError):
+            return jsonify({"error": "minuti: intero da 1 a 525600"}), 400
+        scade = (datetime.now(timezone.utc) + timedelta(minutes=minuti)).strftime("%Y-%m-%d %H:%M:%S")
     conn = get_db()
     try:
         with conn:
             conn.execute(
-                "INSERT OR REPLACE INTO ip_bans (ip, reason) VALUES (?, ?)",
-                (ip, reason),
+                "INSERT OR REPLACE INTO ip_bans (ip, reason, scade_il) VALUES (?, ?, ?)",
+                (ip, reason, scade),
             )
         return jsonify({"ok": True}), 201
     finally:
@@ -231,17 +253,73 @@ def unban_ip(ip):
 
 # ── Backup / Restore ──────────────────────────────────────────────────────────
 
+# Immagini prodotto (/dispensa-images/<id>.<ext>): salvate nel JSON in base64 e ripristinate con i dati
+RE_IMMAGINE = re.compile(r"^\d+\.(jpg|png|webp)$")
+MAX_IMMAGINE_BYTES = 5 * 1024 * 1024
+_MAGIC = {"jpg": (b"\xff\xd8\xff",), "png": (b"\x89PNG\r\n\x1a\n",), "webp": (b"RIFF",)}
+
+
+def _immagini_per_backup(prodotti) -> dict:
+    """{nome_file: base64} delle immagini referenziate dai prodotti e presenti su disco."""
+    out = {}
+    for p in prodotti:
+        url = p.get("immagine_url") or ""
+        if not url.startswith("/dispensa-images/"):
+            continue
+        nome = url[len("/dispensa-images/"):]
+        if nome in out or not RE_IMMAGINE.match(nome):
+            continue
+        try:
+            with open(os.path.join(IMAGES_DIR, nome), "rb") as f:
+                out[nome] = base64.b64encode(f.read()).decode("ascii")
+        except OSError:
+            logger.warning("Immagine %s referenziata ma assente su disco: non inclusa nel backup", nome)
+    return out
+
+
+def _ripristina_immagini(immagini) -> dict:
+    """Scrive su disco le immagini del backup. Controlla nome, firma del file e dimensione:
+    il contenuto arriva da un file caricato. Ritorna {"scritte": n, "scartate": n}."""
+    esito = {"scritte": 0, "scartate": 0}
+    if not isinstance(immagini, dict) or not immagini:
+        return esito
+    os.makedirs(IMAGES_DIR, exist_ok=True)
+    for nome, b64 in immagini.items():
+        ok = False
+        if isinstance(nome, str) and isinstance(b64, str) and RE_IMMAGINE.match(nome):
+            try:
+                dati = base64.b64decode(b64, validate=True)
+            except (binascii.Error, ValueError):
+                dati = b""
+            estensione = nome.rsplit(".", 1)[1]
+            if 0 < len(dati) <= MAX_IMMAGINE_BYTES and dati.startswith(_MAGIC[estensione]):
+                percorso = os.path.join(IMAGES_DIR, nome)
+                try:
+                    with open(percorso + ".tmp", "wb") as f:
+                        f.write(dati)
+                    os.replace(percorso + ".tmp", percorso)
+                    ok = True
+                except OSError as e:
+                    logger.warning("Immagine %s non scritta: %s", nome, e)
+        esito["scritte" if ok else "scartate"] += 1
+    return esito
+
+
 def _build_backup() -> dict:
     """Costruisce dizionario con TUTTO il contenuto utile del DB (no password hash, no api_key)."""
     conn = get_db()
     try:
+        prodotti = [dict(r) for r in conn.execute("SELECT * FROM prodotti ORDER BY id").fetchall()]
+        immagini = _immagini_per_backup(prodotti)
         backup = {
             "_meta": {
                 "version": "dispensa-manager-backup-v1",
                 "created_at": datetime.utcnow().isoformat() + "Z",
                 "schema_version": int(conn.execute("SELECT value FROM app_settings WHERE key='schema_version'").fetchone()["value"]),
+                "immagini": len(immagini),
             },
-            "prodotti": [dict(r) for r in conn.execute("SELECT * FROM prodotti ORDER BY id").fetchall()],
+            "prodotti": prodotti,
+            "immagini": immagini,
             "lista_spesa": [dict(r) for r in conn.execute("SELECT * FROM lista_spesa ORDER BY id").fetchall()],
             "storico_movimenti": [dict(r) for r in conn.execute("SELECT * FROM storico_movimenti ORDER BY id").fetchall()],
             "barcode_cache": [dict(r) for r in conn.execute("SELECT * FROM barcode_cache ORDER BY ean").fetchall()],
@@ -296,9 +374,16 @@ def _restore_backup(backup: dict) -> dict:
                     continue
                 set_setting(conn, s["key"], s["value"])
             counts["app_settings"] = len(settings)
-        return counts
     finally:
         conn.close()
+
+    # le immagini si scrivono dopo il commit dei dati: se il ripristino fallisce non si tocca il disco
+    esito = _ripristina_immagini(backup.get("immagini"))
+    if esito["scritte"] or esito["scartate"]:
+        counts["immagini"] = esito["scritte"]
+        if esito["scartate"]:
+            counts["immagini scartate"] = esito["scartate"]
+    return counts
 
 
 BACKUP_AUTO_COPIE = 4

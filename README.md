@@ -21,6 +21,8 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 🏷️ **Nutri-Score** — visualizzato nel dettaglio prodotto
 - 🗃️ **Cache locale** — i prodotti non trovati online vengono salvati per le scansioni future
 - 🔍 **Multi-database** — Open Food Facts + Open Products Facts + Open Beauty Facts
+- 🛡️ **Ban IP che scade** — dopo i tentativi di login falliti l'IP si blocca per un tempo configurabile (default 60 minuti, 0 = permanente) e si sblocca da solo; l'admin vede la scadenza e puo' sbloccare prima
+- 💾 **Backup completo** — dati e foto dei prodotti nello stesso file JSON, scaricabile dal pannello Admin e ripristinabile; backup automatico settimanale con le ultime 4 copie
 - ⬜ **Sezione Esauriti** — i prodotti a zero sono separati dall'inventario attivo, con pallino grigio e tab collassabile
 - ⏰ **Filtro In scadenza** — mostra solo i prodotti in scadenza entro la soglia configurata
 - 🔴 **Filtro Scaduti** — mostra solo i prodotti con data di scadenza già passata

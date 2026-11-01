@@ -5,6 +5,29 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.1.1] — 2026-11-01
+
+### Ban IP con scadenza
+- **Il ban automatico finisce da solo.** Prima, dopo i tentativi di login falliti, l'IP restava bannato per sempre: bastava un errore di digitazione di troppo e solo un amministratore poteva sbloccarlo. Ora il ban dura `ban_durata_minuti` (default **60**; **0** = permanente) e alla prima richiesta dopo la scadenza l'IP viene sbloccato e i suoi vecchi tentativi azzerati, cosi' non viene ribannato al primo errore.
+- La durata si cambia dal pannello Admin (Impostazioni), insieme a tentativi massimi e finestra.
+- Il pannello **Ban IP** mostra quando ogni ban si sblocca da solo oppure «Permanente»; i ban scaduti non compaiono. Corretto anche l'orario mostrato, che era sfalsato di 1-2 ore (le date del database sono UTC).
+- Il ban manuale resta permanente; l'API accetta `minuti` per un ban a tempo (`POST /api/admin/ip-bans`).
+- **Migrazione schema 7**: aggiunge `ip_bans.scade_il`. I ban gia' presenti restano permanenti.
+
+### Immagini nel backup
+- Il backup JSON (download, backup automatico settimanale e copie ruotate) ora include le **foto dei prodotti** in base64 (`immagini`), quelle salvate in `/dispensa-images/`. Il ripristino le riscrive su disco: dopo un disastro i prodotti non restano piu' senza foto. Le immagini mancanti su disco vengono saltate senza interrompere il backup.
+- Il ripristino controlla ogni immagine del file caricato: nome `<id>.jpg|png|webp` (niente percorsi), firma del file coerente con l'estensione, base64 valido, massimo 5 MB; le altre vengono scartate e contate («immagini scartate»).
+- I backup della 2.1.0 e precedenti, senza immagini, si ripristinano come prima. Il formato resta `dispensa-manager-backup-v1`.
+- Il file cresce di circa 60-100 KB per prodotto con foto: con qualche centinaio di foto sono pochi MB.
+
+### Icona
+- **Icona dell'add-on** (`icon.png`, 128x128) per lo store e il pannello di Home Assistant: barattolo con etichetta a barre e orologio della scadenza.
+
+### Test
+- `tests/test_ban_immagini.py`: 13 test (scadenza e fine del ban, ban permanente, validazione, migrazione da schema 6, backup e ripristino delle immagini, file pericolosi). In totale 33 test Python.
+
+---
+
 ## [2.1.0] — 2026-11-01
 
 ### Scansione barcode
@@ -56,8 +79,7 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 - Test: `tests/test_scadenza.js` (40 casi) e `tests/test_backend.py` (20 test su database temporaneo).
 
 ### Non incluso
-- Ban IP senza scadenza e cambio obbligatorio della password `admin` al primo accesso: scelte di progetto da discutere.
-- Le immagini dei prodotti non sono nel backup JSON.
+- Cambio obbligatorio della password `admin` al primo accesso (scelta di progetto da discutere). Ban IP con scadenza e immagini nel backup sono arrivati nella 2.1.1.
 
 ---
 
