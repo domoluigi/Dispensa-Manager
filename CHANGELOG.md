@@ -5,6 +5,25 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.1.2] — 2026-11-02
+
+Revisione della GUI pagina per pagina (inventario, scansione, conferma, dettaglio, modifica, spesa, statistiche, impostazioni, admin) su telefono e PC.
+
+### Icone
+- **Barra delle schede con le icone complete.** La barra in basso era copiata 5 volte nell'HTML, una per schermata, e in 4 copie le icone erano troncate: nelle pagine Spesa, Statistiche, Impostazioni e Admin «Scansiona» era un semplice quadrato, «Impostazioni» un puntino, «Admin» un cerchio, «Statistiche» una sola barra. Ora la barra e' una sola (`<nav id="tab-bar">`) e `showScreen()` evidenzia la scheda attiva; le schermate di dettaglio, scansione e modifica non la mostrano, come prima.
+- La barra e' navigabile da tastiera (Tab, Invio, Spazio) e le schede hanno etichetta per i lettori di schermo.
+- **Icone della PWA** (`icon-192.png`, `icon-512.png`) con lo stesso disegno dell'icona dell'add-on, a quadrato pieno (iOS e le maschere di Android arrotondano da soli) e con il disegno nella zona sicura. Il vecchio quadrato verde con sagome bianche e' sostituito. Una PWA gia' installata puo' tenere la vecchia icona finche' non viene reinstallata.
+
+### Layout e aspetto
+- **Schermi larghi** (PC, tablet orizzontale): colonna centrale di 640 px, con la barra delle schede centrata, invece di righe lunghe quanto lo schermo.
+- **Tema scuro**: il campo della chiave API era bianco e ora ha lo stile degli altri campi; checkbox, scrollbar e controlli nativi seguono il tema (`color-scheme: dark`) con l'accento verde dell'app.
+- **Aree di tocco**: pulsanti +/−, spunta e interruttori della lista spesa e delle impostazioni restano com'erano alla vista ma hanno una zona di tocco di circa 40 px (erano 28 px).
+
+### Test
+- `tests/test_gui.js` (16 controlli): una sola barra, sei schede nell'ordine giusto, ogni icona con tutti i suoi elementi, mappa schermata→scheda, regola per schermi larghi dopo quella base, campo chiave API.
+
+---
+
 ## [2.1.1] — 2026-11-01
 
 ### Ban IP con scadenza

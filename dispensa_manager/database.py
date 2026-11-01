@@ -15,7 +15,7 @@ OPTIONS_PATH = "/data/options.json"
 IMAGES_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "images")
 BACKUPS_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "backups")
 
-APP_VERSION = "2.1.1"
+APP_VERSION = "2.1.2"
 SCHEMA_VERSION = 7
 
 

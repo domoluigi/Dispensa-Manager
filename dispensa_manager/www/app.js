@@ -186,9 +186,20 @@ let esauritiOpen = false;
 let bulkMode = false;
 let bulkSelected = new Set();
 
+// Schermata → scheda evidenziata nella barra in basso (le altre schermate non hanno la barra)
+const TAB_DI_SCHERMATA = { 'screen-inventario': 'inventario', 'screen-spesa': 'spesa', 'screen-statistiche': 'statistiche', 'screen-impostazioni': 'impostazioni', 'screen-admin': 'admin' };
+function aggiornaTabBar(id) {
+  const bar = document.getElementById('tab-bar');
+  if (!bar) return;
+  const attiva = TAB_DI_SCHERMATA[id];
+  bar.style.display = attiva ? '' : 'none';
+  bar.querySelectorAll('.tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === attiva); if (t.dataset.tab === attiva) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current'); });
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  aggiornaTabBar(id);
   // Exit bulk mode quando lasciamo inventario
   if (id !== 'screen-inventario' && bulkMode) exitBulkMode();
   if (id === 'screen-inventario') caricaInventario();
@@ -197,6 +208,11 @@ function showScreen(id) {
   if (id === 'screen-scan') avviaScanner();
   else fermaScanner();
 }
+
+document.addEventListener('keydown', (e) => {
+  const t = e.target && e.target.closest ? e.target.closest('.tab') : null;
+  if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); t.click(); }
+});
 
 function showTab(tab) {
   if (tab === 'inventario') showScreen('screen-inventario');
