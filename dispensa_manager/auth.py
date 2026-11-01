@@ -27,6 +27,18 @@ def _get_max_attempts(conn) -> int:
         return DEFAULT_MAX_ATTEMPTS
 
 
+def _get_ban_duration_minutes(conn) -> int:
+    """Durata del ban automatico in minuti; 0 = permanente."""
+    try:
+        return max(0, int(get_setting(conn, "ban_durata_minuti", "60")))
+    except ValueError:
+        return 60
+
+
+def _utc_str(dt) -> str:
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
 def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
@@ -64,8 +76,18 @@ def get_client_ip() -> str:
 
 
 def is_ip_banned(conn, ip: str) -> bool:
-    row = conn.execute("SELECT ip FROM ip_bans WHERE ip=?", (ip,)).fetchone()
-    return row is not None
+    """Un ban con scadenza finisce da solo: alla prima richiesta dopo la scadenza si toglie il ban e si
+    azzerano i tentativi di quell'IP (altrimenti i vecchi fallimenti lo ribanerebbero subito)."""
+    row = conn.execute("SELECT ip, scade_il FROM ip_bans WHERE ip=?", (ip,)).fetchone()
+    if row is None:
+        return False
+    if row["scade_il"] and row["scade_il"] <= _utc_str(datetime.now(timezone.utc)):
+        with conn:
+            conn.execute("DELETE FROM ip_bans WHERE ip=?", (ip,))
+            conn.execute("DELETE FROM login_attempts WHERE ip=?", (ip,))
+        logger.info("Ban IP scaduto, sbloccato: %s", ip)
+        return False
+    return True
 
 
 def record_attempt(conn, ip: str, username: str, success: bool):
@@ -90,9 +112,12 @@ def _maybe_ban(conn, ip: str):
         (ip, window_start),
     ).fetchone()
     if row["n"] >= max_attempts:
+        durata = _get_ban_duration_minutes(conn)
+        scade = None if durata == 0 else _utc_str(datetime.now(timezone.utc) + timedelta(minutes=durata))
         with conn:
-            conn.execute("INSERT OR IGNORE INTO ip_bans (ip) VALUES (?)", (ip,))
-        logger.warning("IP bannato dopo %d tentativi falliti: %s", max_attempts, ip)
+            conn.execute("INSERT OR IGNORE INTO ip_bans (ip, scade_il) VALUES (?, ?)", (ip, scade))
+        logger.warning("IP bannato dopo %d tentativi falliti: %s (%s)", max_attempts, ip,
+                       "permanente" if scade is None else f"fino alle {scade} UTC")
 
 
 def admin_required(fn):

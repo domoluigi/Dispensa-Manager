@@ -1431,6 +1431,9 @@ function deleteUser(id, username) {
   openModal('modal-confirm');
 }
 
+// Le date del database sono UTC senza fuso ("2026-11-01 10:00:00"): senza la Z il browser le legge come ora locale
+function dataUtc(s) { return new Date(String(s).replace(' ', 'T') + 'Z'); }
+
 async function caricaIPBans() {
   const r = await apiFetch(`${API_BASE()}/api/admin/ip-bans`);
   const bans = await r.json();
@@ -1440,7 +1443,8 @@ async function caricaIPBans() {
     <div class="ip-ban-row">
       <div style="flex:1;min-width:0;">
         <div class="ip-ban-ip">${esc(b.ip)}</div>
-        <div class="ip-ban-info">${b.failed_attempts} tentativi falliti – ${new Date(b.banned_at).toLocaleString('it-IT')}</div>
+        <div class="ip-ban-info">${b.failed_attempts} tentativi falliti – ${dataUtc(b.banned_at).toLocaleString('it-IT')}</div>
+        <div class="ip-ban-info">${b.scade_il ? 'Si sblocca da solo: ' + dataUtc(b.scade_il).toLocaleString('it-IT') : 'Permanente: solo un admin può sbloccarlo'}</div>
       </div>
       <button class="btn-sm btn-sm-green" onclick="unbanIP(${jsArg(b.ip)})">Sblocca</button>
     </div>`).join('');

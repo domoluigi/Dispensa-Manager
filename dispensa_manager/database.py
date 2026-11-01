@@ -15,8 +15,8 @@ OPTIONS_PATH = "/data/options.json"
 IMAGES_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "images")
 BACKUPS_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "backups")
 
-APP_VERSION = "2.1.0"
-SCHEMA_VERSION = 6
+APP_VERSION = "2.1.1"
+SCHEMA_VERSION = 7
 
 
 def get_db():
@@ -312,6 +312,20 @@ def init_db():
         with conn:
             _set_schema_version(conn, 6)
         current = 6
+
+    if current < 7:
+        logger.info("Migrazione schema DB: v6 → v7 (ban IP con scadenza)")
+        try:
+            conn.execute("ALTER TABLE ip_bans ADD COLUMN scade_il DATETIME")   # NULL = permanente (i ban esistenti restano tali)
+        except sqlite3.OperationalError:
+            pass   # colonna gia' presente
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
+                ("ban_durata_minuti", "60", "Durata del ban IP automatico in minuti (0 = permanente)"),
+            )
+            _set_schema_version(conn, 7)
+        current = 7
 
     conn.close()
 
