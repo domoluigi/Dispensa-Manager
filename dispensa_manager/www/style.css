@@ -93,7 +93,15 @@ body {
 #video-container { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 3/4; }
 #video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-.scan-frame { width: 65%; aspect-ratio: 1; position: relative; }
+.scan-frame { width: 82%; aspect-ratio: 2 / 1; position: relative; }
+.cam-ctrl { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.cam-btn { padding: 8px 14px; border-radius: 12px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; cursor: pointer; touch-action: manipulation; }
+.cam-btn.attivo { background: var(--green); color: #fff; border-color: var(--green); }
+.cam-zoom { width: 160px; accent-color: var(--green); }
+.scan-continuo { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.scan-continuo input { width: 18px; height: 18px; accent-color: var(--green); flex-shrink: 0; }
+.ocr-chip { display: inline-block; margin: 4px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,0.15); color: #fff; font-size: 14px; cursor: pointer; border: none; }
+.ocr-chip.principale { background: var(--green); font-weight: 600; font-size: 16px; }
 .scan-frame::before, .scan-frame::after,
 .scan-frame > span::before, .scan-frame > span::after {
   content: ''; position: absolute; width: 24px; height: 24px; border-color: var(--green); border-style: solid;

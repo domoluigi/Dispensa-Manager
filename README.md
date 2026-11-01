@@ -11,11 +11,12 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 ## ✨ Funzionalità
 
 - 📱 **PWA iPhone/Android** — installabile come app, funziona offline
-- 📦 **Scanner barcode** — scansiona i prodotti con la fotocamera (ZXing)
+- 📦 **Scanner barcode** — scansiona i prodotti con la fotocamera (rilevatore nativo del telefono, ZXing di ripiego): controlla il checksum del codice e lo accetta solo dopo due letture uguali; torcia e zoom dove il telefono li offre; modalita' **scansione continua** per caricare la spesa in fila
 - 📷 **Foto prodotto** — scatta o scegli una foto per i prodotti senza barcode noto
 - 🗄️ **Posizione automatica** — Frigo 🧊 / Dispensa 🗄️ / Freezer ❄️ suggeriti dalla categoria
-- 📅 **Scadenza suggerita** — calcolata automaticamente dalla categoria del prodotto
-- 🔍 **OCR scadenza** — scansiona la data di scadenza con la fotocamera (Tesseract.js), supporta DD/MM/YYYY, MM/YYYY e mesi in italiano
+- 📅 **Scadenza suggerita** — dal tuo storico dello stesso prodotto (mediana degli acquisti passati), altrimenti dalla categoria; se non c'e' nulla di affidabile il campo resta vuoto
+- 📭 **Aperto oggi** — un tocco accorcia la scadenza dopo l'apertura (latte 3 giorni, sughi 4, ecc.) e annota «Aperto il…»; con Annulla
+- 🔍 **OCR scadenza** — legge la data con la fotocamera da sola (Tesseract.js in locale), distingue scadenza, produzione e lotto, mostra il risultato da confermare
 - 📊 **Valori nutrizionali** — da Open Food Facts (energia, grassi, carboidrati, ecc.)
 - 🏷️ **Nutri-Score** — visualizzato nel dettaglio prodotto
 - 🗃️ **Cache locale** — i prodotti non trovati online vengono salvati per le scansioni future
@@ -396,9 +397,11 @@ La schermata Statistiche mostra:
 | POST | `/api/prodotti` | Aggiunge un prodotto |
 | PUT | `/api/prodotti/<id>` | Aggiorna un prodotto |
 | DELETE | `/api/prodotti/<id>` | Elimina un prodotto |
+| POST | `/api/prodotti/<id>/consuma` | Toglie 1 pezzo (o `quantita`) e registra il consumo (`x-api-key` o JWT) |
+| POST | `/api/prodotti/<id>/butta` | Elimina il prodotto contandolo come spreco (`x-api-key` o JWT) |
 | GET | `/api/prodotti/by-ean/<ean>` | Cerca prodotti duplicati per EAN |
 | GET | `/api/prodotti/esauriti` | Lista solo i prodotti esauriti (`quantita <= 0`) |
-| GET | `/api/barcode/<ean>` | Cerca un prodotto per EAN |
+| GET | `/api/barcode/<ean>` | Cerca un prodotto per EAN; risponde anche con `suggerimento` (posizione, giorni di scadenza, fonte). `?refresh=1` ignora la cache dei non trovati |
 | POST | `/api/barcode-cache` | Salva in cache locale |
 | DELETE | `/api/barcode-cache/<ean>` | Rimuove dalla cache |
 | GET | `/api/lista-spesa` | Lista della spesa |
@@ -439,15 +442,22 @@ Dispensa-Manager/
 │   ├── Dockerfile
 │   ├── config.yaml
 │   ├── app.py                  # Backend Flask
-│   ├── requirements.txt
+│   ├── notifiche.py            # Telegram: escape Markdown, token fuori dai log
+│   ├── suggerimenti.py         # Posizione e scadenza suggerite (storico + categoria)
+│   ├── requirements.txt        # Versioni fissate
 │   └── www/                    # Frontend PWA (servito direttamente da Flask)
 │       ├── index.html          # App principale
+│       ├── scanner.js          # Fotocamera, barcode, OCR scadenza
+│       ├── scadenza.js         # Parser delle date (testabile in node)
+│       ├── vendor/             # Chart.js, ZXing, Tesseract in locale (niente CDN)
 │       ├── sw.js               # Service Worker (network-first + /api/ passthrough)
 │       ├── manifest.json       # Web App Manifest (id, screenshots, icone)
 │       ├── icon-192.png        # Icona app 192×192
 │       ├── icon-512.png        # Icona app 512×512
 │       ├── screenshot-narrow.png  # Screenshot mobile 390×844 (install dialog)
 │       └── screenshot-wide.png    # Screenshot desktop 1280×800 (install dialog)
+├── docs/azioni_notifica_ha.md  # Notifica HA con pulsanti Consumato / Buttato
+├── tests/                      # test_scadenza.js (node), test_backend.py (unittest)
 ├── repository.json             # Custom store HA
 ├── CHANGELOG.md
 ├── .gitignore
@@ -460,15 +470,23 @@ Dispensa-Manager/
 
 Dalla schermata di conferma prodotto, accanto al campo data di scadenza è presente il pulsante 📷:
 
-1. Clicca 📷 — si apre la fotocamera con una cornice verde
-2. Inquadra la data di scadenza stampata sulla confezione
-3. Clicca **📸 Scatta** — Tesseract.js analizza il testo
-4. Se riconosce la data la compila automaticamente nel campo
+1. Clicca 📷 — si apre la fotocamera con una cornice verde (torcia e zoom, se il telefono li supporta)
+2. Inquadra la data stampata sulla confezione: la legge da sola, mezzo secondo alla volta. Il pulsante **📸 Scatta** prova tutte le preparazioni dell'immagine
+3. Compare «Ho letto: …» con la data proposta e le alternative: **✓ Usa** la scrive nel campo, **↻ Riprova** continua a leggere
+4. Se non riesce, si puo' scrivere la data a mano
+
+Legge solo l'interno della cornice, prepara l'immagine (contrasto, soglia locale o globale, scritte chiare su fondo scuro) e usa un motore che resta in memoria durante la lettura. Tutto in locale: nessun dato lascia il telefono e funziona anche senza Internet.
+
+**Come sceglie la data:** ogni data trovata e' un candidato. Vincono quelle precedute da SCAD, EXP, TMC, BB, «da consumarsi entro»; si scartano quelle precedute da PROD, CONF, MFG (produzione) e si evitano i numeri dopo LOTTO/L (lotti). Con piu' date a pari merito si prende la piu' lontana.
 
 **Formati riconosciuti:**
-- `DD/MM/YYYY`, `DD-MM-YYYY`, `DD.MM.YYYY`
-- `MM/YYYY` → imposta automaticamente l'ultimo giorno del mese
-- Mesi in italiano: `GEN 2026`, `GENNAIO 2026`, ecc.
+- `DD/MM/YYYY`, `DD-MM-YY`, `DD.MM.YYYY`, `DD MM YY`, `YYYY-MM-DD`
+- `MM/YYYY` e `MM/YY` (con parola chiave) → ultimo giorno del mese
+- Mesi in lettere, italiano e inglese: `OTT 2027`, `10 OTT 2027`, `DEC 2027`, `12DIC2027`
+- Compatti (`250527`, `20270525`) solo dopo una parola chiave di scadenza
+- Correzione di O/0, I/1, S/5, B/8 solo dentro i numeri, mai nelle parole
+
+**Test:** `node tests/test_scadenza.js` e `python -m unittest discover -s tests`.
 
 ---
 

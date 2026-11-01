@@ -18,14 +18,13 @@ logger = logging.getLogger(__name__)
 
 OPTIONS_PATH = "/data/options.json"
 
-# CDN usate da index.html: Chart.js (jsdelivr), ZXing e Tesseract (unpkg);
-# Tesseract scarica core WASM e dati lingua da jsdelivr e usa worker blob:.
-_CDN = "https://cdn.jsdelivr.net https://unpkg.com"
+# Dalla 2.1.0 le librerie (Chart.js, ZXing, Tesseract) sono in www/vendor: nessuna CDN.
+# 'unsafe-inline' serve agli handler onclick; 'wasm-unsafe-eval' e i worker blob: a Tesseract.
 CSP = "; ".join([
     "default-src 'self'",
-    f"script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: {_CDN}",
-    f"worker-src 'self' blob: {_CDN}",
-    f"connect-src 'self' blob: data: {_CDN} https://tessdata.projectnaptha.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:",
+    "worker-src 'self' blob:",
+    "connect-src 'self' blob: data:",
     "img-src 'self' data: blob: https:",
     "style-src 'self' 'unsafe-inline'",
     "media-src 'self' blob: mediastream:",
@@ -104,10 +103,8 @@ def _auto_backup_loop():
                 age_seconds = time.time() - os.path.getmtime(auto_path)
                 should_backup = age_seconds > (AUTO_BACKUP_INTERVAL_DAYS * 24 * 3600)
             if should_backup:
-                from routes.admin import _build_backup
-                backup = _build_backup()
-                with open(auto_path, "w", encoding="utf-8") as f:
-                    json.dump(backup, f, indent=2, default=str, ensure_ascii=False)
+                from routes.admin import scrivi_backup_auto
+                scrivi_backup_auto()
                 size_kb = os.path.getsize(auto_path) / 1024
                 logger.info("Backup automatico settimanale completato: %s (%.1f KB)", auto_path, size_kb)
         except Exception as e:

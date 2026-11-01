@@ -3,7 +3,10 @@ import io
 import json
 import logging
 import os
+import re
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, make_response
 from flask_jwt_extended import jwt_required
@@ -14,16 +17,28 @@ from database import (
     save_image_to_fs, delete_image_from_fs,
 )
 from auth import api_key_or_jwt
+from notifiche import invia_telegram, invia_a_chat, chat_ids, md_esc
+from suggerimenti import costruisci_suggerimento
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("products", __name__)
 
-# Telegram limita i messaggi a 4096 caratteri
-TELEGRAM_MAX_LEN = 4000
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _intero(valore, default, minimo=None, massimo=None):
+    """Converte in intero; se non e' valido o fuori intervallo torna il default."""
+    try:
+        n = int(valore)
+    except (ValueError, TypeError):
+        return default
+    if minimo is not None and n < minimo:
+        return default
+    if massimo is not None and n > massimo:
+        return default
+    return n
+
 
 def _get_days_threshold(conn):
     try:
@@ -45,6 +60,35 @@ def log_movimento(nome, tipo, ean="", marca="", categoria="", quantita=1, prezzo
         logger.error("Errore log movimento: %s", e)
     finally:
         conn.close()
+
+
+# Gli attributi di stato di HA oltre ~16 KB non vengono salvati dal recorder:
+# negli elenchi dei sensori si mettono al massimo queste voci (lo stato resta il conteggio completo).
+MAX_ELENCO_SENSORI = 25
+
+
+def _aggiungi_esauriti_a_lista(conn, esauriti_list):
+    """Mette in lista spesa i prodotti esauriti che non ci sono gia'.
+    Il confronto e' per EAN o per nome (prima i prodotti senza EAN si bloccavano a vicenda: una sola
+    voce manuale impediva di aggiungere tutti gli altri) e conta anche gli elementi spuntati negli
+    ultimi 14 giorni: un prodotto comprato ma non ancora ricaricato non deve rientrare in lista
+    a ogni sincronizzazione."""
+    for p in esauriti_list:
+        ean = p["ean"] or ""
+        if ean and not ean.startswith("MANUAL-"):
+            filtro, parametri = "(ean=? OR LOWER(nome)=LOWER(?))", (ean, p["nome"])
+        else:
+            filtro, parametri = "LOWER(nome)=LOWER(?)", (p["nome"],)
+        esistente = conn.execute(
+            f"SELECT id FROM lista_spesa WHERE {filtro} "
+            "AND (completato=0 OR data_aggiunta >= datetime('now', '-14 days'))",
+            parametri,
+        ).fetchone()
+        if not esistente:
+            conn.execute(
+                "INSERT INTO lista_spesa (nome, ean, marca) VALUES (?, ?, ?)",
+                (p["nome"], ean, p["marca"] or ""),
+            )
 
 
 def aggiorna_sensori_ha():
@@ -69,25 +113,18 @@ def aggiorna_sensori_ha():
             try:
                 scad = datetime.strptime(p["scadenza"], "%Y-%m-%d").date()
                 giorni = (scad - oggi).days
+                voce = {"id": p["id"], "nome": p["nome"], "scadenza": p["scadenza"], "giorni": giorni}
                 if giorni < 0:
-                    scaduti.append({"nome": p["nome"], "scadenza": p["scadenza"], "giorni": giorni})
+                    scaduti.append(voce)
                 elif giorni <= giorni_soglia:
-                    in_scadenza.append({"nome": p["nome"], "scadenza": p["scadenza"], "giorni": giorni})
+                    in_scadenza.append(voce)
             except Exception:
                 pass
 
     conn2 = get_db()
     try:
         with conn2:
-            for p in esauriti_list:
-                esistente = conn2.execute(
-                    "SELECT id FROM lista_spesa WHERE ean=? AND completato=0", (p["ean"] or "",)
-                ).fetchone()
-                if not esistente:
-                    conn2.execute(
-                        "INSERT INTO lista_spesa (nome, ean, marca) VALUES (?, ?, ?)",
-                        (p["nome"], p["ean"] or "", p["marca"] or ""),
-                    )
+            _aggiungi_esauriti_a_lista(conn2, esauriti_list)
     finally:
         conn2.close()
 
@@ -102,15 +139,15 @@ def aggiorna_sensori_ha():
         },
         "sensor.dispensa_in_scadenza": {
             "state": len(in_scadenza),
-            "attributes": {"friendly_name": "Dispensa: in scadenza", "prodotti": in_scadenza, "icon": "mdi:calendar-alert", "unit_of_measurement": "prodotti"},
+            "attributes": {"friendly_name": "Dispensa: in scadenza", "prodotti": in_scadenza[:MAX_ELENCO_SENSORI], "icon": "mdi:calendar-alert", "unit_of_measurement": "prodotti"},
         },
         "sensor.dispensa_scaduti": {
             "state": len(scaduti),
-            "attributes": {"friendly_name": "Dispensa: scaduti", "prodotti": scaduti, "icon": "mdi:calendar-remove", "unit_of_measurement": "prodotti"},
+            "attributes": {"friendly_name": "Dispensa: scaduti", "prodotti": scaduti[:MAX_ELENCO_SENSORI], "icon": "mdi:calendar-remove", "unit_of_measurement": "prodotti"},
         },
         "sensor.dispensa_esauriti": {
             "state": len(esauriti_list),
-            "attributes": {"friendly_name": "Dispensa: esauriti", "prodotti": [p["nome"] for p in esauriti_list], "icon": "mdi:package-variant-remove", "unit_of_measurement": "prodotti"},
+            "attributes": {"friendly_name": "Dispensa: esauriti", "prodotti": [p["nome"] for p in esauriti_list[:MAX_ELENCO_SENSORI]], "icon": "mdi:package-variant-remove", "unit_of_measurement": "prodotti"},
         },
     }
     for entity_id, payload in stati.items():
@@ -122,40 +159,6 @@ def aggiorna_sensori_ha():
 
 def _async(fn, *args, **kwargs):
     threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True).start()
-
-
-def invia_telegram(testo, categoria=None):
-    """categoria opzionale ('acquisto', 'modifica', 'eliminazione') → check setting notif_telegram_<categoria>"""
-    token = get_ha_option("telegram_token", "")
-    chat_id_raw = get_ha_option("telegram_chat_id", "")
-    if not token or not chat_id_raw:
-        logger.warning("Telegram non configurato (token o chat_id mancanti nelle opzioni HA)")
-        return
-    if categoria:
-        conn = get_db()
-        try:
-            enabled = get_setting(conn, f"notif_telegram_{categoria}", "1")
-            if enabled != "1":
-                logger.info("Notifica Telegram '%s' disabilitata da settings", categoria)
-                return
-        finally:
-            conn.close()
-    if len(testo) > TELEGRAM_MAX_LEN:
-        logger.warning("Messaggio Telegram troppo lungo (%d char) — troncato a %d", len(testo), TELEGRAM_MAX_LEN)
-        testo = testo[:TELEGRAM_MAX_LEN - 60] + "\n\n_…messaggio troncato, apri l'app per il dettaglio_"
-    for cid in [c.strip() for c in str(chat_id_raw).split(",") if c.strip()]:
-        try:
-            r = http_requests.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": cid, "text": testo, "parse_mode": "Markdown"},
-                timeout=10,
-            )
-            if r.status_code != 200:
-                logger.error("Telegram chat %s respinto (HTTP %d): %s", cid, r.status_code, r.text[:300])
-            else:
-                logger.info("Telegram chat %s OK (%d char, cat=%s)", cid, len(testo), categoria or "default")
-        except Exception as e:
-            logger.error("Errore Telegram %s: %s", cid, e)
 
 
 def _pos_icon(pos):
@@ -174,69 +177,128 @@ def _handle_immagine(immagine_url: str, prodotto_id: int) -> str:
 
 # ── Barcode ──────────────────────────────────────────────────────────────────
 
-@bp.get("/api/barcode/<ean>")
-@jwt_required()
-def cerca_barcode(ean):
+# Campi richiesti a Open Food Facts: la risposta completa pesa oltre 100 KB, questi ~700 byte
+OFF_CAMPI = "product_name,product_name_it,brands,categories_tags,image_front_small_url,nutriscore_grade,nutriments"
+OFF_TIMEOUT = 6
+MISS_TTL = 6 * 3600          # un EAN non trovato non si cerca di nuovo per 6 ore (salvo ?refresh=1)
+_miss = {}
+
+
+def _scarica_prodotto(url, headers):
+    """Ritorna il dict "product" se trovato, None se il database risponde "non trovato".
+    Solleva se il database non risponde (rete, timeout): in quel caso non si ricorda il "non trovato"."""
+    r = http_requests.get(url, params={"fields": OFF_CAMPI}, timeout=OFF_TIMEOUT, headers=headers)
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    data = r.json()
+    return data["product"] if data.get("status") == 1 else None
+
+
+def _cerca_online(ean):
+    """Interroga i tre database insieme (non uno dopo l'altro). Ritorna (prodotto|None, tutti_risposto)."""
     headers = {"User-Agent": f"DispensaManager/{APP_VERSION}"}
-    conn = get_db()
-    try:
-        cached = conn.execute("SELECT * FROM barcode_cache WHERE ean=?", (ean,)).fetchone()
-    finally:
-        conn.close()
-
-    if cached:
-        nutriments = None
-        if cached["nutriments"]:
-            try:
-                nutriments = json.loads(cached["nutriments"])
-            except Exception:
-                pass
-        return jsonify({
-            "trovato": True, "fonte": "cache_locale", "ean": ean,
-            "nome": cached["nome"], "marca": cached["marca"] or "",
-            "categoria": cached["categoria"] or "", "immagine_url": cached["immagine_url"] or "",
-            "nutriscore": cached["nutriscore"] or "", "nutriments": nutriments or {},
-        })
-
-    databases = [
+    urls = [
         f"https://world.openfoodfacts.org/api/v2/product/{ean}.json",
         f"https://world.openproductsfacts.org/api/v2/product/{ean}.json",
         f"https://world.openbeautyfacts.org/api/v2/product/{ean}.json",
     ]
-    for url in databases:
-        try:
-            r = http_requests.get(url, timeout=8, headers=headers)
-            data = r.json()
-            if data.get("status") == 1:
-                p = data["product"]
-                nutriments = p.get("nutriments", {})
-                return jsonify({
-                    "trovato": True, "fonte": "online", "ean": ean,
-                    "nome": p.get("product_name_it") or p.get("product_name", "Prodotto sconosciuto"),
-                    "marca": (p.get("brands", "").split(",")[0].strip()),
-                    "categoria": (p.get("categories_tags", [""])[0].replace("en:", "").replace("-", " ")
-                                  if p.get("categories_tags") else ""),
-                    "immagine_url": p.get("image_front_small_url", ""),
-                    "nutriscore": p.get("nutriscore_grade", "").upper(),
-                    "nutriments": {
-                        "energia_kcal": nutriments.get("energy-kcal_100g"),
-                        "grassi": nutriments.get("fat_100g"),
-                        "grassi_saturi": nutriments.get("saturated-fat_100g"),
-                        "carboidrati": nutriments.get("carbohydrates_100g"),
-                        "zuccheri": nutriments.get("sugars_100g"),
-                        "fibre": nutriments.get("fiber_100g"),
-                        "proteine": nutriments.get("proteins_100g"),
-                        "sale": nutriments.get("salt_100g"),
-                    },
-                })
-        except Exception as e:
-            logger.warning("Errore lookup barcode %s su %s: %s", ean, url, e)
-            continue
+    ex = ThreadPoolExecutor(max_workers=len(urls))
+    futuri = [ex.submit(_scarica_prodotto, u, headers) for u in urls]
+    tutti_risposto = True
+    try:
+        for url, f in zip(urls, futuri):          # in ordine di priorita'
+            try:
+                prodotto = f.result(timeout=OFF_TIMEOUT + 2)
+            except Exception as e:
+                tutti_risposto = False
+                logger.warning("Errore lookup barcode %s su %s: %s", ean, url, e)
+                continue
+            if prodotto:
+                return prodotto, tutti_risposto
+    finally:
+        ex.shutdown(wait=False)
+    return None, tutti_risposto
 
-    return jsonify({
-        "trovato": False, "ean": ean, "nome": "", "marca": "",
-        "categoria": "", "immagine_url": "", "nutriscore": "", "nutriments": {},
-    }), 404
+
+def _categorie_da_tag(tags):
+    """['en:pasta-sauces', ...] → ['pasta sauces', ...] dal piu' generico al piu' specifico."""
+    return [re.sub(r"^[a-z]{2}:", "", t).replace("-", " ") for t in (tags or [])]
+
+
+@bp.get("/api/barcode/<ean>")
+@jwt_required()
+def cerca_barcode(ean):
+    if not re.fullmatch(r"\d{4,14}", ean):
+        return jsonify({"trovato": False, "ean": ean, "nome": "", "marca": "", "categoria": "",
+                        "immagine_url": "", "nutriscore": "", "nutriments": {}, "categorie": []}), 404
+
+    conn = get_db()
+    try:
+        cached = conn.execute("SELECT * FROM barcode_cache WHERE ean=?", (ean,)).fetchone()
+        if cached:
+            nutriments = None
+            if cached["nutriments"]:
+                try:
+                    nutriments = json.loads(cached["nutriments"])
+                except Exception:
+                    pass
+            categorie = [cached["categoria"]] if cached["categoria"] else []
+            return jsonify({
+                "trovato": True, "fonte": "cache_locale", "ean": ean,
+                "nome": cached["nome"], "marca": cached["marca"] or "",
+                "categoria": cached["categoria"] or "", "categorie": categorie,
+                "immagine_url": cached["immagine_url"] or "",
+                "nutriscore": cached["nutriscore"] or "", "nutriments": nutriments or {},
+                "suggerimento": costruisci_suggerimento(conn, ean, categorie, cached["nome"]),
+            })
+    finally:
+        conn.close()
+
+    ora = time.time()
+    if ean in _miss and ora - _miss[ean] < MISS_TTL and request.args.get("refresh") != "1":
+        prodotto, tutti_risposto = None, True
+    else:
+        prodotto, tutti_risposto = _cerca_online(ean)
+        if prodotto is None and tutti_risposto:
+            _miss[ean] = ora
+        elif prodotto is not None:
+            _miss.pop(ean, None)
+
+    conn = get_db()
+    try:
+        if prodotto is None:
+            return jsonify({
+                "trovato": False, "ean": ean, "nome": "", "marca": "",
+                "categoria": "", "categorie": [], "immagine_url": "", "nutriscore": "", "nutriments": {},
+                "suggerimento": costruisci_suggerimento(conn, ean, [], ""),
+            }), 404
+
+        nutriments = prodotto.get("nutriments") or {}
+        categorie = _categorie_da_tag(prodotto.get("categories_tags"))
+        nome = prodotto.get("product_name_it") or prodotto.get("product_name") or "Prodotto sconosciuto"
+        return jsonify({
+            "trovato": True, "fonte": "online", "ean": ean,
+            "nome": nome,
+            "marca": (prodotto.get("brands") or "").split(",")[0].strip(),
+            "categoria": categorie[-1] if categorie else "",     # la piu' specifica, non la prima (la piu' generica)
+            "categorie": categorie,
+            "immagine_url": prodotto.get("image_front_small_url") or "",
+            "nutriscore": (prodotto.get("nutriscore_grade") or "").upper(),
+            "nutriments": {
+                "energia_kcal": nutriments.get("energy-kcal_100g"),
+                "grassi": nutriments.get("fat_100g"),
+                "grassi_saturi": nutriments.get("saturated-fat_100g"),
+                "carboidrati": nutriments.get("carbohydrates_100g"),
+                "zuccheri": nutriments.get("sugars_100g"),
+                "fibre": nutriments.get("fiber_100g"),
+                "proteine": nutriments.get("proteins_100g"),
+                "sale": nutriments.get("salt_100g"),
+            },
+            "suggerimento": costruisci_suggerimento(conn, ean, categorie, nome),
+        })
+    finally:
+        conn.close()
 
 
 @bp.post("/api/barcode-cache")
@@ -344,6 +406,7 @@ def lista_esauriti():
 def aggiungi_prodotto():
     data = request.get_json(silent=True) or {}
     immagine_url = data.get("immagine_url", "")
+    quantita = _intero(data.get("quantita", 1), 1, minimo=1)
     # Salva prima senza immagine pesante (verrà spostata su FS post-insert)
     prezzo = data.get("prezzo")
     try:
@@ -359,7 +422,7 @@ def aggiungi_prodotto():
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     data.get("ean", ""), data.get("nome", "Prodotto"), data.get("marca", ""),
-                    data.get("categoria", ""), "", data.get("quantita", 1),
+                    data.get("categoria", ""), "", quantita,
                     data.get("scadenza"), data.get("note", ""),
                     json.dumps(data.get("nutriments")) if data.get("nutriments") else None,
                     data.get("nutriscore", ""), data.get("posizione", "Dispensa"),
@@ -377,18 +440,18 @@ def aggiungi_prodotto():
     log_movimento(
         nome=data.get("nome", "Prodotto"), tipo="acquisto",
         ean=data.get("ean", ""), marca=data.get("marca", ""),
-        categoria=data.get("categoria", ""), quantita=data.get("quantita", 1),
+        categoria=data.get("categoria", ""), quantita=quantita,
         prezzo=prezzo,
     )
     _async(aggiorna_sensori_ha)
 
     nome = data.get("nome", "Prodotto")
-    qty = data.get("quantita", 1)
+    qty = quantita
     pos = data.get("posizione", "Dispensa")
     scad = data.get("scadenza")
     scad_str = (f"\n\U0001f4c5 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}" if scad else "")
     prezzo_str = f"\n💰 {prezzo:.2f}€" if prezzo else ""
-    _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{nome}* ×{qty}\n{_pos_icon(pos)} {pos}{scad_str}{prezzo_str}", "acquisto")
+    _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{md_esc(nome)}* ×{qty}\n{_pos_icon(pos)} {pos}{scad_str}{prezzo_str}", "acquisto")
 
     return jsonify({"ok": True, "id": new_id}), 201
 
@@ -398,6 +461,13 @@ def aggiungi_prodotto():
 def aggiorna_prodotto(id):
     data = request.get_json(silent=True) or {}
     skip_log = bool(data.get("_skip_log", False))
+    if "quantita" in data:
+        try:
+            data["quantita"] = int(data["quantita"])
+        except (ValueError, TypeError):
+            return jsonify({"error": "quantita deve essere un intero"}), 400
+        if data["quantita"] < 0:
+            return jsonify({"error": "quantita non puo' essere negativa"}), 400
 
     p = None
     conn = get_db()
@@ -462,19 +532,18 @@ def aggiorna_prodotto(id):
         if "posizione" in data and data["posizione"] != (p["posizione"] or "Dispensa"):
             cambiamenti.append(f"Posizione: {p['posizione'] or 'Dispensa'} → {data['posizione']}")
         if "nome" in data and data["nome"] != p["nome"]:
-            cambiamenti.append(f"Nome: {p['nome']} → {data['nome']}")
+            cambiamenti.append(f"Nome: {md_esc(p['nome'])} → {md_esc(data['nome'])}")
         if "note" in data and data["note"] != (p["note"] or ""):
             cambiamenti.append("Note aggiornate")
         if cambiamenti:
             corpo = "\n".join(f"• {c}" for c in cambiamenti)
-            _async(invia_telegram, f"✏️ *Modificato: {nome}*\n\n{corpo}", "modifica")
+            _async(invia_telegram, f"✏️ *Modificato: {md_esc(nome)}*\n\n{corpo}", "modifica")
 
     return jsonify({"ok": True})
 
 
-@bp.delete("/api/prodotti/<int:id>")
-@jwt_required()
-def elimina_prodotto(id):
+def _rimuovi_prodotto(id):
+    """Elimina un prodotto registrando il movimento «eliminato» (conta come spreco nelle statistiche)."""
     p = None
     conn = get_db()
     try:
@@ -494,9 +563,52 @@ def elimina_prodotto(id):
         if p["immagine_url"]:
             delete_image_from_fs(p["immagine_url"])
         pos = p["posizione"] or "Dispensa"
-        _async(invia_telegram, f"\U0001f5d1️ *Eliminato*\n\n*{p['nome']}*\n{_pos_icon(pos)} {pos}", "eliminazione")
+        _async(invia_telegram, f"\U0001f5d1️ *Eliminato*\n\n*{md_esc(p['nome'])}*\n{_pos_icon(pos)} {pos}", "eliminazione")
     _async(aggiorna_sensori_ha)
+    return p
+
+
+@bp.delete("/api/prodotti/<int:id>")
+@jwt_required()
+def elimina_prodotto(id):
+    _rimuovi_prodotto(id)
     return jsonify({"ok": True})
+
+
+# Azioni per le notifiche con pulsanti dell'app HA (x-api-key o JWT): vedi docs/azioni_notifica_ha.md
+@bp.post("/api/prodotti/<int:id>/consuma")
+@api_key_or_jwt
+def consuma_prodotto(id):
+    """Toglie N pezzi (default 1) dalla quantita' e registra il consumo."""
+    data = request.get_json(silent=True) or {}
+    n = _intero(data.get("quantita", request.args.get("quantita", 1)), 1, minimo=1, massimo=999)
+    conn = get_db()
+    try:
+        p = conn.execute("SELECT * FROM prodotti WHERE id=?", (id,)).fetchone()
+        if not p:
+            return jsonify({"error": "Prodotto non trovato"}), 404
+        nuova = max(0, p["quantita"] - n)
+        with conn:
+            conn.execute("UPDATE prodotti SET quantita=? WHERE id=?", (nuova, id))
+    finally:
+        conn.close()
+    log_movimento(
+        nome=p["nome"], tipo="consumo", ean=p["ean"] or "", marca=p["marca"] or "",
+        categoria=p["categoria"] or "", quantita=p["quantita"] - nuova,
+        prezzo=p["prezzo"] if "prezzo" in p.keys() else None,
+    )
+    _async(aggiorna_sensori_ha)
+    return jsonify({"ok": True, "id": id, "quantita": nuova})
+
+
+@bp.post("/api/prodotti/<int:id>/butta")
+@api_key_or_jwt
+def butta_prodotto(id):
+    """Elimina il prodotto contandolo come spreco."""
+    p = _rimuovi_prodotto(id)
+    if not p:
+        return jsonify({"error": "Prodotto non trovato"}), 404
+    return jsonify({"ok": True, "id": id})
 
 
 # ── Bulk operations (multi-select) ──────────────────────────────────────────
@@ -556,19 +668,18 @@ def bulk_action():
 
         elif action == "extend_scadenza":
             # value = giorni da aggiungere alla scadenza esistente
-            try:
-                giorni = int(value)
-            except (ValueError, TypeError):
-                return jsonify({"error": "value deve essere intero (giorni da aggiungere)"}), 400
+            giorni = _intero(value, None, minimo=-3650, massimo=3650)
+            if giorni is None:
+                return jsonify({"error": "value deve essere intero tra -3650 e 3650 (giorni da aggiungere)"}), 400
             with conn:
-                # Solo per prodotti con scadenza
+                # Solo per prodotti con una scadenza valida (una data malformata darebbe NULL e la cancellerebbe)
                 cur = conn.execute(
-                    f"UPDATE prodotti SET scadenza=date(scadenza, '+{giorni} days') "
-                    f"WHERE id IN ({placeholders}) AND scadenza IS NOT NULL",
-                    ids,
+                    f"UPDATE prodotti SET scadenza=date(scadenza, ?) "
+                    f"WHERE id IN ({placeholders}) AND date(scadenza) IS NOT NULL",
+                    [f"{giorni:+d} days"] + ids,
                 )
                 affected = cur.rowcount
-            _async(invia_telegram, f"📅 *Modifica scadenze*\n\n{affected} prodotti: +{giorni} giorni", "modifica")
+            _async(invia_telegram, f"📅 *Modifica scadenze*\n\n{affected} prodotti: {giorni:+d} giorni", "modifica")
     finally:
         conn.close()
 
@@ -753,12 +864,12 @@ def invia_alerts():
             elif p["giorni"] == 0: lbl = "scade oggi!"
             elif p["giorni"] == 1: lbl = "scade domani"
             else: lbl = f"tra {p['giorni']} giorni"
-            msg += f"  • {p['nome']} — _{lbl}_\n"
+            msg += f"  • {md_esc(p['nome'])} — _{lbl}_\n"
         msg += "\n"
     if esauriti:
         msg += "❌ *Esauriti:*\n"
         for nome in esauriti:
-            msg += f"  • {nome}\n"
+            msg += f"  • {md_esc(nome)}\n"
 
     _async(invia_telegram, msg)
     _async(aggiorna_sensori_ha)
@@ -779,23 +890,21 @@ def sync_ha():
 @api_key_or_jwt
 def test_telegram():
     token = get_ha_option("telegram_token", "")
-    chat_id_raw = get_ha_option("telegram_chat_id", "")
+    ids = chat_ids()
 
-    if not token or not chat_id_raw:
+    if not token or not ids:
         return jsonify({"ok": False, "errore": "Token o chat_id non configurati nelle opzioni HA addon"})
 
     msg = "\U0001f9ea *Test Dispensa Manager*\n\nLe notifiche Telegram funzionano correttamente! ✅"
     risultati = []
-    for cid in [c.strip() for c in str(chat_id_raw).split(",") if c.strip()]:
-        try:
-            r = http_requests.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": cid, "text": msg, "parse_mode": "Markdown"},
-                timeout=10,
-            )
-            risultati.append({"chat_id": cid, "ok": r.status_code == 200, "http_status": r.status_code})
-        except Exception as e:
-            risultati.append({"chat_id": cid, "ok": False, "errore": str(e)})
+    for cid in ids:
+        esito = invia_a_chat(token, cid, msg)
+        r = {"chat_id": cid, "ok": esito["ok"]}
+        if esito["http_status"] is not None:
+            r["http_status"] = esito["http_status"]
+        if esito["errore"]:
+            r["errore"] = esito["errore"]
+        risultati.append(r)
     return jsonify({"risultati": risultati})
 
 
@@ -858,7 +967,7 @@ def report_dispensa():
         for p in scaduti[:30]:
             gg = abs(p["giorni"])
             lbl = "ieri" if gg == 1 else f"{gg} giorni fa"
-            msg += f"  • {p['nome']} ×{p['quantita']} — _scaduto {lbl}_\n"
+            msg += f"  • {md_esc(p['nome'])} ×{p['quantita']} — _scaduto {lbl}_\n"
         if len(scaduti) > 30:
             msg += f"  _…e altri {len(scaduti) - 30}_\n"
         msg += "\n"
@@ -869,7 +978,7 @@ def report_dispensa():
             if p["giorni"] == 0: lbl = "scade oggi!"
             elif p["giorni"] == 1: lbl = "scade domani"
             else: lbl = f"tra {p['giorni']} giorni"
-            msg += f"  • {p['nome']} ×{p['quantita']} — _{lbl}_\n"
+            msg += f"  • {md_esc(p['nome'])} ×{p['quantita']} — _{lbl}_\n"
         if len(in_scadenza) > 30:
             msg += f"  _…e altri {len(in_scadenza) - 30}_\n"
         msg += "\n"
@@ -877,7 +986,7 @@ def report_dispensa():
     if esauriti:
         msg += "🛒 *Esauriti (lista spesa):*\n"
         for p in esauriti[:30]:
-            msg += f"  • {p['nome']}\n"
+            msg += f"  • {md_esc(p['nome'])}\n"
         if len(esauriti) > 30:
             msg += f"  _…e altri {len(esauriti) - 30}_\n"
 

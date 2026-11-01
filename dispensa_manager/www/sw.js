@@ -1,7 +1,11 @@
-const CACHE = 'dispensa-v11';
+const CACHE = 'dispensa-v12';
 
+// Librerie leggere in locale: pronte subito. Quelle pesanti dell'OCR (worker, core WASM, dati lingua)
+// si mettono in cache alla prima lettura.
 const STATIC_ASSETS = [
-  'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
+  'vendor/zxing.min.js',
+  'vendor/chart.umd.min.js',
+  'vendor/tesseract/tesseract.min.js',
 ];
 
 self.addEventListener('install', e => {
@@ -32,7 +36,8 @@ self.addEventListener('fetch', e => {
   // Network-first per HTML, CSS e JS dell'app (no flash di vecchie versioni)
   const isAppAsset = url.endsWith('/') || url.includes('index.html')
     || url.endsWith('style.css') || url.includes('style.css?')
-    || url.endsWith('app.js') || url.includes('app.js?');
+    || url.endsWith('app.js') || url.includes('app.js?')
+    || url.includes('scanner.js') || url.includes('scadenza.js');
 
   if (isAppAsset) {
     e.respondWith(
@@ -47,7 +52,21 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first per le altre risorse statiche (librerie CDN, immagini)
+  // Librerie in locale (versioni fisse): cache-first, salvate al primo uso
+  if (url.includes('/vendor/')) {
+    e.respondWith(
+      caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
+        if (resp.ok && resp.status === 200) {
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return resp;
+      }))
+    );
+    return;
+  }
+
+  // Cache-first per le altre risorse statiche (immagini)
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request))
   );

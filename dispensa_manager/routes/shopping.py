@@ -2,10 +2,10 @@ import logging
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-import requests as http_requests
 
 from database import get_db, get_ha_option
 from auth import api_key_or_jwt
+from notifiche import chat_ids, invia_a_chat, md_esc
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def svuota_completati():
 def invia_lista_spesa_telegram():
     # Auth: x-api-key (HA automation) o JWT (frontend)
     token = get_ha_option("telegram_token", "")
-    chat_id_raw = get_ha_option("telegram_chat_id", "")
+    ids = chat_ids()
 
     conn = get_db()
     try:
@@ -96,28 +96,21 @@ def invia_lista_spesa_telegram():
     finally:
         conn.close()
 
-    if not token or not chat_id_raw:
+    if not token or not ids:
         return jsonify({"ok": False, "errore": "Telegram non configurato nelle opzioni HA addon"})
     if not items:
         return jsonify({"ok": False, "errore": "Lista spesa vuota"})
 
     msg = f"\U0001f6d2 *Lista della Spesa*\n_{datetime.now().strftime('%d/%m/%Y %H:%M')}_\n\n"
     for item in items:
-        msg += f"  ☐ {item['nome']}"
+        msg += f"  ☐ {md_esc(item['nome'])}"
         if item["quantita"] > 1:
             msg += f" \xd7{item['quantita']}"
         if item["marca"]:
-            msg += f" _{item['marca']}_"
+            msg += f" _{md_esc(item['marca'])}_"
         msg += "\n"
 
-    for cid in [c.strip() for c in str(chat_id_raw).split(",") if c.strip()]:
-        try:
-            http_requests.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": cid, "text": msg, "parse_mode": "Markdown"},
-                timeout=10,
-            )
-        except Exception as e:
-            logger.error("Errore Telegram lista spesa %s: %s", cid, e)
+    for cid in ids:
+        invia_a_chat(token, cid, msg)
 
     return jsonify({"ok": True, "totale": len(items)})
