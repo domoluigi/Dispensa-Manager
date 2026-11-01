@@ -681,6 +681,7 @@ function apriDettaglio(id) {
     + '<div class="card card-body" style="margin-top:8px;"><div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>'
     + '<div class="qty-row" style="margin-bottom:12px;"><div class="qty-btn" onclick="cambiaQtyDet(-1)">−</div><div class="qty-val" id="det-qty-delta">1</div><div class="qty-btn" onclick="cambiaQtyDet(1)">+</div></div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><button class="btn btn-secondary" onclick="consumaProdotto(' + p.id + ',' + p.quantita + ')">− Consuma</button><button class="btn btn-secondary" onclick="aggiungiQty(' + p.id + ',' + p.quantita + ')">+ Aggiungi</button></div></div>'
+    + (isEsaurito ? '' : '<button class="btn btn-secondary" style="margin-top:8px;width:100%;" onclick="segnaAperto(' + p.id + ')">📭 Aperto oggi: accorcia la scadenza</button>')
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;"><button class="btn btn-secondary" onclick="apriModifica(' + p.id + ')">✏️ Modifica</button><button class="btn btn-danger" onclick="eliminaProdotto(' + p.id + ')">🗑️ Elimina</button></div>';
   showScreen('screen-dettaglio');
 }
@@ -721,147 +722,7 @@ async function eliminaProdotto(id) {
   showScreen('screen-inventario');
 }
 
-// ── Barcode scanner — veloce con BarcodeDetector native, fallback ZXing ──
-function beep(freq = 900, duration = 100) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = freq;
-    osc.connect(gain); gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    osc.start(); osc.stop(ctx.currentTime + duration / 1000);
-  } catch(e) {}
-}
-
-async function avviaScanner() {
-  if (codeReader || barcodeDetectorActive) return;
-  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  if (!hasCamera) {
-    document.getElementById('video-container').style.display = 'none';
-    document.getElementById('scan-foto-btn').style.display = 'block';
-    document.getElementById('scan-status').textContent = scanMode === 'search' ? 'Scatta foto del barcode per cercarlo' : 'Scatta foto del barcode per aggiungerlo';
-    return;
-  }
-  document.getElementById('video-container').style.display = '';
-  document.getElementById('scan-foto-btn').style.display = 'none';
-  document.getElementById('scan-status').className = 'scan-active';
-  document.getElementById('scan-status').textContent = '📷 Avvio fotocamera...';
-
-  // Try BarcodeDetector nativo (più veloce su Chrome Android)
-  if ('BarcodeDetector' in window) {
-    try {
-      const supportedFormats = await BarcodeDetector.getSupportedFormats();
-      const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'].filter(f => supportedFormats.includes(f));
-      if (formats.length > 0) {
-        await startNativeScanner(new BarcodeDetector({ formats }));
-        return;
-      }
-    } catch(e) { console.warn('BarcodeDetector failed, fallback ZXing:', e); }
-  }
-
-  // Fallback ZXing con hints per soli formati prodotti
-  await startZXingScanner();
-}
-
-async function startNativeScanner(detector) {
-  const video = document.getElementById('video');
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    video.srcObject = stream;
-    await video.play();
-    barcodeDetectorActive = { stream };
-    document.getElementById('scan-status').innerHTML = '<span class="scan-active">📷 Scansione attiva (nativa)</span>';
-
-    const scan = async () => {
-      if (!barcodeDetectorActive) return;
-      try {
-        const codes = await detector.detect(video);
-        if (codes && codes.length > 0) {
-          const ean = codes[0].rawValue;
-          fermaScanner();
-          onBarcodeDetected(ean);
-          return;
-        }
-      } catch(e) {}
-      if (barcodeDetectorActive) requestAnimationFrame(scan);
-    };
-    requestAnimationFrame(scan);
-  } catch(e) {
-    document.getElementById('scan-status').textContent = '⚠️ Errore fotocamera: ' + e.message;
-  }
-}
-
-async function startZXingScanner() {
-  try {
-    codeReader = new ZXing.BrowserMultiFormatReader();
-    // Hints per soli formati prodotti (più veloce)
-    const formats = [
-      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
-      ZXing.BarcodeFormat.CODE_128,
-    ];
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    codeReader.hints = hints;
-
-    document.getElementById('scan-status').innerHTML = '<span class="scan-active">📷 Scansione attiva</span>';
-    codeReader.decodeFromVideoDevice(null, 'video', async (result, err) => {
-      if (result) {
-        fermaScanner();
-        onBarcodeDetected(result.getText());
-      }
-    });
-  } catch(e) {
-    document.getElementById('scan-status').textContent = '⚠️ Errore: ' + e.message;
-  }
-}
-
-function onBarcodeDetected(ean) {
-  navigator.vibrate?.(150);
-  beep();
-  document.getElementById('scan-status').className = 'scan-found';
-  document.getElementById('scan-status').innerHTML = `✅ Codice letto: <code>${esc(ean)}</code>`;
-  setTimeout(() => {
-    if (scanMode === 'search') cercaNellaDispensa(ean);
-    else cercaProdotto(ean);
-  }, 250);
-}
-
-function fermaScanner() {
-  if (codeReader) { try { codeReader.reset(); } catch(e) {} codeReader = null; }
-  if (barcodeDetectorActive) {
-    try { barcodeDetectorActive.stream?.getTracks().forEach(t => t.stop()); } catch(e) {}
-    barcodeDetectorActive = false;
-  }
-  const video = document.getElementById('video');
-  if (video && video.srcObject) {
-    try { video.srcObject.getTracks().forEach(t => t.stop()); } catch(e) {}
-    video.srcObject = null;
-  }
-}
-
 function avviaFotoScan() { document.getElementById('barcode-file-input').click(); }
-
-async function scansionaFoto(input) {
-  const file = input.files[0];
-  if (!file) return;
-  input.value = '';
-  const status = document.getElementById('scan-status');
-  status.textContent = 'Analisi barcode in corso...';
-  const imgUrl = URL.createObjectURL(file);
-  try {
-    const reader = new ZXing.BrowserMultiFormatReader();
-    const result = await reader.decodeFromImageUrl(imgUrl);
-    onBarcodeDetected(result.getText());
-  } catch(e) {
-    status.textContent = '⚠️ Barcode non riconosciuto';
-    toast('Barcode non riconosciuto, riprova');
-  } finally { URL.revokeObjectURL(imgUrl); }
-}
 
 // ── Cerca prodotto: check dispensa → cache locale → online (con status feedback) ─
 let _scanDuplicateEan = null;
@@ -930,7 +791,7 @@ async function aggiungiAEsistente() {
       body: JSON.stringify({quantita: nuovaQty})
     });
     toast(`✅ ${primo.nome}: ${primo.quantita} → ${nuovaQty}`);
-    showScreen('screen-inventario');
+    dopoAggiunta();
   } catch(e) { toast('Errore'); }
   _scanDuplicateEan = null; _scanDuplicateProdotti = null;
 }
@@ -947,7 +808,7 @@ function suggerisciDaCategoria(categoria) {
   let posizione = 'Dispensa';
   if (/latte|yogurt|formaggio|latticin|burro|panna|affettat|salum|carne|pesce|fresc|verdur|frutta|uov|salsa aperta|succo aperto/.test(cat)) posizione = 'Frigo';
   if (/surgelat|gelat|frozen|ice/.test(cat)) posizione = 'Freezer';
-  let giorni = 365;
+  let giorni = null;
   if (/latte/.test(cat)) giorni = 7;
   else if (/yogurt/.test(cat)) giorni = 14;
   else if (/formaggio|cheese/.test(cat)) giorni = 21;
@@ -974,10 +835,10 @@ function apriConferma(prodotto) {
   document.getElementById('conf-qty').textContent = '1';
   document.getElementById('conf-note').value = '';
   document.getElementById('conf-prezzo').value = '';
-  const { posizione, giorni } = suggerisciDaCategoria(prodotto.categoria);
-  const oggi = new Date();
-  oggi.setDate(oggi.getDate() + giorni);
-  document.getElementById('conf-scadenza').value = oggi.toISOString().split('T')[0];
+  const sug = suggerimentoPer(prodotto);
+  const posizione = sug.posizione;
+  document.getElementById('conf-scadenza').value = sug.scadenza;
+  document.getElementById('conf-scad-hint').textContent = sug.nota;
   document.getElementById('conf-posizione').value = posizione;
   const img = document.getElementById('conf-img');
   if (prodotto.immagine_url) { img.src = prodotto.immagine_url; img.style.display = 'block'; }
@@ -1064,7 +925,7 @@ async function salvaInDispensa() {
   };
   try {
     await apiFetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    if (payload.ean && !payload.ean.startsWith('MANUAL-') && prodottoCorrente.trovato) {
+    if (payload.ean && !payload.ean.startsWith('MANUAL-')) {
       await apiFetch(`${API_BASE()}/api/barcode-cache`, {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
@@ -1076,7 +937,7 @@ async function salvaInDispensa() {
     }
     fotoBase64 = null;
     toast('Prodotto salvato!');
-    showScreen('screen-inventario');
+    dopoAggiunta();
   } catch(e) { toast('Errore salvataggio. Riprova.'); }
 }
 
@@ -1328,129 +1189,6 @@ function renderStatsCharts(s) {
   }
 }
 
-// ── OCR scadenza ──────────────────────────────────────────────────────────────
-let ocrStream = null;
-function avviaOCRScadenza() {
-  const modal = document.getElementById('ocr-modal');
-  modal.style.display = 'flex';
-  document.getElementById('ocr-status').textContent = 'Avvio fotocamera...';
-  document.getElementById('ocr-manuale').style.display = 'none';
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } })
-    .then(stream => {
-      ocrStream = stream;
-      document.getElementById('ocr-video').srcObject = stream;
-      document.getElementById('ocr-status').textContent = 'Inquadra la data di scadenza nella cornice verde';
-    }).catch(err => { document.getElementById('ocr-status').textContent = 'Errore fotocamera: ' + err.message; });
-}
-
-function chiudiOCR() {
-  if (ocrStream) { ocrStream.getTracks().forEach(t => t.stop()); ocrStream = null; }
-  document.getElementById('ocr-modal').style.display = 'none';
-}
-
-function preprocessCanvas(canvas) {
-  const w = canvas.width, h = canvas.height;
-  const scaled = document.createElement('canvas');
-  scaled.width = w * 2; scaled.height = h * 2;
-  const sCtx = scaled.getContext('2d');
-  sCtx.imageSmoothingEnabled = false;
-  sCtx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
-  const imgData = sCtx.getImageData(0, 0, scaled.width, scaled.height);
-  const data = imgData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-    const val = lum > 128 ? 255 : 0;
-    data[i] = data[i+1] = data[i+2] = val;
-  }
-  sCtx.putImageData(imgData, 0, 0);
-  return scaled;
-}
-
-async function scattaFotoOCR() {
-  const video = document.getElementById('ocr-video');
-  const canvas = document.getElementById('ocr-canvas');
-  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  document.getElementById('ocr-status').textContent = '🔍 Elaborazione...';
-  try {
-    const processed = preprocessCanvas(canvas);
-    let text = '';
-    const r1 = await Tesseract.recognize(processed, 'ita+eng', { logger: () => {}, tessedit_char_whitelist: '0123456789/-.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ' });
-    text = r1.data.text;
-    let data = estraiDataScadenza(text);
-    if (!data) {
-      const r2 = await Tesseract.recognize(canvas, 'ita+eng', { logger: () => {} });
-      text = r2.data.text;
-      data = estraiDataScadenza(text);
-    }
-    if (data) {
-      document.getElementById('conf-scadenza').value = data;
-      chiudiOCR();
-      toast('✅ Scadenza rilevata: ' + formatDataIT(data));
-    } else {
-      document.getElementById('ocr-status').textContent = '⚠️ Data non rilevata.';
-      document.getElementById('ocr-testo-letto').textContent = text.replace(/\n/g, ' ').trim().substring(0, 100);
-      document.getElementById('ocr-manuale').style.display = 'block';
-    }
-  } catch(e) {
-    document.getElementById('ocr-status').textContent = '⚠️ Errore OCR.';
-    document.getElementById('ocr-manuale').style.display = 'block';
-  }
-}
-
-function confermaManualeOCR() {
-  const input = document.getElementById('ocr-input-manuale').value.trim();
-  const data = estraiDataScadenza(input);
-  if (data) {
-    document.getElementById('conf-scadenza').value = data;
-    chiudiOCR();
-    toast('✅ Scadenza impostata: ' + formatDataIT(data));
-  } else {
-    document.getElementById('ocr-status').textContent = '⚠️ Formato non riconosciuto.';
-  }
-}
-
-function estraiDataScadenza(testo) {
-  if (!testo) return null;
-  let t = testo.toUpperCase().replace(/[Oo]/g, '0').replace(/[Il\|]/g, '1').replace(/[Ss]/g, '5').replace(/[Bb]/g, '8').replace(/\r/g, ' ').replace(/\n/g, ' ');
-  t = t.replace(/\b(EXP|SCAD|TMC|BB|USE BY|BEST BY|CONSUMARE ENTRO|CONS\.?\s*ENT\.?|LOT|LOTTO|L\.?)\s*/g, ' ');
-  let m = t.match(/\b(\d{2})(\d{2})(\d{2})\b/);
-  if (m) { const [, g, ms, aa] = m; const a = '20' + aa; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
-  m = t.match(/\b(\d{2})(\d{2})(\d{4})\b/);
-  if (m) { const [, g, ms, a] = m; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
-  m = t.match(/\b(202\d)(\d{2})(\d{2})\b/);
-  if (m) { const [, a, ms, g] = m; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
-  m = t.match(/\b(\d{1,2})[\s\/\-\.](\d{1,2})[\s\/\-\.](\d{2,4})\b/);
-  if (m) { let [, g, ms, a] = m; if (a.length === 2) a = '20' + a; const d = new Date(parseInt(a), parseInt(ms)-1, parseInt(g)); if (isDataValida(d, parseInt(g), parseInt(ms))) return formatISO(d); }
-  m = t.match(/\b(202\d)[\s\/\-\.](\d{1,2})\b/);
-  if (m) { const [, a, ms] = m; const ug = new Date(parseInt(a), parseInt(ms), 0).getDate(); const d = new Date(parseInt(a), parseInt(ms)-1, ug); if (isDataValida(d, ug, parseInt(ms))) return formatISO(d); }
-  m = t.match(/\b(\d{1,2})[\s\/\-\.](202\d)\b/);
-  if (m) { const [, ms, a] = m; const ug = new Date(parseInt(a), parseInt(ms), 0).getDate(); const d = new Date(parseInt(a), parseInt(ms)-1, ug); if (isDataValida(d, ug, parseInt(ms))) return formatISO(d); }
-  m = t.match(/\b(202\d)(0[1-9]|1[0-2])\b/);
-  if (m) { const [, a, ms] = m; const ug = new Date(parseInt(a), parseInt(ms), 0).getDate(); const d = new Date(parseInt(a), parseInt(ms)-1, ug); if (isDataValida(d, ug, parseInt(ms))) return formatISO(d); }
-  const mesiIT = { GEN:1,FEB:2,MAR:3,APR:4,MAG:5,GIU:6,LUG:7,AGO:8,SET:9,OTT:10,NOV:11,DIC:12, GENNAIO:1,FEBBRAIO:2,MARZO:3,APRILE:4,MAGGIO:5,GIUGNO:6,LUGLIO:7,AGOSTO:8,SETTEMBRE:9,OTTOBRE:10,NOVEMBRE:11,DICEMBRE:12, JAN:1,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,DEC:12 };
-  for (const [nome, num] of Object.entries(mesiIT)) {
-    const re = new RegExp(`\\b(\\d{1,2})?\\s*${nome}\\s*(\\d{4}|\\d{2})\\b`);
-    m = t.match(re);
-    if (m) { let a = m[2]; if (a.length === 2) a = '20' + a; const g = m[1] ? parseInt(m[1]) : new Date(parseInt(a), num, 0).getDate(); const d = new Date(parseInt(a), num-1, g); if (isDataValida(d, g, num)) return formatISO(d); }
-  }
-  return null;
-}
-
-function isDataValida(data, giorno, mese) {
-  if (isNaN(data.getTime())) return false;
-  if (giorno < 1 || giorno > 31) return false;
-  if (mese < 1 || mese > 12) return false;
-  const anno = data.getFullYear();
-  if (anno < 2024 || anno > 2040) return false;
-  return true;
-}
-function formatISO(data) {
-  const y = data.getFullYear();
-  const m = String(data.getMonth()+1).padStart(2,'0');
-  const d = String(data.getDate()).padStart(2,'0');
-  return `${y}-${m}-${d}`;
-}
 function formatDataIT(iso) { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; }
 
 function salvaImpostazioni() {

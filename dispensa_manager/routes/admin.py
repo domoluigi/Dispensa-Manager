@@ -1,3 +1,4 @@
+import glob
 import json
 import logging
 import os
@@ -15,6 +16,12 @@ bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 HA_MANAGED_KEYS = ("telegram_token", "telegram_chat_id", "cloudflare_url")
 # Chiavi interne (non esposte mai)
 INTERNAL_KEYS = ("schema_version", "jwt_secret_key", "api_key")
+
+
+def _altri_admin_attivi(conn, escluso_id) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) AS n FROM users WHERE is_admin=1 AND is_active=1 AND id!=?", (escluso_id,)
+    ).fetchone()["n"]
 
 
 @bp.get("/users")
@@ -79,6 +86,11 @@ def update_user(user_id):
         if not fields:
             return jsonify({"error": "Nessun campo da aggiornare"}), 400
 
+        toglie_admin = bool(user["is_admin"] and user["is_active"]) and (
+            fields.get("is_admin", 1) == 0 or fields.get("is_active", 1) == 0)
+        if toglie_admin and _altri_admin_attivi(conn, user_id) == 0:
+            return jsonify({"error": "Deve restare almeno un amministratore attivo"}), 400
+
         set_clause = ", ".join(f"{k}=?" for k in fields)
         values = list(fields.values()) + [user_id]
         with conn:
@@ -96,6 +108,9 @@ def delete_user(user_id):
         return jsonify({"error": "Non puoi eliminare te stesso"}), 400
     conn = get_db()
     try:
+        user = conn.execute("SELECT is_admin, is_active FROM users WHERE id=?", (user_id,)).fetchone()
+        if user and user["is_admin"] and user["is_active"] and _altri_admin_attivi(conn, user_id) == 0:
+            return jsonify({"error": "Deve restare almeno un amministratore attivo"}), 400
         with conn:
             conn.execute("DELETE FROM users WHERE id=?", (user_id,))
         return jsonify({"ok": True})
@@ -259,12 +274,15 @@ def _restore_backup(backup: dict) -> dict:
             # Backup tabelle dati (NON utenti, NON segreti)
             for table in ("prodotti", "lista_spesa", "storico_movimenti", "barcode_cache"):
                 conn.execute(f"DELETE FROM {table}")
+                colonne = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
                 rows = backup.get(table, [])
                 counts[table] = len(rows)
                 for row in rows:
                     if not row:
                         continue
-                    keys = list(row.keys())
+                    keys = [k for k in row.keys() if k in colonne]   # i nomi colonna arrivano dal file caricato
+                    if not keys:
+                        continue
                     placeholders = ",".join("?" * len(keys))
                     cols = ",".join(keys)
                     conn.execute(
@@ -281,6 +299,27 @@ def _restore_backup(backup: dict) -> dict:
         return counts
     finally:
         conn.close()
+
+
+BACKUP_AUTO_COPIE = 4
+
+
+def scrivi_backup_auto() -> str:
+    """Scrive auto_backup.json (l'ultimo) e una copia datata; tiene le ultime BACKUP_AUTO_COPIE copie,
+    cosi' un dato rovinato non sovrascrive subito l'unico backup buono."""
+    os.makedirs(BACKUPS_DIR, exist_ok=True)
+    contenuto = json.dumps(_build_backup(), indent=2, default=str, ensure_ascii=False)
+    auto_path = os.path.join(BACKUPS_DIR, "auto_backup.json")
+    copia = os.path.join(BACKUPS_DIR, f"auto_backup_{datetime.now().strftime('%Y%m%d')}.json")
+    for percorso in (auto_path, copia):
+        with open(percorso, "w", encoding="utf-8") as f:
+            f.write(contenuto)
+    for vecchia in sorted(glob.glob(os.path.join(BACKUPS_DIR, "auto_backup_*.json")))[:-BACKUP_AUTO_COPIE]:
+        try:
+            os.remove(vecchia)
+        except OSError as e:
+            logger.warning("Impossibile rimuovere il backup vecchio %s: %s", vecchia, e)
+    return auto_path
 
 
 @bp.get("/backup")
@@ -349,11 +388,7 @@ def auto_backup_status():
 def trigger_auto_backup_now():
     """Forza un backup automatico immediato."""
     try:
-        auto_path = os.path.join(BACKUPS_DIR, "auto_backup.json")
-        os.makedirs(BACKUPS_DIR, exist_ok=True)
-        backup = _build_backup()
-        with open(auto_path, "w", encoding="utf-8") as f:
-            json.dump(backup, f, indent=2, default=str, ensure_ascii=False)
+        auto_path = scrivi_backup_auto()
         return jsonify({"ok": True, "path": auto_path, "size_bytes": os.path.getsize(auto_path)})
     except Exception as e:
         logger.error("Errore backup manuale auto: %s", e)

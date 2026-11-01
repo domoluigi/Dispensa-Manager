@@ -5,6 +5,62 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.1.0] — 2026-11-01
+
+### Scansione barcode
+- **Checksum e doppia lettura**: un codice vale solo se e' un EAN-13/8, UPC-A o UPC-E valido (checksum corretto) e viene letto due volte di fila. Prima il primo Code128 qualsiasi, anche un lotto, veniva preso per un EAN.
+- **Fotocamera**: ZXing parte con la camera posteriore a 1280×720 (prima senza ne' facingMode ne' risoluzione) e legge ogni 120 ms invece di 500; messa a fuoco continua, **torcia** e **zoom** dove il telefono li supporta.
+- **Fotocamera spenta davvero**: se si esce dalla schermata mentre lo scanner sta partendo, lo stream si ferma da solo (prima restava acceso).
+- **Foto del barcode**: prova il rilevatore nativo, poi ZXing anche su versioni ridotte dell'immagine.
+- **Scansione continua** (opzione nella schermata Scansiona): dopo ogni prodotto salvato o +1 torna alla fotocamera.
+
+### OCR della scadenza
+- **Parser riscritto** (`www/scadenza.js`, 40 test): le correzioni O→0, I→1, S→5, B→8 valgono solo dentro i numeri. Prima si applicavano a tutto il testo e i mesi OTT, SET, LUG, AGO, NOV, DIC non venivano mai riconosciuti, e SCAD/BB/LOT non venivano tolti. Sulle stesse 19 frasi: da 11 a 19 giuste, piu' le nuove (due date, lotti, date ISO).
+- **Scadenza, produzione, lotto**: con due date vince quella dopo SCAD/EXP/TMC/BB; si scartano PROD/CONF/MFG; un numero a 6 cifre dopo LOTTO non e' piu' una data. Prima un lotto `250627` diventava 2027-06-25 e con PROD+SCAD veniva scelta la produzione. Una data ISO `2027-05-15` non diventa piu' fine mese.
+- **Legge solo la cornice** (prima l'intero fotogramma, ingrandito 2×), con contrasto allargato e tre preparazioni (soglia locale, Otsu, solo grigi) che funzionano anche con scritte chiare su fondo scuro.
+- **Lettura automatica** ogni mezzo secondo, risultato da **confermare** («Ho letto: …», alternative, Riprova) invece di scrivere subito nel campo.
+- **Motore persistente**: il worker Tesseract resta in memoria mentre si legge (prima veniva ricreato a ogni scatto, due volte per foto) e la whitelist dei caratteri e' impostata dove tesseract.js v5 la legge (passata a `recognize()` veniva ignorata).
+- **Torcia e zoom** anche per l'OCR.
+
+### Suggerimenti alla conferma del prodotto
+- **Categoria corretta**: si usa il tag piu' specifico (prima il primo, il piu' generico e in inglese, quindi le regole italiane non scattavano quasi mai e la scadenza di default era sempre oggi+365). Tabella con termini italiani e inglesi.
+- **Dallo storico**: se hai gia' comprato quel prodotto, la scadenza suggerita e' la mediana dei giorni tra inserimento e scadenza degli ultimi acquisti (esclusi quelli segnati «Aperto»).
+- **Niente date inventate**: senza un'indicazione affidabile il campo scadenza resta vuoto, con la nota «Scadenza non suggerita».
+- I prodotti non trovati online ma inseriti a mano si ricordano nella cache locale.
+
+### Ricerca online piu' veloce
+- Richiesta dei soli campi utili a Open Food Facts: ~700 byte invece di ~117 KB.
+- I tre database (OFF, Products, Beauty) si interrogano **insieme**, non uno dopo l'altro (prima fino a 24 s per un prodotto sconosciuto, ora al massimo ~6 s).
+- Gli EAN non trovati non si ricercano per 6 ore (`?refresh=1` per forzare); un errore di rete non viene ricordato come «non trovato». L'EAN deve essere numerico.
+
+### Nuove funzioni
+- **Aperto oggi** nel dettaglio prodotto: accorcia la scadenza in base alla categoria e annota «Aperto il gg/mm»; con Annulla.
+- **Azioni per le notifiche di HA**: `POST /api/prodotti/<id>/consuma` e `/butta` (con `x-api-key`), e i sensori `sensor.dispensa_in_scadenza`/`scaduti` ora riportano l'`id` di ogni prodotto. Esempio in `docs/azioni_notifica_ha.md`.
+
+### Corretto
+- **Token Telegram nei log**: gli errori di rete di `requests` includono l'URL con `/bot<TOKEN>` e finivano nel log dell'add-on; ora il token e' sempre oscurato.
+- **Telegram con nomi speciali**: un `_`, `*`, `[` nel nome del prodotto faceva rifiutare tutto il messaggio (Markdown); ora i nomi sono protetti e, se Telegram rifiuta comunque, si riprova in testo semplice.
+- **Lista spesa**: gli esauriti senza EAN non si bloccano piu' a vicenda (bastava una voce manuale per impedire di aggiungere gli altri) e un prodotto spuntato come comprato non rientra in lista a ogni sincronizzazione.
+- **Estendi scadenze** con un valore negativo non cancella piu' le date (scriveva `+-5 days`, che SQLite legge come NULL); valore limitato a ±3650 giorni.
+- **Quantita'** non valida o negativa rifiutata (prima errore 500 su una stringa).
+- **Amministratori**: non si puo' piu' togliere i privilegi, disattivare o eliminare l'ultimo amministratore attivo.
+- **Ripristino backup**: si usano solo le colonne che esistono nella tabella (i nomi arrivavano dal file caricato).
+- **Backup automatico** con copie datate: le ultime 4 (prima un solo file sovrascritto ogni settimana).
+- **Sensori HA**: elenchi limitati a 25 voci (oltre ~16 KB gli attributi non vengono salvati dal recorder).
+- La scadenza di default usava `toISOString()` (UTC): a ridosso della mezzanotte sbagliava di un giorno.
+
+### Sicurezza e manutenzione
+- **Niente piu' CDN**: Chart.js, ZXing e Tesseract (con core WASM e dati lingua) sono in `www/vendor/` a versione fissa. Funziona anche senza Internet, la Content-Security-Policy non ammette piu' unpkg/jsdelivr e non c'e' piu' codice di terzi caricato senza controllo di integrita'.
+- `requirements.txt` con versioni fisse (prima `>=`: una nuova major poteva rompere la build).
+- Service worker `dispensa-v12`: anche `scanner.js` e `scadenza.js` sono network-first, le librerie in locale cache-first.
+- Test: `tests/test_scadenza.js` (40 casi) e `tests/test_backend.py` (20 test su database temporaneo).
+
+### Non incluso
+- Ban IP senza scadenza e cambio obbligatorio della password `admin` al primo accesso: scelte di progetto da discutere.
+- Le immagini dei prodotti non sono nel backup JSON.
+
+---
+
 ## [2.0.21] — 2026-10-03
 
 ### Rimosso
