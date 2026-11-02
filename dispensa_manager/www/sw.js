@@ -1,4 +1,4 @@
-const CACHE = 'dispensa-v13';
+const CACHE = 'dispensa-v14';
 
 // Librerie leggere in locale: pronte subito. Quelle pesanti dell'OCR (worker, core WASM, dati lingua)
 // si mettono in cache alla prima lettura.
@@ -37,7 +37,7 @@ self.addEventListener('fetch', e => {
   const isAppAsset = url.endsWith('/') || url.includes('index.html')
     || url.endsWith('style.css') || url.includes('style.css?')
     || url.endsWith('app.js') || url.includes('app.js?')
-    || url.includes('scanner.js') || url.includes('scadenza.js');
+    || url.includes('scanner.js') || url.includes('scadenza.js') || url.includes('spesa.js');
 
   if (isAppAsset) {
     e.respondWith(

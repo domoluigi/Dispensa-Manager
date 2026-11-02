@@ -38,5 +38,22 @@ verifica("la regola per schermi larghi sta dopo la regola base di .tab-bar (altr
 verifica('campo chiave API con lo stile degli altri campi', /id="api-key-display" class="setting-input"/.test(html));
 verifica('controlli nativi scuri in tema scuro', /\.dark \{ color-scheme: dark; \}/.test(css));
 
+// Lista della spesa 2.2.0: tre sezioni, aggiunta, badge, nessun codice vecchio rimasto in app.js
+const spesaJs = fs.readFileSync(path.join(www, 'spesa.js'), 'utf8');
+const sw = fs.readFileSync(path.join(www, 'sw.js'), 'utf8');
+for (const id of ['spesa-input', 'spesa-completa', 'spesa-da-comprare', 'spesa-suggeriti', 'spesa-carrello', 'badge-spesa']) {
+  verifica('spesa: elemento #' + id, html.includes('id="' + id + '"'));
+}
+verifica('spesa.js caricato dopo app.js', html.indexOf('src="spesa.js') > html.indexOf('src="app.js'));
+verifica('spesa.js network-first nel service worker', /includes\('spesa\.js'\)/.test(sw));
+verifica('le funzioni della lista stanno solo in spesa.js', !/function caricaListaSpesa|function renderListaSpesa|function aggiungiSpesaManuale/.test(js) && /async function caricaListaSpesa/.test(spesaJs));
+verifica('esiste una sola definizione di inviaListaSpesaTelegram', (js.match(/function inviaListaSpesaTelegram/g) || []).length + (spesaJs.match(/function inviaListaSpesaTelegram/g) || []).length === 1);
+verifica('nessun prompt() per aggiungere alla lista', !/\bprompt\(/.test(spesaJs));
+// ogni funzione chiamata da un onclick dell'HTML della spesa esiste
+const htmlSpesa = html.slice(html.indexOf('id="screen-spesa"'), html.indexOf('SCREEN: Statistiche'));
+const chiamate = new Set([...spesaJs.matchAll(/onclick="([a-zA-Z]+)\(/g), ...htmlSpesa.matchAll(/(?:onclick|onsubmit|oninput)="([a-zA-Z]+)\(/g)].map(m => m[1]));
+const mancanti = [...chiamate].filter(f => !new RegExp('function ' + f + '\\b').test(spesaJs + js + (fs.readFileSync(path.join(www, 'scanner.js'), 'utf8'))));
+verifica('funzioni degli onclick della spesa definite (' + [...chiamate].length + ')' + (mancanti.length ? ' — mancano: ' + mancanti.join() : ''), mancanti.length === 0);
+
 console.log(ok + '/' + tot);
 process.exit(ok === tot ? 0 : 1);

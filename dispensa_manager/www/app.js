@@ -253,6 +253,7 @@ async function caricaInventario() {
     const r = await apiFetch(`${API_BASE()}/api/prodotti`);
     prodottiCache = await r.json();
     applicaFiltroSort();
+    if (typeof aggiornaBadgeSpesa === 'function') aggiornaBadgeSpesa();
   } catch(e) {
     document.getElementById('lista-prodotti').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
   }
@@ -965,87 +966,6 @@ function inserisciManuale() {
 }
 
 // ── Lista spesa ──────────────────────────────────────────────────────────────
-async function caricaListaSpesa() {
-  try {
-    const r = await apiFetch(`${API_BASE()}/api/lista-spesa`);
-    const items = await r.json();
-    renderListaSpesa(items);
-  } catch(e) {
-    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
-  }
-}
-
-function renderListaSpesa(items) {
-  if (!items.length) {
-    document.getElementById('lista-spesa').innerHTML = `<div class="empty"><div class="empty-icon">🛒</div><div>Lista spesa vuota!</div></div>`;
-    return;
-  }
-  let html = '';
-  items.forEach(item => {
-    const done = item.completato === 1;
-    const qty = item.quantita || 1;
-    html += `<div class="spesa-item">
-      <div class="spesa-check ${done ? 'done' : ''}" onclick="toggleSpesa(${item.id}, ${done ? 0 : 1}, ${qty})"></div>
-      <div class="spesa-info" style="flex:1;min-width:0;">
-        <div class="spesa-nome ${done ? 'done' : ''}">${esc(item.nome)}</div>
-        ${item.marca ? `<div style="font-size:12px;color:var(--muted);">${esc(item.marca)}</div>` : ''}
-      </div>
-      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-right:4px;" onclick="event.stopPropagation()">
-        <div class="quick-btn" style="width:28px;height:28px;font-size:14px;" onclick="cambiaQtySpesa(${item.id}, ${qty - 1}, ${item.completato})">−</div>
-        <span style="font-weight:600;min-width:22px;text-align:center;font-size:13px;color:var(--text);">${qty}</span>
-        <div class="quick-btn" style="width:28px;height:28px;font-size:14px;" onclick="cambiaQtySpesa(${item.id}, ${qty + 1}, ${item.completato})">+</div>
-      </div>
-      <div class="spesa-del" onclick="eliminaSpesa(${item.id})">✕</div>
-    </div>`;
-  });
-  document.getElementById('lista-spesa').innerHTML = html;
-}
-
-async function cambiaQtySpesa(id, nuovaQty, completato) {
-  if (nuovaQty < 1) {
-    if (confirm('Quantità a 0: rimuovere dalla lista?')) await eliminaSpesa(id);
-    return;
-  }
-  await apiFetch(`${API_BASE()}/api/lista-spesa/${id}`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ completato: completato || 0, quantita: nuovaQty })
-  });
-  caricaListaSpesa();
-}
-
-async function toggleSpesa(id, completato, quantita) {
-  await apiFetch(`${API_BASE()}/api/lista-spesa/${id}`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ completato, quantita: quantita || 1 })
-  });
-  caricaListaSpesa();
-}
-
-async function eliminaSpesa(id) {
-  await apiFetch(`${API_BASE()}/api/lista-spesa/${id}`, { method: 'DELETE' });
-  caricaListaSpesa();
-}
-
-async function svuotaCompletati() {
-  await apiFetch(`${API_BASE()}/api/lista-spesa/svuota-completati`, { method: 'DELETE' });
-  toast('Completati rimossi');
-  caricaListaSpesa();
-}
-
-async function inviaListaSpesaTelegram() {
-  const r = await apiFetch(`${API_BASE()}/api/lista-spesa/invia-telegram`);
-  const data = await r.json();
-  toast(data.ok ? '📤 Lista inviata su Telegram!' : '⚠️ ' + (data.errore || 'Errore'));
-}
-
-function aggiungiSpesaManuale() {
-  const nome = prompt('Nome del prodotto da aggiungere alla lista:');
-  if (!nome || !nome.trim()) return;
-  apiFetch(`${API_BASE()}/api/lista-spesa`, {
-    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({nome: nome.trim(), quantita: 1})
-  }).then(() => { toast('Aggiunto alla lista!'); caricaListaSpesa(); });
-}
-
 // ── Statistiche con Chart.js + anti-spreco insights ──────────────────────────
 let _statsCharts = [];
 

@@ -4,7 +4,11 @@ import os
 import logging
 import secrets
 import base64
+import uuid
 import bcrypt
+
+from normalizza import token_chiave
+from reparti import reparto_di
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +19,8 @@ OPTIONS_PATH = "/data/options.json"
 IMAGES_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "images")
 BACKUPS_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "backups")
 
-APP_VERSION = "2.1.2"
-SCHEMA_VERSION = 7
+APP_VERSION = "2.2.0"
+SCHEMA_VERSION = 8
 
 
 def get_db():
@@ -138,6 +142,57 @@ def _set_schema_version(conn, version):
         "INSERT OR REPLACE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
         ("schema_version", str(version), "Versione schema DB interna"),
     )
+
+
+def _migra_lista_v8(conn):
+    """Lista della spesa 2.2.0: colonne per reparti/sincronizzazione, tabelle di servizio e pulizia delle voci
+    che le versioni precedenti aggiungevano da sole per ogni prodotto esaurito.
+
+    Quelle voci automatiche non si perdono: i prodotti esauriti restano in dispensa e diventano suggerimenti.
+    Per sicurezza le righe tolte si copiano in lista_spesa_legacy."""
+    for colonna, tipo in [("uid", "TEXT"), ("origine", "TEXT DEFAULT 'manuale'"), ("nome_norm", "TEXT"),
+                          ("reparto", "TEXT"), ("aggiunto_da", "TEXT"), ("aggiornato_il", "TEXT"),
+                          ("completato_il", "TEXT")]:
+        try:
+            conn.execute(f"ALTER TABLE lista_spesa ADD COLUMN {colonna} {tipo}")
+        except sqlite3.OperationalError:
+            pass   # gia' presente
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS suggerimenti_ignorati (
+            prodotto_id INTEGER PRIMARY KEY,
+            data TEXT
+        );
+        CREATE TABLE IF NOT EXISTS spesa_storico (
+            nome_norm TEXT PRIMARY KEY,
+            nome TEXT NOT NULL,
+            volte INTEGER DEFAULT 1,
+            ultimo TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_lista_nome_norm ON lista_spesa(nome_norm);
+        CREATE TABLE IF NOT EXISTS lista_spesa_legacy AS SELECT * FROM lista_spesa WHERE 0;
+    """)
+    esauriti = conn.execute("SELECT ean, nome FROM prodotti WHERE quantita<=0").fetchall()
+    eans = {e["ean"] for e in esauriti if e["ean"]}
+    nomi = {(e["nome"] or "").lower() for e in esauriti}
+    righe = conn.execute("SELECT * FROM lista_spesa ORDER BY id").fetchall()
+    adesso = conn.execute("SELECT datetime('now')").fetchone()[0]
+    auto = []
+    with conn:
+        for r in righe:
+            if not r["completato"] and ((r["ean"] and r["ean"] in eans) or (r["nome"] or "").lower() in nomi):
+                auto.append(r["id"])
+                continue
+            conn.execute(
+                "UPDATE lista_spesa SET uid=COALESCE(NULLIF(uid,''), ?), origine=COALESCE(origine, 'manuale'), "
+                "nome_norm=?, reparto=?, aggiornato_il=COALESCE(aggiornato_il, ?) WHERE id=?",
+                (uuid.uuid4().hex, " ".join(sorted(token_chiave(r["nome"]))), reparto_di(r["nome"], r["marca"]), adesso, r["id"]),
+            )
+        if auto:
+            segnaposto = ",".join("?" * len(auto))
+            conn.execute(f"INSERT INTO lista_spesa_legacy SELECT * FROM lista_spesa WHERE id IN ({segnaposto})", auto)
+            conn.execute(f"DELETE FROM lista_spesa WHERE id IN ({segnaposto})", auto)
+    logger.info("Lista spesa v8: %d voci manuali conservate, %d voci automatiche tolte (ora sono suggerimenti)",
+                len(righe) - len(auto), len(auto))
 
 
 def init_db():
@@ -326,6 +381,13 @@ def init_db():
             )
             _set_schema_version(conn, 7)
         current = 7
+
+    if current < 8:
+        logger.info("Migrazione schema DB: v7 → v8 (lista della spesa con suggeriti)")
+        _migra_lista_v8(conn)
+        with conn:
+            _set_schema_version(conn, 8)
+        current = 8
 
     conn.close()
 

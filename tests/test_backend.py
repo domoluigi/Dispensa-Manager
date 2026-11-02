@@ -142,27 +142,6 @@ class Api(unittest.TestCase):
         r = self.c.post("/api/prodotti/bulk", json={"ids": [pid], "action": "extend_scadenza", "value": 99999}, headers=self.h)
         self.assertEqual(r.status_code, 400)
 
-    def test_lista_spesa_prodotti_senza_ean(self):
-        conn = database.get_db()
-        try:
-            with conn:
-                conn.execute("DELETE FROM lista_spesa")
-                conn.execute("INSERT INTO lista_spesa (nome, ean) VALUES ('Pane manuale', '')")   # voce manuale
-                conn.execute("INSERT INTO prodotti (ean, nome, quantita) VALUES ('', 'Latte senza ean', 0)")
-                conn.execute("INSERT INTO prodotti (ean, nome, quantita) VALUES ('', 'Uova senza ean', 0)")
-        finally:
-            conn.close()
-        products.aggiorna_sensori_ha()
-        products.aggiorna_sensori_ha()      # seconda sincronizzazione: nessun doppione
-        nomi = sorted(r["nome"] for r in self.c.get("/api/lista-spesa", headers=self.h).get_json())
-        self.assertEqual(nomi, ["Latte senza ean", "Pane manuale", "Uova senza ean"])
-        # spuntato = comprato ma non ancora ricaricato: non deve rientrare
-        voce = next(r for r in self.c.get("/api/lista-spesa", headers=self.h).get_json() if r["nome"] == "Latte senza ean")
-        self.c.put(f"/api/lista-spesa/{voce['id']}", json={"completato": 1, "quantita": 1}, headers=self.h)
-        products.aggiorna_sensori_ha()
-        nomi = sorted(r["nome"] for r in self.c.get("/api/lista-spesa", headers=self.h).get_json())
-        self.assertEqual(nomi.count("Latte senza ean"), 1)
-
     def test_barcode_online_miss_cache_e_suggerimento(self):
         prodotto = {"product_name": "Arrabbiata", "brands": "Barilla, altro", "image_front_small_url": "https://x/y.jpg",
                     "categories_tags": ["en:plant-based-foods", "en:sauces", "en:pasta-sauces", "en:arrabbiata-sauces"],

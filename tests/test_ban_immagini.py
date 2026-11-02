@@ -126,7 +126,7 @@ class BanIp(unittest.TestCase):
             database.DB_PATH = vecchio
         self.assertIsNone(riga["scade_il"])          # i ban esistenti restano permanenti
         self.assertEqual(durata["value"], "60")
-        self.assertEqual(versione["value"], "7")
+        self.assertEqual(versione["value"], str(database.SCHEMA_VERSION))   # migra fino all'ultima versione
 
 
 class ImmaginiNelBackup(unittest.TestCase):
