@@ -13,7 +13,7 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 📱 **PWA iPhone/Android** — installabile come app, funziona offline
 - 📦 **Scanner barcode** — scansiona i prodotti con la fotocamera (rilevatore nativo del telefono, ZXing di ripiego): controlla il checksum del codice e lo accetta solo dopo due letture uguali; torcia e zoom dove il telefono li offre; modalita' **scansione continua** per caricare la spesa in fila
 - 📷 **Foto prodotto** — scatta o scegli una foto per i prodotti senza barcode noto
-- 🗄️ **Posizione automatica** — Frigo 🧊 / Dispensa 🗄️ / Freezer ❄️ suggeriti dalla categoria
+- 🗄️ **Posizione automatica** — Dispensa 🗄️ / Frigo 🧊 / Congelatore ❄️ / Saponi 🧴 / Altro 📦 scelti dal nome e dalla categoria, anche per i prodotti già in casa (con anteprima e annulla)
 - 📅 **Scadenza suggerita** — dal tuo storico dello stesso prodotto (mediana degli acquisti passati), altrimenti dalla categoria; se non c'e' nulla di affidabile il campo resta vuoto
 - 📭 **Aperto oggi** — un tocco accorcia la scadenza dopo l'apertura (latte 3 giorni, sughi 4, ecc.) e annota «Aperto il…»; con Annulla
 - 🔍 **OCR scadenza** — legge la data con la fotocamera da sola (Tesseract.js in locale), distingue scadenza, produzione e lotto, mostra il risultato da confermare
@@ -197,7 +197,8 @@ Nella schermata Dispensa sono disponibili i seguenti filtri rapidi:
 | ⏰ **In scadenza** | Prodotti che scadono entro la soglia configurata (default 3 giorni) |
 | 🔴 **Scaduti** | Prodotti con data di scadenza già passata |
 | 🧊 **Frigo** | Solo prodotti in posizione Frigo |
-| ❄️ **Freezer** | Solo prodotti in posizione Freezer |
+| ❄️ **Congelatore** | Solo prodotti in posizione Congelatore (valore `Freezer`) |
+| 🧴 **Saponi** / 📦 **Altro** | Igiene e pulizia della casa / tutto il resto che non è cibo |
 | 🗄️ **Dispensa** | Solo prodotti in posizione Dispensa |
 
 ---
@@ -389,7 +390,7 @@ La schermata Statistiche mostra:
 - **Acquisti totali** — numero di prodotti acquistati nel tempo
 - **Consumi totali** — numero di prodotti consumati
 - **Acquisti questo mese** — acquisti nel mese corrente
-- **Prodotti per posizione** — quanti prodotti attivi in Frigo, Dispensa, Freezer
+- **Prodotti per posizione** — quanti prodotti attivi in Dispensa, Frigo, Congelatore, Saponi, Altro
 - **Top 5 più acquistati** — prodotti acquistati più frequentemente
 - **Top 5 più consumati** — prodotti consumati più frequentemente
 
@@ -456,6 +457,8 @@ Dispensa-Manager/
 │   ├── app.py                  # Backend Flask
 │   ├── notifiche.py            # Telegram: escape Markdown, token fuori dai log
 │   ├── suggerimenti.py         # Posizione e scadenza suggerite (storico + categoria)
+│   ├── posizioni.py            # Classificatore delle cinque posizioni
+│   ├── riclassifica.py         # Proposte, applicazione e annullo per i prodotti esistenti
 │   ├── spesa.py                # Lista della spesa: voci, suggeriti, ricerca
 │   ├── sync_todo.py            # Sincronizzazione con la lista to-do di Home Assistant (widget)
 │   ├── normalizza.py           # Nomi: quantità, singolare/plurale, confronto

@@ -98,8 +98,10 @@
       <div class="chip" data-filtro="scadenza" onclick="setFiltro('scadenza')">⏰ In scadenza</div>
       <div class="chip" data-filtro="scaduti" onclick="setFiltro('scaduti')">🔴 Scaduti</div>
       <div class="chip" data-filtro="frigo" onclick="setFiltro('frigo')">🧊 Frigo</div>
-      <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Freezer</div>
+      <div class="chip" data-filtro="freezer" onclick="setFiltro('freezer')">❄️ Congelatore</div>
       <div class="chip" data-filtro="dispensa" onclick="setFiltro('dispensa')">🗄️ Dispensa</div>
+      <div class="chip" data-filtro="saponi" onclick="setFiltro('saponi')">🧴 Saponi</div>
+      <div class="chip" data-filtro="altro" onclick="setFiltro('altro')">📦 Altro</div>
     </div>
     <div class="sort-bar">
       <span class="sort-label">Ordina:</span>
@@ -109,6 +111,9 @@
         <option value="nome">Nome A→Z</option>
         <option value="quantita">Quantità</option>
       </select>
+    </div>
+    <div class="riclass-banner hidden" id="riclass-banner" role="button" tabindex="0" onclick="apriRiclassifica()">
+      <span id="riclass-testo"></span><span class="riclass-cta">Rivedi ›</span>
     </div>
     <div class="card" id="lista-container">
       <div id="lista-prodotti"><div class="empty"><div class="spinner"></div></div></div>
@@ -224,10 +229,12 @@
       </div>
       <div class="field">
         <label>Posizione</label>
-        <select id="conf-posizione">
+        <select id="conf-posizione" onchange="_posManuale = true">
           <option value="Dispensa">🗄️ Dispensa</option>
           <option value="Frigo">🧊 Frigo</option>
-          <option value="Freezer">❄️ Freezer</option>
+          <option value="Freezer">❄️ Congelatore</option>
+          <option value="Saponi">🧴 Saponi</option>
+          <option value="Altro">📦 Altro</option>
         </select>
       </div>
       <div class="field">
@@ -290,6 +297,11 @@
       </div>
       <button class="btn btn-primary" onclick="salvaImpostazioni()" style="margin-top:4px;">Salva</button>
     </div>
+    <div class="card card-body" style="margin-top: 12px;">
+      <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--muted);">Posizioni dei prodotti</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5;">Dispensa, Frigo, Congelatore, Saponi e Altro vengono scelti da soli per i prodotti nuovi. Qui puoi controllare quelli già in casa.</div>
+      <button class="btn btn-secondary" onclick="apriRiclassifica()">🧭 Controlla le posizioni</button>
+    </div>
     <div class="card card-body" style="margin-top:12px;" id="pwa-section">
       <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">📲 App</div>
       <div id="pwa-status-installed" style="display:none;font-size:14px;color:var(--green-d);font-weight:500;padding:8px 0;">✅ Stai usando l'app installata</div>
@@ -343,7 +355,9 @@
         <select id="mod-posizione">
           <option value="Dispensa">🗄️ Dispensa</option>
           <option value="Frigo">🧊 Frigo</option>
-          <option value="Freezer">❄️ Freezer</option>
+          <option value="Freezer">❄️ Congelatore</option>
+          <option value="Saponi">🧴 Saponi</option>
+          <option value="Altro">📦 Altro</option>
         </select>
       </div>
       <div class="field"><label>Note (opzionale)</label><input type="text" id="mod-note" placeholder="es. aperto, in frigo..."></div>
@@ -487,14 +501,29 @@
   </div>
 </div>
 
+<!-- Modal riclassifica posizioni -->
+<div class="modal-overlay hidden" id="modal-riclass">
+  <div class="modal-box" style="max-height:86vh;display:flex;flex-direction:column;">
+    <div class="modal-title">Controlla le posizioni</div>
+    <div id="riclass-corpo" style="overflow-y:auto;flex:1;margin-bottom:12px;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn btn-primary" id="riclass-applica" onclick="applicaRiclassifica(false)">Sposta i selezionati</button>
+      <button class="btn btn-secondary" onclick="applicaRiclassifica(true)">Lascia dove sono i non selezionati</button>
+      <button class="btn btn-secondary" onclick="chiudiRiclassifica()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal bulk action menu -->
 <div class="modal-overlay hidden" id="modal-bulk-action">
   <div class="modal-box">
     <div class="modal-title">Azioni su <span id="bulk-action-count">0</span> prodotti</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
       <button class="btn btn-secondary" onclick="bulkMoveTo('Frigo')">🧊 Sposta in Frigo</button>
-      <button class="btn btn-secondary" onclick="bulkMoveTo('Freezer')">❄️ Sposta in Freezer</button>
+      <button class="btn btn-secondary" onclick="bulkMoveTo('Freezer')">❄️ Sposta in Congelatore</button>
       <button class="btn btn-secondary" onclick="bulkMoveTo('Dispensa')">🗄️ Sposta in Dispensa</button>
+      <button class="btn btn-secondary" onclick="bulkMoveTo('Saponi')">🧴 Sposta in Saponi</button>
+      <button class="btn btn-secondary" onclick="bulkMoveTo('Altro')">📦 Sposta in Altro</button>
       <button class="btn btn-secondary" onclick="bulkExtendScadenza()">📅 Estendi scadenza +N giorni</button>
       <button class="btn btn-danger" onclick="bulkDelete()">🗑️ Elimina selezionati</button>
     </div>

@@ -19,6 +19,7 @@ from database import (
 from auth import api_key_or_jwt
 from notifiche import invia_telegram, invia_a_chat, chat_ids, md_esc
 from suggerimenti import costruisci_suggerimento
+from posizioni import POSIZIONI, classifica
 import spesa as sp
 
 logger = logging.getLogger(__name__)
@@ -154,7 +155,7 @@ def _async(fn, *args, **kwargs):
 
 
 def _pos_icon(pos):
-    return {"Frigo": "\U0001f9ca", "Freezer": "❄️", "Dispensa": "\U0001f5c4️"}.get(pos, "\U0001f4e6")
+    return {"Frigo": "\U0001f9ca", "Freezer": "❄️", "Dispensa": "\U0001f5c4️", "Saponi": "\U0001f9f4"}.get(pos, "\U0001f4e6")
 
 
 def _handle_immagine(immagine_url: str, prodotto_id: int) -> str:
@@ -242,7 +243,7 @@ def cerca_barcode(ean):
                 "categoria": cached["categoria"] or "", "categorie": categorie,
                 "immagine_url": cached["immagine_url"] or "",
                 "nutriscore": cached["nutriscore"] or "", "nutriments": nutriments or {},
-                "suggerimento": costruisci_suggerimento(conn, ean, categorie, cached["nome"]),
+                "suggerimento": costruisci_suggerimento(conn, ean, categorie, cached["nome"], cached["marca"] or ""),
             })
     finally:
         conn.close()
@@ -287,7 +288,7 @@ def cerca_barcode(ean):
                 "proteine": nutriments.get("proteins_100g"),
                 "sale": nutriments.get("salt_100g"),
             },
-            "suggerimento": costruisci_suggerimento(conn, ean, categorie, nome),
+            "suggerimento": costruisci_suggerimento(conn, ean, categorie, nome, (prodotto.get("brands") or "").split(",")[0].strip()),
         })
     finally:
         conn.close()
@@ -399,6 +400,9 @@ def aggiungi_prodotto():
     data = request.get_json(silent=True) or {}
     immagine_url = data.get("immagine_url", "")
     quantita = _intero(data.get("quantita", 1), 1, minimo=1)
+    posizione = data.get("posizione")
+    if posizione not in POSIZIONI:
+        posizione = classifica(data.get("nome", ""), data.get("marca", ""), data.get("categoria", "")).get("posizione", "Dispensa")
     # Salva prima senza immagine pesante (verrà spostata su FS post-insert)
     prezzo = data.get("prezzo")
     try:
@@ -417,7 +421,7 @@ def aggiungi_prodotto():
                     data.get("categoria", ""), "", quantita,
                     data.get("scadenza"), data.get("note", ""),
                     json.dumps(data.get("nutriments")) if data.get("nutriments") else None,
-                    data.get("nutriscore", ""), data.get("posizione", "Dispensa"),
+                    data.get("nutriscore", ""), posizione,
                     prezzo,
                 ),
             )
@@ -439,7 +443,7 @@ def aggiungi_prodotto():
 
     nome = data.get("nome", "Prodotto")
     qty = quantita
-    pos = data.get("posizione", "Dispensa")
+    pos = posizione
     scad = data.get("scadenza")
     scad_str = (f"\n\U0001f4c5 Scade: {datetime.strptime(scad, '%Y-%m-%d').strftime('%d/%m/%Y')}" if scad else "")
     prezzo_str = f"\n💰 {prezzo:.2f}€" if prezzo else ""
@@ -453,6 +457,8 @@ def aggiungi_prodotto():
 def aggiorna_prodotto(id):
     data = request.get_json(silent=True) or {}
     skip_log = bool(data.get("_skip_log", False))
+    if "posizione" in data and data["posizione"] not in POSIZIONI:
+        return jsonify({"error": "posizione: " + ", ".join(POSIZIONI)}), 400
     if "quantita" in data:
         try:
             data["quantita"] = int(data["quantita"])
@@ -648,8 +654,8 @@ def bulk_action():
             _async(invia_telegram, f"🗑️ *Eliminazione massiva*\n\n{affected} prodotti rimossi dalla dispensa", "eliminazione")
 
         elif action == "set_posizione":
-            if value not in ("Dispensa", "Frigo", "Freezer"):
-                return jsonify({"error": "value deve essere Dispensa|Frigo|Freezer"}), 400
+            if value not in POSIZIONI:
+                return jsonify({"error": "value deve essere " + "|".join(POSIZIONI)}), 400
             with conn:
                 cur = conn.execute(
                     f"UPDATE prodotti SET posizione=? WHERE id IN ({placeholders})",
