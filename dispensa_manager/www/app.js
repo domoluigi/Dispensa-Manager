@@ -47,6 +47,17 @@ async function tryRefreshToken() {
   } catch { return false; }
 }
 
+// Posizioni dei prodotti: il valore salvato resta «Freezer», in italiano si legge «Congelatore»
+const POS = {
+  Dispensa: { i: '🗄️', l: 'Dispensa', colore: '#1D9E75' },
+  Frigo: { i: '🧊', l: 'Frigo', colore: '#4FC3F7' },
+  Freezer: { i: '❄️', l: 'Congelatore', colore: '#81D4FA' },
+  Saponi: { i: '🧴', l: 'Saponi', colore: '#B39DDB' },
+  Altro: { i: '📦', l: 'Altro', colore: '#A1887F' },
+};
+function posEtichetta(p) { const x = POS[p] || POS.Dispensa; return x.i + ' ' + x.l; }
+let _posManuale = false;   // true se l'utente ha scelto la posizione a mano: l'auto-classifica non la tocca piu'
+
 async function apiFetch(url, opts = {}) {
   const jwt = getAccessToken();
   const headers = Object.assign({}, opts.headers || {});
@@ -254,6 +265,7 @@ async function caricaInventario() {
     prodottiCache = await r.json();
     applicaFiltroSort();
     if (typeof aggiornaBadgeSpesa === 'function') aggiornaBadgeSpesa();
+    aggiornaBannerRiclassifica();
   } catch(e) {
     document.getElementById('lista-prodotti').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div>Backend non raggiungibile.</div></div>`;
   }
@@ -284,9 +296,10 @@ function applicaFiltroSort() {
   } else if (filtroAttivo === 'scaduti') {
     attivi = attivi.filter(p => { if (!p.scadenza) return false; const gg = Math.round((new Date(p.scadenza) - oggi) / 86400000); return gg < 0; });
     esauriti = [];
-  } else if (filtroAttivo === 'frigo') { attivi = attivi.filter(p => p.posizione === 'Frigo'); esauriti = esauriti.filter(p => p.posizione === 'Frigo'); }
-  else if (filtroAttivo === 'freezer') { attivi = attivi.filter(p => p.posizione === 'Freezer'); esauriti = esauriti.filter(p => p.posizione === 'Freezer'); }
-  else if (filtroAttivo === 'dispensa') { attivi = attivi.filter(p => p.posizione === 'Dispensa'); esauriti = esauriti.filter(p => p.posizione === 'Dispensa'); }
+  } else if (['frigo', 'freezer', 'dispensa', 'saponi', 'altro'].includes(filtroAttivo)) {
+    const uguale = p => (p.posizione || 'Dispensa').toLowerCase() === filtroAttivo;
+    attivi = attivi.filter(uguale); esauriti = esauriti.filter(uguale);
+  }
 
   if (q) {
     attivi = attivi.filter(p => (p.nome||'').toLowerCase().includes(q) || (p.marca||'').toLowerCase().includes(q) || (p.posizione||'').toLowerCase().includes(q));
@@ -681,7 +694,7 @@ function apriDettaglio(id) {
   const isEsaurito = p.quantita <= 0;
   const imgHtml = p.immagine_url ? '<img src="' + safeUrl(p.immagine_url) + '" style="width:100%;max-height:180px;object-fit:contain;border-radius:12px;margin-bottom:16px;background:var(--bg);" onerror="this.style.display=\'none\'">' : '';
   const esauritoHtml = isEsaurito ? '<div style="background:var(--gray-l);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--gray);font-weight:500;">□ Prodotto esaurito — rimane nel database</div>' : '';
-  const posizioneLabel = p.posizione === 'Frigo' ? '🧊 Frigo' : p.posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa';
+  const posizioneLabel = posEtichetta(p.posizione);
   const eanLabel = p.ean ? (p.ean.startsWith('MANUAL-') ? '—' : p.ean) : '—';
   const prezzoRow = p.prezzo ? `<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Prezzo</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);color:var(--green-d);">${Number(p.prezzo).toFixed(2)}€</td></tr>` : '';
   document.getElementById('det-content').innerHTML =
@@ -857,6 +870,7 @@ function apriConferma(prodotto) {
   document.getElementById('conf-scadenza').value = sug.scadenza;
   document.getElementById('conf-scad-hint').textContent = sug.nota;
   document.getElementById('conf-posizione').value = posizione;
+  _posManuale = false;
   const img = document.getElementById('conf-img');
   if (prodotto.immagine_url) { img.src = prodotto.immagine_url; img.style.display = 'block'; }
   else img.style.display = 'none';
@@ -867,7 +881,7 @@ function apriConferma(prodotto) {
   document.getElementById('foto-upload-area').classList.remove('has-photo');
   const badge = document.getElementById('found-badge-container');
   badge.innerHTML = prodotto.trovato
-    ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posizione === 'Frigo' ? '🧊 Frigo' : posizione === 'Freezer' ? '❄️ Freezer' : '🗄️ Dispensa'} suggerito</div></div>`
+    ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posEtichetta(posizione)} suggerito</div></div>`
     : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci i dettagli</div></div>`;
   showScreen('screen-conferma');
 }
@@ -977,7 +991,7 @@ async function caricaStatistiche() {
     _statsCharts.forEach(c => { try { c.destroy(); } catch(e) {} });
     _statsCharts = [];
 
-    const posIcon = {'Frigo':'🧊','Freezer':'❄️','Dispensa':'🗄️'};
+    const posIcon = Object.fromEntries(Object.entries(POS).map(([k, v]) => [k, v.i]));
 
     let html = `
       <div class="metric-row" style="grid-template-columns:repeat(2,1fr);">
@@ -1113,7 +1127,7 @@ function renderStatsCharts(s) {
   if (posCanvas && s.per_posizione) {
     const labels = s.per_posizione.map(p => p.posizione || 'N/D');
     const data = s.per_posizione.map(p => p.n);
-    const colors = labels.map(l => l === 'Frigo' ? '#4FC3F7' : l === 'Freezer' ? '#81D4FA' : l === 'Dispensa' ? '#1D9E75' : '#888');
+    const colors = labels.map(l => (POS[l] || {}).colore || '#888');
     _statsCharts.push(new Chart(posCanvas, {
       type: 'doughnut',
       data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
@@ -1229,7 +1243,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 function applyDeepLink() {
   const params = new URLSearchParams(window.location.search);
   const filtro = params.get('filter');
-  const validi = ['tutti', 'scadenza', 'scaduti', 'frigo', 'freezer', 'dispensa'];
+  const validi = ['tutti', 'scadenza', 'scaduti', 'frigo', 'freezer', 'dispensa', 'saponi', 'altro'];
   if (filtro && validi.indexOf(filtro) !== -1) setFiltro(filtro);
   const action = params.get('action');
   if (action === 'scan') { scanMode = 'add'; showScreen('screen-scan'); }
@@ -1547,4 +1561,91 @@ async function eseguiRestore() {
     }
   } catch(e) { closeModal('modal-restore'); toast('Errore di rete'); }
   _restoreFileData = null;
+}
+
+
+// ── Posizione automatica mentre si scrive il nome (prodotti inseriti a mano) ─
+let _classTimer = null;
+document.getElementById('conf-nome-edit')?.addEventListener('input', () => {
+  if (_classTimer) clearTimeout(_classTimer);
+  _classTimer = setTimeout(async () => {
+    if (_posManuale) return;
+    const nome = document.getElementById('conf-nome-edit').value.trim();
+    if (nome.length < 3) return;
+    try {
+      const r = await apiFetch(`${API_BASE()}/api/classifica?nome=${encodeURIComponent(nome)}&marca=${encodeURIComponent((prodottoCorrente && prodottoCorrente.marca) || '')}`);
+      const k = await r.json();
+      if (_posManuale || !k.suggerita) return;
+      const sel = document.getElementById('conf-posizione');
+      if (sel.value !== k.posizione) { sel.value = k.posizione; toast('Posizione: ' + posEtichetta(k.posizione)); }
+    } catch (e) { /* senza rete resta la scelta attuale */ }
+  }, 450);
+});
+
+// ── Riclassifica dei prodotti gia' in casa ───────────────────────────────────
+let _riclass = [];
+
+async function aggiornaBannerRiclassifica() {
+  const b = document.getElementById('riclass-banner');
+  if (!b) return;
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/prodotti/riclassifica/conteggio`);
+    const c = await r.json();
+    const n = (c.alto || 0) + (c.medio || 0);
+    b.classList.toggle('hidden', n === 0);
+    if (n) document.getElementById('riclass-testo').textContent = n === 1 ? '1 prodotto sembra nella posizione sbagliata' : n + ' prodotti sembrano nella posizione sbagliata';
+  } catch (e) { b.classList.add('hidden'); }
+}
+
+async function apriRiclassifica() {
+  const corpo = document.getElementById('riclass-corpo');
+  corpo.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  document.getElementById('modal-riclass').classList.remove('hidden');
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/prodotti/riclassifica`);
+    _riclass = (await r.json()).proposte || [];
+  } catch (e) { corpo.innerHTML = '<div class="empty">Backend non raggiungibile.</div>'; return; }
+  disegnaRiclassifica();
+}
+
+function disegnaRiclassifica() {
+  const corpo = document.getElementById('riclass-corpo');
+  if (!_riclass.length) {
+    corpo.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div>Tutti i prodotti sono già al loro posto.</div></div>';
+    document.getElementById('riclass-applica').style.display = 'none';
+    return;
+  }
+  document.getElementById('riclass-applica').style.display = '';
+  const gruppo = (titolo, righe) => righe.length ? `<div class="riclass-gruppo">${titolo}</div>` + righe.map(x => `
+    <label class="riclass-riga"><input type="checkbox" data-id="${x.id}" ${x.livello === 'alto' ? 'checked' : ''}>
+      <div><div class="riclass-nome">${esc(x.nome)}${x.marca ? ' · ' + esc(x.marca) : ''}</div>
+      <div class="riclass-mov">${posEtichetta(x.da)} → ${posEtichetta(x.a)}</div></div></label>`).join('') : '';
+  corpo.innerHTML = gruppo('Consigliati', _riclass.filter(x => x.livello === 'alto')) + gruppo('Da verificare', _riclass.filter(x => x.livello !== 'alto'));
+}
+
+function chiudiRiclassifica() {
+  document.getElementById('modal-riclass').classList.add('hidden');
+}
+
+async function applicaRiclassifica(soloIgnora) {
+  const boxes = [...document.querySelectorAll('#riclass-corpo input[type=checkbox]')];
+  const ids = soloIgnora ? [] : boxes.filter(b => b.checked).map(b => +b.dataset.id);
+  const ignora = soloIgnora ? boxes.filter(b => !b.checked).map(b => +b.dataset.id) : [];   // scartare e' una scelta esplicita, non l'effetto di «Sposta»
+  if (!soloIgnora && !ids.length) { toast('Seleziona almeno un prodotto'); return; }
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/prodotti/riclassifica`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, ignora }),
+    });
+    const d = await r.json();
+    chiudiRiclassifica();
+    await caricaInventario();
+    if (d.lotto) {
+      toastUndo(d.cambiati === 1 ? '1 prodotto spostato' : d.cambiati + ' prodotti spostati', async () => {
+        await apiFetch(`${API_BASE()}/api/prodotti/riclassifica/annulla`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lotto: d.lotto }),
+        });
+        await caricaInventario();
+      }, 8000);
+    } else toast('Fatto');
+  } catch (e) { toast('Errore: riprova'); }
 }

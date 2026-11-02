@@ -5,6 +5,34 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.4.0] — 2026-11-02
+
+**Cinque posizioni, scelte da sole.** Oltre a Dispensa, Frigo e Congelatore (nel database resta «Freezer») arrivano **Saponi** 🧴 (igiene, pulizia della casa) e **Altro** 📦 (sacchetti, pile, lampadine…). I prodotti nuovi finiscono nel posto giusto senza pensarci, e quelli già in casa si possono sistemare in un colpo solo.
+
+### Classificazione (`posizioni.py`)
+- Si guarda il nome, la marca e le categorie di Open Food Facts, in ordine di sicurezza: igiene e casa → Saponi (o Altro per sacchetti, pile, lampadine…), surgelati e gelati → Congelatore, poi le regole del fresco (frigo) e della dispensa. Ogni risposta ha un **livello**: alto (non è cibo, o è surgelato), medio (frigo/dispensa dal solo nome), basso (non si capisce: resta Dispensa).
+- Più attenzione ai falsi amici: «cavolo» non è un cavo, il caffè o le tisane non sono «fresche», gli affettati e le alternative vegetali (burger, tofu, yogurt di soia…) vanno in frigo.
+- **Scansione**: la posizione suggerita usa la nuova classificazione (lo storico dello stesso prodotto vince sempre); per Saponi e Altro non si propone nessuna scadenza.
+- **Inserimento a mano**: mentre scrivi il nome la posizione si aggiorna da sola e ti dice quale ha scelto; se la cambi tu, non viene più toccata. Il server classifica anche i prodotti inseriti senza posizione (API, Home Assistant).
+
+### Prodotti già in casa
+- Un **banner** sull'inventario («42 prodotti sembrano nella posizione sbagliata») e il pulsante «🧭 Controlla le posizioni» in Impostazioni aprono l'elenco delle proposte.
+- **Consigliati** (non sono cibo, o sono surgelati) sono già spuntati; **Da verificare** (frigo/dispensa dal solo nome) no. Non si sposta niente senza conferma.
+- «Sposta i selezionati» applica e mostra **Annulla** per 8 secondi (l'annullo rispetta i prodotti che nel frattempo hai spostato a mano); «Lascia dove sono i non selezionati» li mette da parte e non te li ripropone.
+- Il server ricalcola le proposte al momento dell'applicazione: non si fida di ciò che invia il client.
+
+### Interfaccia
+- Filtri, menu a tendina, azioni in blocco, statistiche e lista della spesa conoscono le cinque posizioni; unica tabella `POS` in `app.js`.
+- Le API rifiutano posizioni sconosciute (prima il valore veniva scritto così com'era).
+
+### Migrazione (schema 10)
+- Tabelle `posizioni_log` (lotti annullabili) e `riclassifica_ignorati`. I prodotti non si toccano finché non confermi dall'app.
+
+### Test
+- `tests/test_posizioni.py` (16 test: classificatore, API, riclassifica con annullo, scarti, id non numerici) e nuovi controlli in `tests/test_gui.js`
+
+---
+
 ## [2.3.0] — 2026-11-02
 
 **La lista della spesa sul telefono.** Dispensa sincronizza la lista con una lista to-do di Home Assistant: il widget «To-do list» dell'app Companion (Android) la mostra, si spunta e si aggiunge dal telefono, e tutto compare anche nell'app. Guida in `docs/widget_telefono.md`.

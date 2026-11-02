@@ -7,7 +7,7 @@ const SUG_VISIBILI = 5;
 let _cercaTimer = null;
 let _cercaSeq = 0;
 
-function _iconaPosizione(p) { return p === 'Frigo' ? '🧊' : p === 'Freezer' ? '❄️' : '🗄️'; }
+function _iconaPosizione(p) { return (POS[p] || POS.Dispensa).i; }
 
 async function caricaListaSpesa() {
   try {

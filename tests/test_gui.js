@@ -61,5 +61,19 @@ verifica('admin: funzioni della card definite in spesa.js', /function caricaSpes
 verifica('admin: lo stato si carica con il pannello', /caricaBackupStatus\(\), caricaSpesaSync\(\)/.test(js));
 verifica('voci arrivate dal telefono hanno la loro etichetta', /origine === 'widget'/.test(spesaJs));
 
+// Posizioni (2.4.0)
+const POSIZ = ['Dispensa', 'Frigo', 'Freezer', 'Saponi', 'Altro'];
+for (const id of ['conf-posizione', 'mod-posizione']) {
+  const sel = (html.match(new RegExp('<select id="' + id + '"[\\s\\S]*?</select>')) || [''])[0];
+  verifica('menu ' + id + ' con le cinque posizioni', POSIZ.every(p => sel.includes('value="' + p + '"')));
+}
+verifica('filtri per Saponi e Altro', html.includes("setFiltro('saponi')") && html.includes("setFiltro('altro')"));
+verifica('azioni in blocco verso Saponi e Altro', html.includes("bulkMoveTo('Saponi')") && html.includes("bulkMoveTo('Altro')"));
+verifica('Freezer si legge «Congelatore»', /Freezer: \{[^}]*l: 'Congelatore'/.test(js));
+verifica('una sola tabella delle posizioni, usata anche dalla spesa', (js.match(/const POS = \{/g) || []).length === 1 && /POS\[p\]/.test(spesaJs));
+verifica('banner e modale di riclassifica', html.includes('id="riclass-banner"') && html.includes('id="modal-riclass"') && /function applicaRiclassifica/.test(js));
+verifica('«Sposta» non scarta i non selezionati', /const ignora = soloIgnora \?/.test(js));
+verifica('service worker aggiornato', /dispensa-v1[5-9]/.test(sw));
+
 console.log(ok + '/' + tot);
 process.exit(ok === tot ? 0 : 1);

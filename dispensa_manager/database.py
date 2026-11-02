@@ -19,8 +19,8 @@ OPTIONS_PATH = "/data/options.json"
 IMAGES_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "images")
 BACKUPS_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "backups")
 
-APP_VERSION = "2.3.0"
-SCHEMA_VERSION = 9
+APP_VERSION = "2.4.0"
+SCHEMA_VERSION = 10
 
 
 def get_db():
@@ -415,6 +415,28 @@ def init_db():
             )
             _set_schema_version(conn, 9)
         current = 9
+
+    if current < 10:
+        logger.info("Migrazione schema DB: v9 → v10 (posizioni: saponi e altro, riclassifica)")
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS posizioni_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lotto TEXT NOT NULL,
+                prodotto_id INTEGER NOT NULL,
+                da TEXT,
+                a TEXT,
+                data TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_pos_log_lotto ON posizioni_log(lotto);
+            CREATE TABLE IF NOT EXISTS riclassifica_ignorati (
+                prodotto_id INTEGER PRIMARY KEY,
+                posizione TEXT,
+                data TEXT DEFAULT (datetime('now'))
+            );
+        """)
+        with conn:
+            _set_schema_version(conn, 10)
+        current = 10
 
     conn.close()
 

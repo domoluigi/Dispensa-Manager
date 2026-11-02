@@ -14,6 +14,17 @@ from datetime import datetime
 # (espressione, giorni dalla data d'acquisto, posizione). Le regole piu' specifiche vanno prima.
 _REGOLE = [(re.compile(p), g, pos) for p, g, pos in [
     (r"surgelat|frozen|ice.?cream|gelat|sorbett", 150, "Freezer"),
+    # alternative vegetali e affettati: freschi, da frigo
+    (r"tofu|tempeh|seitan|affettat|\bburger|\bburgher|cotolett|nugget|salsicc|sausage|wurstel|bresaola|prosciutt|"
+     r"\bspeck|salame|giambon|mopur|beyond|yogurt|yoghurt|yosoi|skyr|fette (?:per|vegan|di veg|mediterran)|rucola|lattugh|"
+     r"insalata\b(?!\s+di\s+riso)|insalatina|spinacin|pasta fresca|gnocch|chicche|cheesecake|apple pie|margarina", 15, "Frigo"),
+    # prodotti a lunga conservazione che contengono parole «fresche» (latte, uova, mele…): prima delle regole del fresco
+    (r"tisan|infus|camomill|\bcaff|cioccolat|biscott|cracker|spalmabil|coconut cream|cream.*(?:cocco|coconut)|"
+     r"latte di cocco|maionese|mayonnais|senape|ketchup|\bragu|\bsugo|pat[eèé]\b|pomodori secchi|pomodorini secchi|"
+     r"sott.?olio|sottaceti|peperoncin|conserv|preparato per|in polvere|polvere|\bnoci\b|mandorle|frutta secca|pecan|"
+     r"uvetta|corinto|semi\b", 365, "Dispensa"),
+    # ortaggi e frutta che si tengono fuori dal frigo
+    (r"patat|cipoll|\baglio|zucca|pomodor|banan|\bmel[ae]\b|aranc|limon|agrum|castagn", 14, "Dispensa"),
     (r"\buht\b|a lunga conservazione|long.?life", 120, "Dispensa"),
     (r"latte fresco|fresh.?milk|pasteurized.?milk", 6, "Frigo"),
     (r"\blatte\b|\bmilks?\b", None, "Frigo"),   # fresco o UHT: dalla categoria non si capisce, data non suggerita
@@ -54,8 +65,8 @@ def _pulisci(tag: str) -> str:
 def suggerisci_da_categoria(categorie, nome: str = "") -> dict:
     """categorie: elenco di tag dal piu' generico al piu' specifico (come Open Food Facts).
     Si guarda dal piu' specifico: la catena di un sugo contiene anche 'vegetables based foods'."""
-    def esito(giorni, pos):
-        return {"posizione": pos, "scadenza_giorni": giorni, "fonte": "categoria" if giorni else None, "campioni": 0}
+    def esito(giorni, pos, trovata=True):
+        return {"posizione": pos, "scadenza_giorni": giorni, "fonte": "categoria" if giorni else None, "campioni": 0, "trovata": trovata}
 
     for tag in reversed([_pulisci(t) for t in (categorie or []) if t]):
         for regola, giorni, pos in _REGOLE:
@@ -66,7 +77,7 @@ def suggerisci_da_categoria(categorie, nome: str = "") -> dict:
         for regola, giorni, pos in _REGOLE:
             if regola.search(testo):
                 return esito(giorni, pos)
-    return esito(None, "Dispensa")
+    return esito(None, "Dispensa", False)
 
 
 def _data(s):
@@ -102,5 +113,20 @@ def suggerisci_da_storico(conn, ean: str):
     }
 
 
-def costruisci_suggerimento(conn, ean: str, categorie, nome: str = "") -> dict:
-    return suggerisci_da_storico(conn, ean) or suggerisci_da_categoria(categorie, nome)
+def costruisci_suggerimento(conn, ean: str, categorie, nome: str = "", marca: str = "") -> dict:
+    """Posizione e scadenza proposte. Prima la storia dello stesso prodotto; poi le regole: la posizione viene
+    dalla classificazione (saponi, altro, congelatore, frigo, dispensa), la scadenza dalla categoria."""
+    storico = suggerisci_da_storico(conn, ean)
+    if storico:
+        return storico
+    from posizioni import classifica       # import locale: posizioni usa questo modulo
+    base = suggerisci_da_categoria(categorie, nome)
+    k = classifica(nome, marca, "", categorie)
+    base["livello"] = k["livello"]
+    if k["livello"] != "basso":
+        base["posizione"] = k["posizione"]
+    if k["posizione"] in ("Saponi", "Altro") and k["livello"] != "basso":
+        base.update(scadenza_giorni=None, fonte=None, senza_scadenza=True)      # igiene e casa: nessuna scadenza da proporre
+    elif k["posizione"] == "Freezer" and k["livello"] == "alto":
+        base.update(scadenza_giorni=150, fonte="categoria")
+    return base
