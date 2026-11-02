@@ -210,7 +210,7 @@ I prodotti con quantità = 0 non vengono conteggiati nel totale e sono separati 
 - Il contatore **"In dispensa"** mostra solo i prodotti attivi (`quantita > 0`)
 - Toccando un esaurito si apre il dettaglio con un avviso visivo
 - Il tasto **+** accanto a ogni esaurito permette di rifornirlo rapidamente
-- Gli esauriti vengono aggiunti automaticamente alla **lista della spesa**
+- Gli esauriti non finiscono più da soli nella lista della spesa: compaiono come **suggerimenti** nella schermata Spesa, da ricomprare con un tocco
 - Il sensore HA `sensor.dispensa_totale_prodotti` conta solo i prodotti attivi
 
 ---
@@ -368,13 +368,15 @@ mode: single
 
 ## 🛒 Lista della Spesa
 
-La lista della spesa è gestita automaticamente:
+La schermata Spesa ha tre parti:
 
-- Quando un prodotto scende a **quantità 0** viene aggiunto automaticamente alla lista
-- Puoi aggiungere prodotti **manualmente** dalla schermata Spesa nella PWA
-- **Spunta** gli articoli mentre sei al supermercato
-- **Invia su Telegram** la lista prima di uscire
-- **Rimuovi completati** per pulire la lista
+- **Da comprare**: le voci della lista, raggruppate per **reparto** nell'ordine di un giro al supermercato (frutta e verdura, pane, latticini, carne e pesce, surgelati, dispensa, bevande, igiene, casa, animali). Si aggiunge scrivendo nel campo in alto: «dentifricio», «2 latte», «latte x3», «due mele». Mentre scrivi compaiono le voci usate spesso e i prodotti che conosci.
+- **Finiti in dispensa** (suggeriti): i prodotti a quantità 0 che **non** sono in lista. Ogni suggerimento ha **+** (lo mette in lista) e **✕** (non serve: sparisce finché non lo ricompri e lo finisci di nuovo). «Aggiungi tutti» e «Nascondi i finiti da più di 3 mesi» servono a ripulire l'elenco. Non si suggerisce ciò di cui hai ancora una scorta o che è già in lista, e i doppioni (stesso EAN o stesso nome) si contano una volta.
+- **Nel carrello**: le voci spuntate; «Svuota» le toglie, toccando la spunta tornano in lista.
+
+**Voci intelligenti.** I nomi si confrontano senza articoli, maiuscole e accenti e con singolare/plurale equivalenti: «Dentifricio», «dentifrici» e «il dentifricio» sono la stessa voce, quindi non si creano doppioni (la quantità si somma solo se la chiedi: «2 dentifricio»). Se hai già in dispensa qualcosa che copre la voce nello stesso reparto («latte» → «Latte intero», 2 in frigo) l'app te lo dice quando aggiungi. Una voce generica come «latte» copre anche il suggerimento «Latte intero parzialmente scremato».
+
+La lista ha un badge con il numero di voci da comprare sull'icona della scheda **Spesa**. **Invia su Telegram** manda la lista per reparto più i prodotti finiti non ancora in lista. I sensori `sensor.dispensa_lista_spesa` (voci da comprare) e `sensor.dispensa_suggeriti` (finiti da ricomprare) sono pronti per dashboard e automazioni.
 
 ---
 
@@ -406,8 +408,14 @@ La schermata Statistiche mostra:
 | GET | `/api/barcode/<ean>` | Cerca un prodotto per EAN; risponde anche con `suggerimento` (posizione, giorni di scadenza, fonte). `?refresh=1` ignora la cache dei non trovati |
 | POST | `/api/barcode-cache` | Salva in cache locale |
 | DELETE | `/api/barcode-cache/<ean>` | Rimuove dalla cache |
-| GET | `/api/lista-spesa` | Lista della spesa |
-| POST | `/api/lista-spesa` | Aggiunge alla lista spesa |
+| GET | `/api/spesa` | Vista completa: `da_comprare` (per reparto), `carrello`, `suggeriti`, `conteggi` |
+| GET | `/api/spesa/conteggi` | Solo i numeri (badge) |
+| GET | `/api/spesa/cerca?q=` | Completamento mentre si scrive |
+| POST | `/api/spesa/suggeriti/<prodotto_id>/aggiungi` | Mette in lista un prodotto finito |
+| POST | `/api/spesa/suggeriti/<prodotto_id>/ignora` | «Non serve» |
+| POST | `/api/spesa/suggeriti/aggiungi-tutti` e `/ignora-vecchi?giorni=90` | Azioni in blocco |
+| GET | `/api/lista-spesa` | Lista della spesa (righe grezze, compatibile con le versioni precedenti) |
+| POST | `/api/lista-spesa` | Aggiunge alla lista spesa senza doppioni (`{"nome": "2 dentifricio"}`); risponde con `unita`, `riattivata`, `in_dispensa` |
 | PUT | `/api/lista-spesa/<id>` | Aggiorna elemento lista spesa |
 | DELETE | `/api/lista-spesa/<id>` | Elimina elemento lista spesa |
 | DELETE | `/api/lista-spesa/svuota-completati` | Rimuove completati |
@@ -446,10 +454,14 @@ Dispensa-Manager/
 │   ├── app.py                  # Backend Flask
 │   ├── notifiche.py            # Telegram: escape Markdown, token fuori dai log
 │   ├── suggerimenti.py         # Posizione e scadenza suggerite (storico + categoria)
+│   ├── spesa.py                # Lista della spesa: voci, suggeriti, ricerca
+│   ├── normalizza.py           # Nomi: quantità, singolare/plurale, confronto
+│   ├── reparti.py              # Reparto del supermercato per una voce
 │   ├── requirements.txt        # Versioni fissate
 │   └── www/                    # Frontend PWA (servito direttamente da Flask)
 │       ├── index.html          # App principale
 │       ├── scanner.js          # Fotocamera, barcode, OCR scadenza
+│       ├── spesa.js            # Schermata Spesa
 │       ├── scadenza.js         # Parser delle date (testabile in node)
 │       ├── vendor/             # Chart.js, ZXing, Tesseract in locale (niente CDN)
 │       ├── sw.js               # Service Worker (network-first + /api/ passthrough)

@@ -19,6 +19,7 @@ from database import (
 from auth import api_key_or_jwt
 from notifiche import invia_telegram, invia_a_chat, chat_ids, md_esc
 from suggerimenti import costruisci_suggerimento
+import spesa as sp
 
 logger = logging.getLogger(__name__)
 
@@ -67,30 +68,6 @@ def log_movimento(nome, tipo, ean="", marca="", categoria="", quantita=1, prezzo
 MAX_ELENCO_SENSORI = 25
 
 
-def _aggiungi_esauriti_a_lista(conn, esauriti_list):
-    """Mette in lista spesa i prodotti esauriti che non ci sono gia'.
-    Il confronto e' per EAN o per nome (prima i prodotti senza EAN si bloccavano a vicenda: una sola
-    voce manuale impediva di aggiungere tutti gli altri) e conta anche gli elementi spuntati negli
-    ultimi 14 giorni: un prodotto comprato ma non ancora ricaricato non deve rientrare in lista
-    a ogni sincronizzazione."""
-    for p in esauriti_list:
-        ean = p["ean"] or ""
-        if ean and not ean.startswith("MANUAL-"):
-            filtro, parametri = "(ean=? OR LOWER(nome)=LOWER(?))", (ean, p["nome"])
-        else:
-            filtro, parametri = "LOWER(nome)=LOWER(?)", (p["nome"],)
-        esistente = conn.execute(
-            f"SELECT id FROM lista_spesa WHERE {filtro} "
-            "AND (completato=0 OR data_aggiunta >= datetime('now', '-14 days'))",
-            parametri,
-        ).fetchone()
-        if not esistente:
-            conn.execute(
-                "INSERT INTO lista_spesa (nome, ean, marca) VALUES (?, ?, ?)",
-                (p["nome"], ean, p["marca"] or ""),
-            )
-
-
 def aggiorna_sensori_ha():
     ha_url = os.environ.get("HA_URL", "http://supervisor/core")
     ha_token = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -121,10 +98,11 @@ def aggiorna_sensori_ha():
             except Exception:
                 pass
 
+    # Dalla 2.2.0 gli esauriti non finiscono piu' da soli nella lista della spesa: sono suggerimenti
     conn2 = get_db()
     try:
-        with conn2:
-            _aggiungi_esauriti_a_lista(conn2, esauriti_list)
+        da_comprare, _ = sp.lista(conn2)
+        sugg = sp.suggeriti(conn2)
     finally:
         conn2.close()
 
@@ -148,6 +126,20 @@ def aggiorna_sensori_ha():
         "sensor.dispensa_esauriti": {
             "state": len(esauriti_list),
             "attributes": {"friendly_name": "Dispensa: esauriti", "prodotti": [p["nome"] for p in esauriti_list[:MAX_ELENCO_SENSORI]], "icon": "mdi:package-variant-remove", "unit_of_measurement": "prodotti"},
+        },
+        "sensor.dispensa_lista_spesa": {
+            "state": len(da_comprare),
+            "attributes": {
+                "friendly_name": "Dispensa: lista della spesa", "icon": "mdi:cart-outline", "unit_of_measurement": "voci",
+                "voci": [{"nome": v["nome"], "quantita": v["quantita"], "reparto": v["reparto"]} for v in da_comprare[:MAX_ELENCO_SENSORI]],
+            },
+        },
+        "sensor.dispensa_suggeriti": {
+            "state": len(sugg),
+            "attributes": {
+                "friendly_name": "Dispensa: finiti da ricomprare", "icon": "mdi:lightbulb-on-outline", "unit_of_measurement": "prodotti",
+                "prodotti": [x["nome"] for x in sugg[:MAX_ELENCO_SENSORI]],
+            },
         },
     }
     for entity_id, payload in stati.items():

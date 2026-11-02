@@ -5,6 +5,39 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.2.0] — 2026-11-02
+
+Lista della spesa rifatta: i prodotti finiti sono **suggerimenti**, non voci automatiche; le voci si aggiungono in modo intelligente e sono pronte per la fusione con la lista di Alexa (versione successiva).
+
+### Suggeriti (finiti in dispensa)
+- **Gli esauriti non entrano più da soli nella lista.** Prima ogni prodotto a zero veniva aggiunto a ogni sincronizzazione: su un database reale 66 voci su 67 erano generate così. Ora la schermata Spesa ha una sezione «Finiti in dispensa» con **+** (aggiungi alla lista) e **✕** (non serve), più «Aggiungi tutti» e «Nascondi i finiti da più di 3 mesi».
+- Non si suggerisce un prodotto di cui hai ancora una scorta (stesso EAN o stesso nome in un'altra riga), uno già coperto da una voce in lista o nel carrello (con lo stesso reparto), né i doppioni (se ne propone uno, l'ultimo inserito). Ogni suggerimento dice da quanti giorni è finito, dall'ultimo consumo registrato; i più recenti stanno in cima.
+- «Non serve» vale finché il prodotto non torna in dispensa: se lo ricompri e lo finisci di nuovo, ricompare.
+
+### Da comprare, per reparto
+- Le voci sono raggruppate per **reparto** nell'ordine di un giro al supermercato: frutta e verdura, pane, latticini, carne e pesce, surgelati, dispensa, bevande, igiene, casa, animali, altro (`reparti.py`, regole in italiano).
+- **Aggiunta intelligente** dal campo in cima alla schermata (non più un `prompt()`): «dentifricio», «2 latte», «latte x3», «due mele», «2 confezioni di pasta»; «500 g pasta» e «Farina 00» restano interi (misure e numeri che non sono quantità).
+- **Niente doppioni**: «Dentifricio», «dentifrici», «il dentifricio» sono la stessa voce (nomi confrontati senza articoli, accenti e maiuscole, singolare = plurale). Una voce già in lista non cambia, salvo quantità esplicita; una nel carrello torna in lista.
+- **Avviso «in dispensa»**: se hai già qualcosa che copre la voce nello stesso reparto, l'app lo dice («Aggiunto: Latte · in dispensa hai Latte intero ×2 (Frigo)») e lo mostra sulla voce. Il controllo del reparto evita i falsi avvisi (non confonde «latte» con «cioccolato al latte di cocco»).
+- **Completamento mentre scrivi**: voci usate spesso (con storico) e nomi di prodotti che conosci.
+- Annulla su spunta e rimozione, quantità con +/−, e chi ha aggiunto la voce («di laura»).
+- **Badge** con il numero di voci da comprare sull'icona della scheda Spesa.
+
+### Integrazioni
+- Nuovi sensori HA: `sensor.dispensa_lista_spesa` (voci da comprare, con elenco) e `sensor.dispensa_suggeriti` (finiti da ricomprare).
+- **Telegram**: la lista esce per reparto e, a parte, i prodotti finiti non ancora in lista.
+- API nuove: `GET /api/spesa`, `/api/spesa/conteggi`, `/api/spesa/cerca`, `POST /api/spesa/suggeriti/<id>/aggiungi|ignora`, `/aggiungi-tutti`, `/ignora-vecchi`. `GET /api/lista-spesa` resta com'era (righe grezze); `PUT` aggiorna solo i campi inviati (prima azzerava `completato` se mancava).
+
+### Migrazione (schema 8)
+- Colonne nuove su `lista_spesa` (`uid`, `origine`, `nome_norm`, `reparto`, `aggiunto_da`, `aggiornato_il`, `completato_il`), tabelle `suggerimenti_ignorati` e `spesa_storico`: la base per la sincronizzazione con Alexa.
+- Le voci **automatiche** (non spuntate, che combaciano con un prodotto esaurito per EAN o nome) vengono tolte dalla lista e diventano suggerimenti; le altre restano. Le righe tolte si copiano in `lista_spesa_legacy`. Provato su una copia di un database reale: 1 voce conservata, 66 tolte, 54 suggerimenti dopo la rimozione dei doppioni.
+- I backup precedenti si ripristinano: le righe senza le colonne nuove vengono completate alla prima lettura.
+
+### Test
+- `tests/test_normalizza.py` (quantità, chiavi, reparti), `tests/test_spesa.py` (voci, suggeriti, API, sensori, Telegram, migrazione, backup), `tests/test_gui.js` esteso alla schermata Spesa. In totale 74 test Python.
+
+---
+
 ## [2.1.2] — 2026-11-02
 
 Revisione della GUI pagina per pagina (inventario, scansione, conferma, dettaglio, modifica, spesa, statistiche, impostazioni, admin) su telefono e PC.
