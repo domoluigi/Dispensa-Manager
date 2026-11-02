@@ -19,8 +19,8 @@ OPTIONS_PATH = "/data/options.json"
 IMAGES_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "images")
 BACKUPS_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "backups")
 
-APP_VERSION = "2.2.0"
-SCHEMA_VERSION = 8
+APP_VERSION = "2.3.0"
+SCHEMA_VERSION = 9
 
 
 def get_db():
@@ -388,6 +388,33 @@ def init_db():
         with conn:
             _set_schema_version(conn, 8)
         current = 8
+
+    if current < 9:
+        logger.info("Migrazione schema DB: v8 → v9 (sincronizzazione con le liste to-do di Home Assistant)")
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS spesa_sync_map (
+                connettore TEXT NOT NULL,
+                uid_remoto TEXT NOT NULL,
+                voce_id INTEGER NOT NULL,
+                summary_visto TEXT,
+                status_visto TEXT,
+                mancante INTEGER DEFAULT 0,
+                PRIMARY KEY (connettore, uid_remoto)
+            );
+            CREATE INDEX IF NOT EXISTS idx_sync_voce ON spesa_sync_map(connettore, voce_id);
+        """)
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
+                ("todo_widget_entity", "todo.lista_della_spesa",
+                 "Lista to-do di Home Assistant per i widget del telefono (vuoto = disattivata)"),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)",
+                ("todo_sync_attivo", "1", "Sincronizzazione della lista della spesa con Home Assistant (1 = attiva, 0 = ferma)"),
+            )
+            _set_schema_version(conn, 9)
+        current = 9
 
     conn.close()
 

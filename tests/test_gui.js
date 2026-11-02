@@ -55,5 +55,11 @@ const chiamate = new Set([...spesaJs.matchAll(/onclick="([a-zA-Z]+)\(/g), ...htm
 const mancanti = [...chiamate].filter(f => !new RegExp('function ' + f + '\\b').test(spesaJs + js + (fs.readFileSync(path.join(www, 'scanner.js'), 'utf8'))));
 verifica('funzioni degli onclick della spesa definite (' + [...chiamate].length + ')' + (mancanti.length ? ' — mancano: ' + mancanti.join() : ''), mancanti.length === 0);
 
+// Admin: stato della lista condivisa con Home Assistant (2.3.0)
+verifica('admin: card della lista condivisa', html.includes('id="spesa-sync-stato"') && html.includes('sincronizzaOra()'));
+verifica('admin: funzioni della card definite in spesa.js', /function caricaSpesaSync/.test(spesaJs) && /function sincronizzaOra/.test(spesaJs));
+verifica('admin: lo stato si carica con il pannello', /caricaBackupStatus\(\), caricaSpesaSync\(\)/.test(js));
+verifica('voci arrivate dal telefono hanno la loro etichetta', /origine === 'widget'/.test(spesaJs));
+
 console.log(ok + '/' + tot);
 process.exit(ok === tot ? 0 : 1);

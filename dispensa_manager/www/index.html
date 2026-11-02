@@ -380,6 +380,13 @@
     </div>
 
     <div class="card card-body admin-section">
+      <div class="admin-section-title">📱 Lista condivisa (widget del telefono)</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5;">La lista della spesa si sincronizza con una lista to-do di Home Assistant: si vede e si spunta dal widget «To-do list» dell'app Companion. Quale lista usare si sceglie in «Impostazioni sistema».</div>
+      <div id="spesa-sync-stato" style="font-size:13px;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:10px;line-height:1.5;">Caricamento stato…</div>
+      <button class="btn-sm btn-sm-green" style="width:100%;padding:10px;" onclick="sincronizzaOra()">🔄 Sincronizza ora</button>
+    </div>
+
+    <div class="card card-body admin-section">
       <div class="admin-section-title">🔑 API Key per automazioni HA</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5;">Usa <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">x-api-key</code> nei tuoi rest_command. Stabile tra riavvii.</div>
       <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:10px;">

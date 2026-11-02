@@ -7,6 +7,7 @@ from database import get_db, get_ha_option
 from auth import api_key_or_jwt
 from notifiche import chat_ids, invia_a_chat, md_esc, TELEGRAM_MAX_LEN
 import spesa as sp
+from sync_todo import richiedi_sync
 from normalizza import bella, token_chiave
 from reparti import reparto_di, ETICHETTA
 
@@ -74,6 +75,7 @@ def aggiungi_suggerito(prodotto_id):
         ris = sp.aggiungi_suggerito(conn, prodotto_id, _utente(conn))
         if ris is None:
             return jsonify({"error": "Prodotto non trovato"}), 404
+        richiedi_sync()
         return jsonify({"ok": True, **ris})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -119,6 +121,7 @@ def aggiungi_tutti_suggeriti():
             ris = sp.aggiungi_suggerito(conn, s["prodotto_id"], utente)
             if ris and not ris.get("unita"):
                 aggiunti += 1
+        richiedi_sync()
         return jsonify({"ok": True, "aggiunti": aggiunti})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -150,6 +153,7 @@ def aggiungi_lista_spesa():
             conn, data.get("nome", ""), data.get("quantita"), data.get("ean", ""), data.get("marca", ""),
             "manuale", _utente(conn),
         )
+        richiedi_sync()
         return jsonify({"ok": True, **ris}), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -193,6 +197,7 @@ def aggiorna_lista_spesa(id):
             valori.append(adesso)
             with conn:
                 conn.execute(f"UPDATE lista_spesa SET {', '.join(campi)} WHERE id=?", valori + [id])
+            richiedi_sync()
         return jsonify({"ok": True})
     finally:
         conn.close()
@@ -205,6 +210,7 @@ def elimina_lista_spesa(id):
     try:
         with conn:
             conn.execute("DELETE FROM lista_spesa WHERE id=?", (id,))
+        richiedi_sync()
         return jsonify({"ok": True})
     finally:
         conn.close()
@@ -217,6 +223,7 @@ def svuota_completati():
     try:
         with conn:
             cur = conn.execute("DELETE FROM lista_spesa WHERE completato=1")
+        richiedi_sync()
         return jsonify({"ok": True, "rimossi": cur.rowcount})
     finally:
         conn.close()
