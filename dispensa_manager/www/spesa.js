@@ -49,6 +49,7 @@ function _metaVoce(v) {
   const parti = [];
   if (v.marca) parti.push(esc(v.marca));
   if (v.origine === 'alexa') parti.push('🎤 Alexa');
+  else if (v.origine === 'widget') parti.push('📱 dal telefono');
   else if (v.aggiunto_da) parti.push('di ' + esc(v.aggiunto_da));
   let html = parti.length ? `<div class="spesa-meta">${parti.join(' · ')}</div>` : '';
   if (v.in_dispensa && v.in_dispensa.length) {
@@ -299,6 +300,47 @@ async function inviaListaSpesaTelegram() {
   const r = await apiFetch(`${API_BASE()}/api/lista-spesa/invia-telegram`);
   const data = await r.json();
   toast(data.ok ? '📤 Lista inviata su Telegram!' : '⚠️ ' + (data.errore || 'Errore'));
+}
+
+// ── Pannello Admin: stato della lista condivisa con Home Assistant ───────────
+function _descriviSync(w) {
+  if (!w || !w.entity) return '⚪ Non configurata: indica una lista in «Impostazioni sistema».';
+  if (!w.attivo) return '⏸️ In pausa (sincronizzazione disattivata nelle impostazioni).';
+  const quando = w.ultimo_ok ? new Date(w.ultimo_ok).toLocaleTimeString('it-IT') : null;
+  if (w.ok === false) {
+    let m = '⚠️ ' + esc(w.errore || 'errore');
+    if (/(400|404)|not found|inatteso/i.test(w.errore || '')) {
+      m += '<br><span style="color:var(--muted);">La lista <b>' + esc(w.entity) + '</b> non esiste ancora: in Home Assistant crea «Local To-do» con nome «Lista della spesa».</span>';
+    }
+    return m + (quando ? '<br><span style="color:var(--muted);">Ultimo scambio riuscito: ' + esc(quando) + '</span>' : '');
+  }
+  if (w.ok === true) {
+    const r = w.risultato || {};
+    const mosse = (r.locali_aggiunte || 0) + (r.locali_aggiornate || 0) + (r.locali_rimosse || 0) + (r.remote_aggiunte || 0) + (r.remote_aggiornate || 0) + (r.remote_rimosse || 0);
+    return '✅ Collegata a <b>' + esc(w.entity) + '</b> · ' + esc(w.voci_collegate) + ' voci collegate<br><span style="color:var(--muted);">Ultimo scambio ' + esc(quando) + (mosse ? ' (' + mosse + ' modifiche)' : ' (nessuna differenza)') + '</span>';
+  }
+  return '⏳ In attesa del primo scambio (parte entro 30 secondi dall\'avvio).<br><span style="color:var(--muted);">Lista: ' + esc(w.entity) + ' · ' + esc(w.voci_collegate) + ' voci collegate</span>';
+}
+
+async function caricaSpesaSync() {
+  const el = document.getElementById('spesa-sync-stato');
+  if (!el) return;
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/spesa-sync`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    el.innerHTML = _descriviSync((await r.json()).widget);
+  } catch (e) { el.textContent = 'Stato non disponibile.'; }
+}
+
+async function sincronizzaOra() {
+  const el = document.getElementById('spesa-sync-stato');
+  if (el) el.textContent = '🔄 Sincronizzazione in corso…';
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/spesa-sync/ora`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) { if (el) el.textContent = '⚠️ ' + (d.error || 'Errore'); return; }
+    if (el) el.innerHTML = _descriviSync(d.widget);
+  } catch (e) { if (el) el.textContent = 'Errore di rete.'; }
 }
 
 // Spazio/Invio sulle caselle da spuntare (tastiera e lettori di schermo)

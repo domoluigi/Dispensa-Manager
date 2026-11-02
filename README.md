@@ -376,6 +376,8 @@ La schermata Spesa ha tre parti:
 
 **Voci intelligenti.** I nomi si confrontano senza articoli, maiuscole e accenti e con singolare/plurale equivalenti: «Dentifricio», «dentifrici» e «il dentifricio» sono la stessa voce, quindi non si creano doppioni (la quantità si somma solo se la chiedi: «2 dentifricio»). Se hai già in dispensa qualcosa che copre la voce nello stesso reparto («latte» → «Latte intero», 2 in frigo) l'app te lo dice quando aggiungi. Una voce generica come «latte» copre anche il suggerimento «Latte intero parzialmente scremato».
 
+**Widget sul telefono.** La lista si sincronizza con una lista to-do di Home Assistant («Local To-do», `todo.lista_della_spesa`): il widget «To-do list» dell'app Companion la mostra, permette di spuntare e di aggiungere, e tutto compare anche qui entro pochi secondi (e viceversa). Passi di configurazione, funzionamento e sicurezza in [`docs/widget_telefono.md`](docs/widget_telefono.md); lo stato sta in Admin → «Lista condivisa».
+
 La lista ha un badge con il numero di voci da comprare sull'icona della scheda **Spesa**. **Invia su Telegram** manda la lista per reparto più i prodotti finiti non ancora in lista. I sensori `sensor.dispensa_lista_spesa` (voci da comprare) e `sensor.dispensa_suggeriti` (finiti da ricomprare) sono pronti per dashboard e automazioni.
 
 ---
@@ -455,6 +457,7 @@ Dispensa-Manager/
 │   ├── notifiche.py            # Telegram: escape Markdown, token fuori dai log
 │   ├── suggerimenti.py         # Posizione e scadenza suggerite (storico + categoria)
 │   ├── spesa.py                # Lista della spesa: voci, suggeriti, ricerca
+│   ├── sync_todo.py            # Sincronizzazione con la lista to-do di Home Assistant (widget)
 │   ├── normalizza.py           # Nomi: quantità, singolare/plurale, confronto
 │   ├── reparti.py              # Reparto del supermercato per una voce
 │   ├── requirements.txt        # Versioni fissate
@@ -471,6 +474,7 @@ Dispensa-Manager/
 │       ├── screenshot-narrow.png  # Screenshot mobile 390×844 (install dialog)
 │       └── screenshot-wide.png    # Screenshot desktop 1280×800 (install dialog)
 ├── docs/azioni_notifica_ha.md  # Notifica HA con pulsanti Consumato / Buttato
+├── docs/widget_telefono.md     # Lista della spesa sul telefono (widget Companion)
 ├── tests/                      # test_scadenza.js (node), test_backend.py (unittest)
 ├── repository.json             # Custom store HA
 ├── CHANGELOG.md

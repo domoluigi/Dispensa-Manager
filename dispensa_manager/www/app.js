@@ -1241,7 +1241,7 @@ setTimeout(applyDeepLink, 800);
 
 // ── Admin panel ───────────────────────────────────────────────────────────────
 async function caricaAdmin() {
-  await Promise.all([caricaUtenti(), caricaImpostazioniAdmin(), caricaIPBans(), caricaApiKey(), caricaBackupStatus()]);
+  await Promise.all([caricaUtenti(), caricaImpostazioniAdmin(), caricaIPBans(), caricaApiKey(), caricaBackupStatus(), caricaSpesaSync()]);
 }
 
 async function caricaUtenti() {

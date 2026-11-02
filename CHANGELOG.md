@@ -5,6 +5,30 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.3.0] — 2026-11-02
+
+**La lista della spesa sul telefono.** Dispensa sincronizza la lista con una lista to-do di Home Assistant: il widget «To-do list» dell'app Companion (Android) la mostra, si spunta e si aggiunge dal telefono, e tutto compare anche nell'app. Guida in `docs/widget_telefono.md`.
+
+### Sincronizzazione (`sync_todo.py`)
+- **Bidirezionale e senza rimbalzi**: ogni elemento remoto è legato a una voce locale da una mappa (`spesa_sync_map`) che ricorda l'ultimo stato concordato; confrontando locale e remoto con quell'istantanea si capisce chi ha cambiato cosa. Un giro senza differenze non scrive niente.
+- **Tempi**: dall'app al telefono 2-3 secondi (ogni modifica sveglia la sincronizzazione), dal telefono all'app entro 30 secondi.
+- **Prima attivazione = unione**: le voci presenti da entrambe le parti (stesso nome, singolare o plurale) diventano una sola; non si cancella niente.
+- **Dal telefono**: «pane», «2 mele», «latte x3» vengono letti come nell'app (quantità, maiuscole, reparto); i nomi senza senso («2») si ignorano; due voci uguali scritte nel widget diventano una.
+- **Spunte, rinomine e quantità** viaggiano nei due sensi. Se cambiano entrambe le parti insieme vince lo stato «fatto» e il nome locale. Una rinomina dal telefono che coinciderebbe con un'altra voce si ignora.
+- **Cancellazioni**: svuotare il carrello o rimuovere una voce nell'app toglie l'elemento dal telefono; una cancellazione dal telefono vale in locale solo dopo **due giri consecutivi** e mai in massa (almeno 4 elementi e più della metà): una lettura incompleta di Home Assistant non può svuotare la lista.
+- **Errori**: se Home Assistant non risponde l'app funziona normalmente, riprova ogni minuto e non perde nulla. Il token del Supervisor non compare mai nei messaggi.
+- Lo stato si vede in **Admin → «Lista condivisa»** (collegata, voci, ultimo scambio, errore con il suggerimento giusto) con «🔄 Sincronizza ora»; la lista si sceglie in «Impostazioni sistema» (`todo_widget_entity`, di default `todo.lista_della_spesa`; `todo_sync_attivo` 0 la ferma). Le voci arrivate dal telefono mostrano «📱 dal telefono».
+- I sensori `sensor.dispensa_lista_spesa` e `sensor.dispensa_suggeriti` si aggiornano a ogni modifica della lista, anche dal telefono.
+- Il motore è generico sui connettori: la lista di Alexa si aggiungerà come secondo connettore quando il login di Alexa Devices funzionerà (HA 2026.11).
+
+### Migrazione (schema 9)
+- Tabella `spesa_sync_map` e due impostazioni (`todo_widget_entity`, `todo_sync_attivo`). Senza la lista in Home Assistant l'add-on resta in attesa e lo dice nel pannello Admin.
+
+### Test
+- `tests/test_sync_todo.py` (28 test: scenari di sincronizzazione con una lista finta, chiamate REST verso HA, endpoint Admin, trigger) e `tests/finto_ha.py`, un Home Assistant finto per provare tutto a mano. In totale 102 test Python. Prova completa con l'add-on reale e il finto HA: aggiunte, spunte, cancellazioni, errore e ripresa.
+
+---
+
 ## [2.2.0] — 2026-11-02
 
 Lista della spesa rifatta: i prodotti finiti sono **suggerimenti**, non voci automatiche; le voci si aggiungono in modo intelligente e sono pronte per la fusione con la lista di Alexa (versione successiva).

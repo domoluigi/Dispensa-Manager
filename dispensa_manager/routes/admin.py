@@ -10,6 +10,7 @@ from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import get_jwt_identity
 from database import get_db, set_setting, get_api_key, regenerate_api_key, BACKUPS_DIR, IMAGES_DIR
 from auth import admin_required, hash_password
+import sync_todo
 
 logger = logging.getLogger(__name__)
 
@@ -151,11 +152,19 @@ def update_settings():
         "giorni_alert_scadenza", "soglia_scorte_minime",
         "max_login_attempts", "ban_window_minutes",
         "notif_telegram_acquisto", "notif_telegram_modifica", "notif_telegram_eliminazione",
-        "ban_durata_minuti",
+        "ban_durata_minuti", "todo_widget_entity", "todo_sync_attivo",
     }
     invalid = set(data.keys()) - ALLOWED_KEYS
     if invalid:
         return jsonify({"error": f"Chiavi non ammesse: {invalid}"}), 400
+    if "todo_widget_entity" in data:
+        entita = str(data["todo_widget_entity"]).strip().lower()
+        if entita and not re.fullmatch(r"todo\.[a-z0-9_]+", entita):
+            return jsonify({"error": "todo_widget_entity: serve un'entita' tipo todo.lista_della_spesa (o vuoto per disattivare)"}), 400
+        data["todo_widget_entity"] = entita
+    if "todo_sync_attivo" in data:
+        if str(data["todo_sync_attivo"]) not in ("0", "1"):
+            return jsonify({"error": "todo_sync_attivo: 0 o 1"}), 400
     if "ban_durata_minuti" in data:
         try:
             if not 0 <= int(data["ban_durata_minuti"]) <= 525600:
@@ -168,6 +177,8 @@ def update_settings():
         with conn:
             for key, value in data.items():
                 set_setting(conn, key, str(value))
+        if any(k.startswith("todo_") for k in data):
+            sync_todo.richiedi_sync()
         return jsonify({"ok": True, "updated": list(data.keys())})
     finally:
         conn.close()
@@ -189,6 +200,30 @@ def regenerate_api_key_endpoint():
 
 
 # ── IP Ban ─────────────────────────────────────────────────────────────────────────────
+
+# ── Sincronizzazione con la lista to-do di Home Assistant ─────────────────────
+
+@bp.get("/spesa-sync")
+@admin_required
+def spesa_sync_stato():
+    return jsonify(sync_todo.stato())
+
+
+@bp.post("/spesa-sync/ora")
+@admin_required
+def spesa_sync_ora():
+    """Un giro subito (per provare dopo aver creato la lista in Home Assistant)."""
+    conn = get_db()
+    try:
+        imp = sync_todo.impostazioni(conn)
+    finally:
+        conn.close()
+    for cid in sync_todo.CONNETTORI:
+        if not imp[cid]:
+            return jsonify({"error": "Nessuna lista indicata nelle impostazioni"}), 400
+        sync_todo.esegui(cid, imp[cid])
+    return jsonify(sync_todo.stato())
+
 
 @bp.get("/ip-bans")
 @admin_required

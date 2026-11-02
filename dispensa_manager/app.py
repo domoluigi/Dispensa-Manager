@@ -253,6 +253,9 @@ if __name__ == "__main__":
     threading.Thread(target=_sync_ha_on_startup, daemon=True).start()
     # Backup automatico ogni 7 giorni
     threading.Thread(target=_auto_backup_loop, daemon=True).start()
+    # Sincronizzazione della lista della spesa con la lista to-do di Home Assistant (widget del telefono)
+    import sync_todo
+    sync_todo.avvia_thread()
     app = create_app()
     # v2.0.20: HTTPS opzionale in parallelo (porta 5443); un errore qui non
     # deve impedire l'avvio della porta 5000

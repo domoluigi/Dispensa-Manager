@@ -403,7 +403,7 @@ class Migrazione(unittest.TestCase):
             c.close()
         finally:
             database.DB_PATH = vecchio
-        self.assertEqual(versione, "8")
+        self.assertEqual(versione, str(database.SCHEMA_VERSION))     # arriva all'ultima versione
         self.assertEqual(sorted(r["nome"] for r in righe), ["Prodotto 3", "Vegan Salad Cream"])
         self.assertEqual(legacy, 66)                                    # copia di sicurezza delle voci tolte
         self.assertTrue(all(r["uid"] and r["nome_norm"] and r["reparto"] for r in righe))
