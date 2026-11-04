@@ -180,12 +180,14 @@ def create_app():
     from routes.shopping import bp as shopping_bp
     from routes.admin import bp as admin_bp
     from routes.riclassifica import bp as riclassifica_bp
+    from routes.inventario import bp as inventario_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(shopping_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(riclassifica_bp)
+    app.register_blueprint(inventario_bp)
 
     @app.route("/")
     def index():

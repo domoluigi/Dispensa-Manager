@@ -75,5 +75,26 @@ verifica('banner e modale di riclassifica', html.includes('id="riclass-banner"')
 verifica('«Sposta» non scarta i non selezionati', /const ignora = soloIgnora \?/.test(js));
 verifica('service worker aggiornato', /dispensa-v1[5-9]/.test(sw));
 
+// Dieta, valori nutrizionali e nuovo inventario (2.5.0)
+for (const id of ['dieta-select', 'risc-banner', 'conf-dieta', 'conf-ingredienti', 'conf-ingr-esito', 'modal-azzera', 'azzera-conferma', 'azzera-vai',
+                  'set-dieta', 'arr-stato', 'inv-stato', 'inv-azzera-btn', 'inv-annulla-btn', 'inv-termina-btn', 'ver-footer']) {
+  verifica('elemento #' + id + ' presente', html.includes('id="' + id + '"'));
+}
+verifica('ogni id della pagina e\' unico', (() => { const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(m => m[1]); return ids.length === new Set(ids).size; })());
+for (const f of ['badgeDieta', 'adattoDieta', 'renderDietaDettaglio', 'renderDietaConferma', 'aggiornaStatoInventario', 'apriAzzera', 'eseguiAzzera',
+                 'annullaAzzeramento', 'terminaRiscansione', 'avviaRaccoltaDati', 'salvaIngredienti', 'impostaGiudizio', 'anteprimaIngredienti', 'salvaDietaProfilo']) {
+  verifica('funzione ' + f + ' definita', new RegExp('function ' + f + '\\(').test(js));
+}
+verifica('la lista mostra il badge di dieta', js.includes('${badgeHtml}${badgeDieta(p)}'));
+verifica('il dettaglio mostra il riquadro dieta', js.includes('renderDietaDettaglio(p) + renderNutriments(p)'));
+verifica('la conferma mostra il giudizio', /renderDietaConferma\(prodotto\);\s*showScreen\('screen-conferma'\)/.test(js));
+verifica('il salvataggio manda ingredienti e dati di Open Food Facts', js.includes('ingredienti: (document.getElementById') && js.includes('off_dati: prodottoCorrente.off_dati'));
+verifica('il salvataggio controlla la risposta del server', js.includes("if (!resp.ok) throw new Error('salvataggio')"));
+verifica('azzeramento: serve scrivere AZZERA', js.includes("toUpperCase() !== 'AZZERA'") && /id="azzera-vai"[^>]*disabled/.test(html));
+verifica('azzeramento: c\'e\' l\'annulla', /toastUndo\([^\n]*annullaLotto\(d\.lotto\)/.test(js));
+verifica('i prodotti che non sono cibo non hanno badge di dieta', /function nonCibo[^\n]*Saponi[^\n]*Altro/.test(js) && /function badgeDieta[^\n]*\n[^\n]*nonCibo/.test(js));
+verifica('la dieta non si legge mai dal nome per dire «vegano» senza dati: nessun valore «si» di default', !/dieta:\s*\{[^}]*vegano:\s*'si'/.test(js));
+verifica('service worker con cache nuova', /dispensa-v16/.test(sw));
+
 console.log(ok + '/' + tot);
 process.exit(ok === tot ? 0 : 1);

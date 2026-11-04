@@ -13,13 +13,14 @@ from flask_jwt_extended import jwt_required
 import requests as http_requests
 
 from database import (
-    get_db, get_setting, get_ha_option, APP_VERSION,
+    get_db, get_setting, get_ha_option, APP_VERSION, riscansione_attiva,
     save_image_to_fs, delete_image_from_fs,
 )
 from auth import api_key_or_jwt
 from notifiche import invia_telegram, invia_a_chat, chat_ids, md_esc
 from suggerimenti import costruisci_suggerimento
 from posizioni import POSIZIONI, classifica
+from dieta import valuta_dieta, profilo_nutrizionale, estrai_off, OFF_CAMPI_DIETA
 import spesa as sp
 
 logger = logging.getLogger(__name__)
@@ -171,7 +172,7 @@ def _handle_immagine(immagine_url: str, prodotto_id: int) -> str:
 # ── Barcode ──────────────────────────────────────────────────────────────────
 
 # Campi richiesti a Open Food Facts: la risposta completa pesa oltre 100 KB, questi ~700 byte
-OFF_CAMPI = "product_name,product_name_it,brands,categories_tags,image_front_small_url,nutriscore_grade,nutriments"
+OFF_CAMPI = "product_name,product_name_it,brands,categories_tags,image_front_small_url,nutriscore_grade,nutriments," + OFF_CAMPI_DIETA
 OFF_TIMEOUT = 6
 MISS_TTL = 6 * 3600          # un EAN non trovato non si cerca di nuovo per 6 ore (salvo ?refresh=1)
 _miss = {}
@@ -190,7 +191,7 @@ def _scarica_prodotto(url, headers):
 
 def _cerca_online(ean):
     """Interroga i tre database insieme (non uno dopo l'altro). Ritorna (prodotto|None, tutti_risposto)."""
-    headers = {"User-Agent": f"DispensaManager/{APP_VERSION}"}
+    headers = {"User-Agent": f"DispensaManager/{APP_VERSION} (https://github.com/domoluigi/Dispensa-Manager)"}
     urls = [
         f"https://world.openfoodfacts.org/api/v2/product/{ean}.json",
         f"https://world.openproductsfacts.org/api/v2/product/{ean}.json",
@@ -219,6 +220,92 @@ def _categorie_da_tag(tags):
     return [re.sub(r"^[a-z]{2}:", "", t).replace("-", " ") for t in (tags or [])]
 
 
+def _json_o(testo, default):
+    try:
+        return json.loads(testo) if testo else default
+    except (ValueError, TypeError):
+        return default
+
+
+def _nutrienti_app(n):
+    n = n or {}
+    return {
+        "energia_kcal": n.get("energy-kcal_100g"),
+        "grassi": n.get("fat_100g"),
+        "grassi_saturi": n.get("saturated-fat_100g"),
+        "carboidrati": n.get("carbohydrates_100g"),
+        "zuccheri": n.get("sugars_100g"),
+        "fibre": n.get("fiber_100g"),
+        "proteine": n.get("proteins_100g"),
+        "sale": n.get("salt_100g"),
+    }
+
+
+def _dati_da_off(prodotto):
+    """Dati di un prodotto di Open Food Facts, nella forma che usa l'app."""
+    categorie = _categorie_da_tag(prodotto.get("categories_tags"))
+    extra = estrai_off(prodotto)
+    return {
+        "nome": prodotto.get("product_name_it") or prodotto.get("product_name") or "Prodotto sconosciuto",
+        "marca": (prodotto.get("brands") or "").split(",")[0].strip(),
+        "categoria": categorie[-1] if categorie else "",     # la piu' specifica, non la prima (la piu' generica)
+        "categorie": categorie,
+        "immagine_url": prodotto.get("image_front_small_url") or "",
+        "nutriscore": (prodotto.get("nutriscore_grade") or "").upper(),
+        "nutriments": _nutrienti_app(prodotto.get("nutriments")),
+        "ingredienti": extra["ingredienti"], "nova": extra["nova"], "off_dati": extra["off_dati"],
+    }
+
+
+def _dati_da_cache(c):
+    return {
+        "nome": c["nome"], "marca": c["marca"] or "", "categoria": c["categoria"] or "",
+        "categorie": [c["categoria"]] if c["categoria"] else [],
+        "immagine_url": c["immagine_url"] or "", "nutriscore": c["nutriscore"] or "",
+        "nutriments": _json_o(c["nutriments"], {}) or {},
+        "ingredienti": c["ingredienti"] or "", "nova": c["nova"], "off_dati": _json_o(c["off_dati"], {}) or {},
+    }
+
+
+def _dieta_da_dati(d, override=None):
+    off = d.get("off_dati") or {}
+    return valuta_dieta(d.get("ingredienti") or "", off.get("analisi"), off.get("etichette"), off.get("categorie"),
+                        d.get("nome") or "", off.get("tracce"), override)
+
+
+def _risposta_barcode(conn, ean, d, fonte):
+    return {
+        "trovato": True, "fonte": fonte, "ean": ean,
+        "nome": d["nome"], "marca": d["marca"], "categoria": d["categoria"], "categorie": d["categorie"],
+        "immagine_url": d["immagine_url"], "nutriscore": d["nutriscore"], "nutriments": d["nutriments"],
+        "ingredienti": d["ingredienti"], "nova": d["nova"], "off_dati": d["off_dati"],
+        "dieta": _dieta_da_dati(d),
+        "profilo": profilo_nutrizionale(d["nutriments"], d["nutriscore"], d["nova"]),
+        "suggerimento": costruisci_suggerimento(conn, ean, d["categorie"], d["nome"], d["marca"]),
+    }
+
+
+def _rinfresca_cache(conn, ean):
+    """La cache di prima della 2.5.0 non ha ingredienti ne' dieta: si chiedono a Open Food Facts una volta sola.
+    Se il database non risponde non si scrive niente (si riprova alla prossima scansione); se risponde «non c'e'»
+    si segna «controllato» con un oggetto vuoto."""
+    prodotto, tutti_risposto = _cerca_online(ean)
+    if prodotto is None:
+        if tutti_risposto:
+            with conn:
+                conn.execute("UPDATE barcode_cache SET off_dati='{}' WHERE ean=?", (ean,))
+        return None
+    nuovo = _dati_da_off(prodotto)
+    with conn:
+        conn.execute(
+            "UPDATE barcode_cache SET ingredienti=?, off_dati=?, nova=?, nutriscore=COALESCE(NULLIF(nutriscore, ''), ?), "
+            "nutriments=COALESCE(nutriments, ?) WHERE ean=?",
+            (nuovo["ingredienti"], json.dumps(nuovo["off_dati"], ensure_ascii=False), nuovo["nova"], nuovo["nutriscore"],
+             json.dumps(nuovo["nutriments"]), ean),
+        )
+    return nuovo
+
+
 @bp.get("/api/barcode/<ean>")
 @jwt_required()
 def cerca_barcode(ean):
@@ -230,21 +317,14 @@ def cerca_barcode(ean):
     try:
         cached = conn.execute("SELECT * FROM barcode_cache WHERE ean=?", (ean,)).fetchone()
         if cached:
-            nutriments = None
-            if cached["nutriments"]:
-                try:
-                    nutriments = json.loads(cached["nutriments"])
-                except Exception:
-                    pass
-            categorie = [cached["categoria"]] if cached["categoria"] else []
-            return jsonify({
-                "trovato": True, "fonte": "cache_locale", "ean": ean,
-                "nome": cached["nome"], "marca": cached["marca"] or "",
-                "categoria": cached["categoria"] or "", "categorie": categorie,
-                "immagine_url": cached["immagine_url"] or "",
-                "nutriscore": cached["nutriscore"] or "", "nutriments": nutriments or {},
-                "suggerimento": costruisci_suggerimento(conn, ean, categorie, cached["nome"], cached["marca"] or ""),
-            })
+            d = _dati_da_cache(cached)
+            if cached["off_dati"] is None:
+                nuovo = _rinfresca_cache(conn, ean)
+                if nuovo:
+                    d.update(ingredienti=nuovo["ingredienti"], nova=nuovo["nova"], off_dati=nuovo["off_dati"])
+                    d["nutriscore"] = d["nutriscore"] or nuovo["nutriscore"]
+                    d["nutriments"] = d["nutriments"] or nuovo["nutriments"]
+            return jsonify(_risposta_barcode(conn, ean, d, "cache_locale"))
     finally:
         conn.close()
 
@@ -266,30 +346,7 @@ def cerca_barcode(ean):
                 "categoria": "", "categorie": [], "immagine_url": "", "nutriscore": "", "nutriments": {},
                 "suggerimento": costruisci_suggerimento(conn, ean, [], ""),
             }), 404
-
-        nutriments = prodotto.get("nutriments") or {}
-        categorie = _categorie_da_tag(prodotto.get("categories_tags"))
-        nome = prodotto.get("product_name_it") or prodotto.get("product_name") or "Prodotto sconosciuto"
-        return jsonify({
-            "trovato": True, "fonte": "online", "ean": ean,
-            "nome": nome,
-            "marca": (prodotto.get("brands") or "").split(",")[0].strip(),
-            "categoria": categorie[-1] if categorie else "",     # la piu' specifica, non la prima (la piu' generica)
-            "categorie": categorie,
-            "immagine_url": prodotto.get("image_front_small_url") or "",
-            "nutriscore": (prodotto.get("nutriscore_grade") or "").upper(),
-            "nutriments": {
-                "energia_kcal": nutriments.get("energy-kcal_100g"),
-                "grassi": nutriments.get("fat_100g"),
-                "grassi_saturi": nutriments.get("saturated-fat_100g"),
-                "carboidrati": nutriments.get("carbohydrates_100g"),
-                "zuccheri": nutriments.get("sugars_100g"),
-                "fibre": nutriments.get("fiber_100g"),
-                "proteine": nutriments.get("proteins_100g"),
-                "sale": nutriments.get("salt_100g"),
-            },
-            "suggerimento": costruisci_suggerimento(conn, ean, categorie, nome, (prodotto.get("brands") or "").split(",")[0].strip()),
-        })
+        return jsonify(_risposta_barcode(conn, ean, _dati_da_off(prodotto), "online"))
     finally:
         conn.close()
 
@@ -301,15 +358,17 @@ def salva_barcode_cache():
     ean = data.get("ean", "")
     if not ean or ean.startswith("MANUAL-"):
         return jsonify({"ok": False, "errore": "EAN non valido"})
+    ingredienti, off_json, nova = _campi_dieta(data)
     conn = get_db()
     try:
         with conn:
             conn.execute(
-                "INSERT OR REPLACE INTO barcode_cache (ean, nome, marca, categoria, immagine_url, nutriscore, nutriments) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO barcode_cache (ean, nome, marca, categoria, immagine_url, nutriscore, nutriments, "
+                "ingredienti, off_dati, nova) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (ean, data.get("nome", ""), data.get("marca", ""), data.get("categoria", ""),
                  data.get("immagine_url", ""), data.get("nutriscore", ""),
-                 json.dumps(data.get("nutriments")) if data.get("nutriments") else None),
+                 json.dumps(data.get("nutriments")) if data.get("nutriments") else None,
+                 ingredienti or None, off_json, nova),
             )
         return jsonify({"ok": True})
     finally:
@@ -364,6 +423,13 @@ def lista_prodotti():
                 d["nutriments"] = json.loads(d["nutriments"])
             except Exception:
                 d["nutriments"] = None
+        off = _json_o(d.pop("off_dati", None), {}) or {}
+        d["dieta"] = valuta_dieta(d.get("ingredienti") or "", off.get("analisi"), off.get("etichette"), off.get("categorie"),
+                                  d.get("nome") or "", off.get("tracce"), d.get("dieta_override"))
+        d["profilo"] = profilo_nutrizionale(d.get("nutriments"), d.get("nutriscore"), d.get("nova"))
+        # un detersivo o la carta igienica ancora in «Dispensa» non hanno una dieta: niente badge finche' non si riclassificano
+        k = classifica(d.get("nome") or "", d.get("marca") or "", d.get("categoria") or "")
+        d["non_cibo"] = k["posizione"] in ("Saponi", "Altro") and k["livello"] == "alto"
         result.append(d)
     return jsonify(result)
 
@@ -394,48 +460,75 @@ def lista_esauriti():
         conn.close()
 
 
+def _campi_dieta(data):
+    """(ingredienti, off_dati come JSON, nova) da un corpo di richiesta; None dove manca."""
+    ingredienti = str(data.get("ingredienti") or "").strip()[:4000]
+    off = data.get("off_dati")
+    off_json = json.dumps(off, ensure_ascii=False) if isinstance(off, dict) else None
+    return ingredienti, off_json, _intero(data.get("nova"), None, minimo=1, massimo=4)
+
+
 @bp.post("/api/prodotti")
 @jwt_required()
 def aggiungi_prodotto():
     data = request.get_json(silent=True) or {}
     immagine_url = data.get("immagine_url", "")
     quantita = _intero(data.get("quantita", 1), 1, minimo=1)
-    posizione = data.get("posizione")
-    if posizione not in POSIZIONI:
-        posizione = classifica(data.get("nome", ""), data.get("marca", ""), data.get("categoria", "")).get("posizione", "Dispensa")
-    # Salva prima senza immagine pesante (verrà spostata su FS post-insert)
+    ean = data.get("ean", "") or ""
+    # Salva prima senza immagine pesante (verra' spostata su FS post-insert)
     prezzo = data.get("prezzo")
     try:
         prezzo = float(prezzo) if prezzo not in (None, "") else None
     except (ValueError, TypeError):
         prezzo = None
+    ingredienti, off_json, nova = _campi_dieta(data)
+    nutriments = json.dumps(data.get("nutriments")) if data.get("nutriments") else None
 
+    ricaricato = False
     conn = get_db()
     try:
         with conn:
-            cur = conn.execute(
-                "INSERT INTO prodotti (ean, nome, marca, categoria, immagine_url, quantita, scadenza, note, nutriments, nutriscore, posizione, prezzo) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    data.get("ean", ""), data.get("nome", "Prodotto"), data.get("marca", ""),
-                    data.get("categoria", ""), "", quantita,
-                    data.get("scadenza"), data.get("note", ""),
-                    json.dumps(data.get("nutriments")) if data.get("nutriments") else None,
-                    data.get("nutriscore", ""), posizione,
-                    prezzo,
-                ),
-            )
-            new_id = cur.lastrowid
+            # Un prodotto finito che si ricompra torna sulla sua riga: niente doppioni tra gli esauriti
+            # e restano i dati gia' raccolti (ingredienti, dieta, foto, posizione).
+            vecchia = conn.execute("SELECT * FROM prodotti WHERE ean=? AND quantita<=0 ORDER BY id DESC LIMIT 1", (ean,)).fetchone() if ean else None
+            posizione = data.get("posizione")
+            if posizione not in POSIZIONI:
+                if vecchia is not None and vecchia["posizione"] in POSIZIONI:
+                    posizione = vecchia["posizione"]
+                else:
+                    posizione = classifica(data.get("nome", ""), data.get("marca", ""), data.get("categoria", "")).get("posizione", "Dispensa")
+            if vecchia is not None:
+                new_id, ricaricato = vecchia["id"], True
+                conn.execute(
+                    "UPDATE prodotti SET quantita=?, scadenza=?, note=?, posizione=?, prezzo=COALESCE(?, prezzo), "
+                    "data_inserimento=datetime('now'), nutriments=COALESCE(?, nutriments), "
+                    "nutriscore=CASE WHEN ? <> '' THEN ? ELSE nutriscore END, "
+                    "ingredienti=COALESCE(NULLIF(?, ''), ingredienti), off_dati=COALESCE(?, off_dati), nova=COALESCE(?, nova) WHERE id=?",
+                    (quantita, data.get("scadenza"), data.get("note", ""), posizione, prezzo, nutriments,
+                     data.get("nutriscore", ""), data.get("nutriscore", ""), ingredienti, off_json, nova, new_id),
+                )
+            else:
+                cur = conn.execute(
+                    "INSERT INTO prodotti (ean, nome, marca, categoria, immagine_url, quantita, scadenza, note, nutriments, nutriscore, "
+                    "posizione, prezzo, ingredienti, off_dati, nova) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        ean, data.get("nome", "Prodotto"), data.get("marca", ""),
+                        data.get("categoria", ""), "", quantita,
+                        data.get("scadenza"), data.get("note", ""), nutriments,
+                        data.get("nutriscore", ""), posizione, prezzo, ingredienti or None, off_json, nova,
+                    ),
+                )
+                new_id = cur.lastrowid
             # Gestione immagine: data-URL → filesystem, URL esterna → invariata
             final_url = _handle_immagine(immagine_url, new_id)
-            if final_url:
+            if final_url and (vecchia is None or not vecchia["immagine_url"] or final_url.startswith("/dispensa-images/")):
                 conn.execute("UPDATE prodotti SET immagine_url=? WHERE id=?", (final_url, new_id))
     finally:
         conn.close()
 
     log_movimento(
         nome=data.get("nome", "Prodotto"), tipo="acquisto",
-        ean=data.get("ean", ""), marca=data.get("marca", ""),
+        ean=ean, marca=data.get("marca", ""),
         categoria=data.get("categoria", ""), quantita=quantita,
         prezzo=prezzo,
     )
@@ -449,7 +542,7 @@ def aggiungi_prodotto():
     prezzo_str = f"\n💰 {prezzo:.2f}€" if prezzo else ""
     _async(invia_telegram, f"➕ *Aggiunto in dispensa*\n\n*{md_esc(nome)}* ×{qty}\n{_pos_icon(pos)} {pos}{scad_str}{prezzo_str}", "acquisto")
 
-    return jsonify({"ok": True, "id": new_id}), 201
+    return jsonify({"ok": True, "id": new_id, "ricaricato": ricaricato}), 201
 
 
 @bp.put("/api/prodotti/<int:id>")
@@ -486,7 +579,8 @@ def aggiorna_prodotto(id):
             # Se new_url è URL normale, lascia stare data come è
 
         fields, values = [], []
-        for campo in ["nome", "marca", "ean", "quantita", "scadenza", "note", "posizione", "immagine_url", "prezzo"]:
+        for campo in ["nome", "marca", "ean", "quantita", "scadenza", "note", "posizione", "immagine_url", "prezzo",
+                      "ingredienti", "dieta_override"]:
             if campo in data:
                 fields.append(f"{campo}=?")
                 val = data[campo]
@@ -495,11 +589,22 @@ def aggiorna_prodotto(id):
                         val = float(val) if val not in (None, "") else None
                     except (ValueError, TypeError):
                         val = None
+                elif campo == "ingredienti":
+                    val = str(val or "").strip()[:4000] or None
+                elif campo == "dieta_override":
+                    val = val if val in ("si", "no") else None
                 values.append(val)
         if fields:
             values.append(id)
             with conn:
                 conn.execute(f"UPDATE prodotti SET {', '.join(fields)} WHERE id=?", values)
+                # ingredienti e giudizio sulla dieta sono del prodotto (EAN), non della singola riga
+                if p["ean"]:
+                    for campo in ("ingredienti", "dieta_override"):
+                        if campo in data:
+                            conn.execute(f"UPDATE prodotti SET {campo}=? WHERE ean=? AND id<>?", (values[fields.index(campo + "=?")], p["ean"], id))
+                    if "ingredienti" in data:
+                        conn.execute("UPDATE barcode_cache SET ingredienti=? WHERE ean=?", (values[fields.index("ingredienti=?")], p["ean"]))
     finally:
         conn.close()
 
@@ -833,6 +938,7 @@ def invia_alerts():
     try:
         prodotti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC").fetchall()
         giorni_soglia = _get_days_threshold(conn)
+        riscansione = riscansione_attiva(conn)
     finally:
         conn.close()
 
@@ -841,7 +947,8 @@ def invia_alerts():
 
     for p in prodotti:
         if p["quantita"] <= 0:
-            esauriti.append(p["nome"])
+            if not riscansione:
+                esauriti.append(p["nome"])
         if p["quantita"] > 0 and p["scadenza"]:
             try:
                 scad = datetime.strptime(p["scadenza"], "%Y-%m-%d").date()
@@ -917,6 +1024,7 @@ def report_dispensa():
     try:
         prodotti = conn.execute("SELECT * FROM prodotti ORDER BY scadenza ASC NULLS LAST").fetchall()
         giorni_soglia = _get_days_threshold(conn)
+        riscansione = riscansione_attiva(conn)
     finally:
         conn.close()
 
@@ -929,7 +1037,8 @@ def report_dispensa():
 
     for p in prodotti:
         if p["quantita"] <= 0:
-            esauriti.append(p)
+            if not riscansione:         # dopo un azzeramento sono tutti esauriti: finche' si riscansiona non si elencano
+                esauriti.append(p)
             continue
         if p["scadenza"]:
             try:

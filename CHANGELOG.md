@@ -5,6 +5,42 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.5.0] — 2026-11-04
+
+**Vegano o no, e un inventario da rifare.** Ogni prodotto dice se è vegano o vegetariano e quali valori nutrizionali ha; e si può segnare tutto come esaurito per riscansionare quello che c'è in casa, senza doppioni e senza una raffica di notifiche.
+
+### Dieta (`dieta.py`)
+- Cinque stati per vegano e per vegetariano: **certo** (etichetta «vegan» o analisi di Open Food Facts tutta vegana), **probabile** (nessun ingrediente animale nell'elenco, ma non certificato), **da verificare** (E471, vitamina D3, vino, birra… o dati che si contraddicono), **no** (con il motivo: «latte», «E120»…) e **sconosciuto**. Un prodotto senza ingredienti non è mai dato per vegano.
+- Il controllo sugli ingredienti legge italiano, inglese, tedesco e francese, toglie le tracce («può contenere latte») e capisce le frasi che sembrano animali ma non lo sono: latte di soia o di cocco, burro di cacao o di arachidi, lievito di birra, «senza latticini», «aroma di mozzarella», cremor tartaro, acido lattico. Le tracce di latte e uova si mostrano a parte.
+- Provato sui 195 prodotti veri che Open Food Facts conosce: dove l'analisi di Open Food Facts è netta, i due giudizi coincidono; il suo «forse vegano» (che dà anche alla pasta di sola semola) diventa «probabile» se nel testo non c'è niente di animale.
+- **Giudizio tuo**: «Ho controllato: è vegano» / «Non è vegano» vince su tutto, ed è per prodotto (EAN), non per singola riga. Gli ingredienti si possono scrivere o incollare (anche in scansione, per i prodotti non online) con l'anteprima del giudizio mentre si scrive.
+- La **dieta di casa** (vegana, vegetariana, nessuna) la sceglie l'amministratore in Impostazioni: decide i badge nella lista, il filtro «Dieta» e l'avviso rosso in scansione («🚫 Non adatto alla dieta vegana: latte»). Saponi e Altro non hanno badge.
+
+### Valori nutrizionali (`profilo_nutrizionale`)
+- Per 100 g, con le soglie dei claim europei: alto contenuto di proteine (almeno il 20% delle calorie), fonte di proteine (12%), ricco di fibre (6 g), pochi zuccheri (5 g), poco sale (0,3 g), pochi grassi saturi (1,5 g); e gli eccessi del «semaforo» britannico (zuccheri 22,5 g, sale 1,5 g, saturi 5 g, grassi 17,5 g). In più Nutri-Score e livello di lavorazione (NOVA).
+
+### Dati da Open Food Facts
+- Si raccolgono anche ingredienti, analisi vegana/vegetariana, etichette, allergeni, tracce, NOVA e categorie; il giudizio si ricalcola ogni volta, quindi un miglioramento delle regole vale subito per tutti i prodotti.
+- La cache locale di prima della 2.5.0 non li ha: alla prima scansione di un prodotto già in cache si chiedono una volta sola.
+- **«Aggiorna i dati dei prodotti»** (Impostazioni) raccoglie in background i dati di tutti i prodotti con codice a barre. Va piano, una richiesta ogni 1,5 secondi (circa 6 minuti per 230 prodotti), e si adatta: Open Food Facts risponde «troppe richieste» (429) se si va troppo veloci, senza dire quanto aspettare; l'app allunga la pausa a ogni 429 e la riaccorcia dopo i successi, e un codice che resta senza risposta viene ritentato alla raccolta successiva invece di essere dato per «non trovato». Nella prima prova senza queste cautele 151 prodotti su 232 sembravano «non trovati» (erano 37). Le richieste si presentano con nome, versione e indirizzo del progetto, come chiede Open Food Facts.
+
+### Nuovo inventario
+- **«Segna tutto come esaurito»** (Impostazioni, solo admin): copia il database (controllando che le righe siano tutte), azzera le quantità e accende la **riscansione**. Serve scrivere AZZERA; c'è l'Annulla (che rispetta ciò che nel frattempo hai riscansionato).
+- **Scansionare un prodotto finito ricarica la sua riga**: niente doppioni tra gli esauriti, e restano foto, ingredienti, dieta e posizione. Vale sempre, non solo in riscansione.
+- Durante la riscansione: banner «Riscansione in corso: 41 di 183», nessun suggerito nella spesa, nessun elenco degli esauriti nei report e negli alert, nessun messaggio Telegram per ogni scansione (restano le eliminazioni). «Termina» la spegne.
+
+### Altro
+- Il salvataggio di un prodotto controlla la risposta del server (prima un errore diceva comunque «Prodotto salvato!»).
+- Il backup JSON e il ripristino portano i campi nuovi. La versione nel piè di pagina è quella vera.
+
+### Migrazione (schema 11)
+- Colonne `ingredienti`, `off_dati`, `nova`, `dieta_override` in `prodotti`; `ingredienti`, `off_dati`, `nova` in `barcode_cache`; tabella `azzeramento_log`. Niente cambia finché non lo chiedi.
+
+### Test
+- `tests/test_dieta.py` (23), `tests/test_inventario.py` (26) e 40 nuovi controlli in `tests/test_gui.js`
+
+---
+
 ## [2.4.0] — 2026-11-02
 
 **Cinque posizioni, scelte da sole.** Oltre a Dispensa, Frigo e Congelatore (nel database resta «Freezer») arrivano **Saponi** 🧴 (igiene, pulizia della casa) e **Altro** 📦 (sacchetti, pile, lampadine…). I prodotti nuovi finiscono nel posto giusto senza pensarci, e quelli già in casa si possono sistemare in un colpo solo.

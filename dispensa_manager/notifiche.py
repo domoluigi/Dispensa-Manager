@@ -11,7 +11,7 @@ import re
 
 import requests as http_requests
 
-from database import get_db, get_setting, get_ha_option
+from database import get_db, get_setting, get_ha_option, riscansione_attiva
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,9 @@ def invia_telegram(testo, categoria=None):
         try:
             if get_setting(conn, f"notif_telegram_{categoria}", "1") != "1":
                 logger.info("Notifica Telegram '%s' disabilitata da settings", categoria)
+                return
+            if categoria in ("acquisto", "modifica") and riscansione_attiva(conn):     # 180 scansioni = 360 messaggi
+                logger.info("Notifica Telegram '%s' sospesa: riscansione in corso", categoria)
                 return
         finally:
             conn.close()

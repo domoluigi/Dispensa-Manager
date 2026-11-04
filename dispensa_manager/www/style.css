@@ -419,3 +419,29 @@ input[type="checkbox"] { accent-color: var(--green); width: 20px; height: 20px; 
 .riclass-riga input { margin-top:3px; flex:none; width:18px; height:18px; }
 .riclass-riga .riclass-nome { font-weight:500; word-break:break-word; }
 .riclass-riga .riclass-mov { font-size:12px; color:var(--muted); margin-top:2px; }
+
+/* Dieta, valori nutrizionali e nuovo inventario (2.5.0) */
+.field textarea { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 14px; background: var(--bg); color: var(--text); font-family: inherit; resize: vertical; line-height: 1.4; }
+.field textarea:focus { outline: none; border-color: var(--green); background: var(--surface); }
+.dieta-chip { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; margin: 4px 6px 0 0; white-space: nowrap; }
+.dieta-si { background: var(--green-l); color: var(--green-d); }
+.dieta-prob { background: var(--green-l); color: var(--green-d); border: 1px dashed var(--green); }
+.dieta-ver { background: var(--amber-l); color: var(--amber); }
+.dieta-no { background: var(--red-l); color: var(--red); }
+.dieta-ign { background: var(--gray-l); color: var(--gray); }
+.det-sez { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+.dieta-nota { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+.dieta-azioni { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.profilo-lista { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.profilo-pt { font-size: 12px; padding: 3px 9px; border-radius: 8px; }
+.profilo-ok { background: var(--green-l); color: var(--green-d); }
+.profilo-attenzione { background: var(--amber-l); color: var(--amber); }
+.dieta-avviso { margin: 0 0 10px; padding: 11px 14px; border-radius: 12px; font-size: 14px; line-height: 1.45; border: 1px solid transparent; }
+.dieta-avviso-no { background: var(--red-l); color: var(--red); border-color: var(--red); }
+.dieta-avviso-ver { background: var(--amber-l); color: var(--amber); border-color: var(--amber); }
+.dieta-avviso-ok { background: var(--green-l); color: var(--green-d); }
+#dieta-select { max-width: 55%; }
+.risc-banner { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 12px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--surface); color: var(--text); border: 1px solid var(--green); font-size: 14px; }
+.risc-banner.hidden { display: none; }
+.risc-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.risc-banner .btn-sm { background: transparent; color: var(--text); border: 1px solid var(--green); flex-shrink: 0; }

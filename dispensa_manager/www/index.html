@@ -111,6 +111,16 @@
         <option value="nome">Nome A→Z</option>
         <option value="quantita">Quantità</option>
       </select>
+      <select id="dieta-select" onchange="applicaFiltroSort()" aria-label="Filtra per dieta">
+        <option value="">Dieta: tutti</option>
+        <option value="ok">🌱 Adatti alla dieta</option>
+        <option value="verifica">⚠️ Da verificare</option>
+        <option value="no">🚫 Non adatti</option>
+      </select>
+    </div>
+    <div class="risc-banner hidden" id="risc-banner">
+      <div><strong id="risc-titolo"></strong><div class="risc-sub" id="risc-sub"></div></div>
+      <button class="btn-sm btn-sm-green" onclick="terminaRiscansione()">Termina</button>
     </div>
     <div class="riclass-banner hidden" id="riclass-banner" role="button" tabindex="0" onclick="apriRiclassifica()">
       <span id="riclass-testo"></span><span class="riclass-cta">Rivedi ›</span>
@@ -157,6 +167,7 @@
   </div>
   <div class="content">
     <div id="found-badge-container"></div>
+    <div id="conf-dieta"></div>
     <div class="card card-body">
       <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
         <img id="conf-img" class="product-img" src="" alt="" onerror="this.style.display='none'">
@@ -241,6 +252,11 @@
         <label>Note (opzionale)</label>
         <input type="text" id="conf-note" placeholder="es. aperto, in frigo...">
       </div>
+      <div class="field">
+        <label for="conf-ingredienti">Ingredienti <span style="color:var(--hint);font-weight:400;font-size:12px;">— opzionale</span></label>
+        <textarea id="conf-ingredienti" rows="2" placeholder="Se il prodotto non è online, scrivi o incolla gli ingredienti" oninput="anteprimaIngredienti('conf')"></textarea>
+        <div id="conf-ingr-esito"></div>
+      </div>
     </div>
     <button class="btn btn-primary" onclick="salvaInDispensa()" style="margin-top: 8px;">Salva in dispensa</button>
   </div>
@@ -317,6 +333,29 @@
       <div style="font-size:12px;color:var(--hint);margin-top:6px;" id="dark-mode-info">Segue automaticamente il tema di sistema. Tocca per sovrascrivere.</div>
     </div>
     <div class="card card-body" style="margin-top:12px;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">🌱 Dieta e valori nutrizionali</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5;">Per ogni prodotto l'app dice se è vegano o vegetariano e quali sono i suoi valori, dagli ingredienti e da Open Food Facts. Un prodotto senza ingredienti non è mai dato per vegano.</div>
+      <div class="field">
+        <label for="set-dieta">Dieta di casa</label>
+        <select id="set-dieta" onchange="salvaDietaProfilo()">
+          <option value="vegana">🌱 Vegana</option>
+          <option value="vegetariana">🥚 Vegetariana</option>
+          <option value="nessuna">Nessuna</option>
+        </select>
+      </div>
+      <div id="arr-stato" style="font-size:13px;color:var(--muted);margin-bottom:8px;"></div>
+      <button class="btn btn-secondary" onclick="avviaRaccoltaDati()">🔄 Aggiorna i dati dei prodotti</button>
+    </div>
+    <div class="card card-body" style="margin-top:12px;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">🧹 Nuovo inventario</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5;">Per rifare l'inventario segna tutto come esaurito e riscansiona quello che hai in casa. Mentre riscansioni non ricevi avvisi sugli esauriti né un messaggio per ogni scansione.</div>
+      <div id="inv-stato" style="font-size:14px;line-height:1.5;margin-bottom:10px;"></div>
+      <button class="btn btn-secondary" id="inv-azzera-btn" onclick="apriAzzera()">Segna tutto come esaurito…</button>
+      <div id="inv-azzera-nota" style="display:none;font-size:12px;color:var(--hint);">Solo l'amministratore può azzerare l'inventario.</div>
+      <button class="btn btn-secondary" id="inv-termina-btn" style="display:none;margin-top:8px;" onclick="terminaRiscansione()">Termina la riscansione</button>
+      <button class="btn btn-secondary" id="inv-annulla-btn" style="display:none;margin-top:8px;" onclick="annullaAzzeramento()">↩️ Annulla l'azzeramento</button>
+    </div>
+    <div class="card card-body" style="margin-top:12px;">
       <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--muted);">Dati</div>
       <button class="btn btn-secondary" onclick="esportaCSV()">📥 Esporta inventario CSV</button>
     </div>
@@ -325,7 +364,7 @@
       <div style="font-size:14px;color:var(--text);margin-bottom:12px;">Connesso come: <strong id="current-username"></strong></div>
       <button class="btn btn-secondary" onclick="doLogout()" style="color:var(--red);">🚪 Esci (logout)</button>
     </div>
-    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v2.0.19</div>
+    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: var(--hint);">Dispensa Manager v<span id="ver-footer"></span></div>
   </div>
 </div>
 
@@ -498,6 +537,20 @@
       <button class="btn btn-secondary" onclick="creaNuovoDopoDuplicato()">🆕 Crea nuovo</button>
     </div>
     <button class="btn" style="width:100%;margin-top:8px;color:var(--muted);" onclick="closeModal('modal-scan-duplicato')">Annulla</button>
+  </div>
+</div>
+
+<!-- Modal azzeramento inventario -->
+<div class="modal-overlay hidden" id="modal-azzera">
+  <div class="modal-box">
+    <div class="modal-title">Segna tutto come esaurito?</div>
+    <p id="azzera-testo" style="font-size:14px;line-height:1.5;margin-bottom:10px;"></p>
+    <p style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;">Prima di farlo copio il database. Puoi annullare finché non riscansioni tutto. Per confermare scrivi <strong>AZZERA</strong>.</p>
+    <input type="text" id="azzera-conferma" class="setting-input" placeholder="AZZERA" autocomplete="off" autocapitalize="characters" oninput="controllaAzzera()">
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn btn-danger" id="azzera-vai" onclick="eseguiAzzera()" disabled>Segna tutto come esaurito</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-azzera')">Annulla</button>
+    </div>
   </div>
 </div>
 
