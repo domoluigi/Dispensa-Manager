@@ -19,8 +19,8 @@ OPTIONS_PATH = "/data/options.json"
 IMAGES_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "images")
 BACKUPS_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "backups")
 
-APP_VERSION = "2.4.0"
-SCHEMA_VERSION = 10
+APP_VERSION = "2.5.0"
+SCHEMA_VERSION = 11
 
 
 def get_db():
@@ -438,6 +438,41 @@ def init_db():
             _set_schema_version(conn, 10)
         current = 10
 
+    if current < 11:
+        logger.info("Migrazione schema DB: v10 → v11 (dieta, ingredienti, nuovo inventario)")
+        for alter in [
+            "ALTER TABLE prodotti ADD COLUMN ingredienti TEXT",
+            "ALTER TABLE prodotti ADD COLUMN off_dati TEXT",
+            "ALTER TABLE prodotti ADD COLUMN nova INTEGER",
+            "ALTER TABLE prodotti ADD COLUMN dieta_override TEXT",
+            "ALTER TABLE barcode_cache ADD COLUMN ingredienti TEXT",
+            "ALTER TABLE barcode_cache ADD COLUMN off_dati TEXT",
+            "ALTER TABLE barcode_cache ADD COLUMN nova INTEGER",
+        ]:
+            try:
+                conn.execute(alter)
+            except sqlite3.OperationalError:
+                pass   # colonna gia' presente
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS azzeramento_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lotto TEXT NOT NULL,
+                prodotto_id INTEGER NOT NULL,
+                quantita_prima INTEGER NOT NULL,
+                data TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_azzeramento_lotto ON azzeramento_log(lotto);
+        """)
+        with conn:
+            for chiave, valore, desc in (
+                ("riscansione_attiva", "0", "Modalita' riscansione: sospende suggeriti, report degli esauriti e notifiche di acquisto"),
+                ("riscansione_lotto", "", "Ultimo azzeramento dell'inventario (per l'Annulla e il conteggio)"),
+                ("dieta_profilo", "vegana", "Dieta di casa: vegana, vegetariana o nessuna (evidenzia cio' che non va bene)"),
+            ):
+                conn.execute("INSERT OR IGNORE INTO app_settings (key, value, description) VALUES (?, ?, ?)", (chiave, valore, desc))
+            _set_schema_version(conn, 11)
+        current = 11
+
     conn.close()
 
     # API key auto-generata al primo avvio (idempotente)
@@ -501,6 +536,11 @@ def get_settings(conn) -> dict:
 def get_setting(conn, key: str, default: str = "") -> str:
     row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
     return row["value"] if row else default
+
+
+def riscansione_attiva(conn) -> bool:
+    """True durante una riscansione dell'inventario: niente suggeriti, report degli esauriti e notifiche di acquisto."""
+    return get_setting(conn, "riscansione_attiva", "0") == "1"
 
 
 def set_setting(conn, key: str, value: str):

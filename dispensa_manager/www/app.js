@@ -230,7 +230,7 @@ function showTab(tab) {
   else if (tab === 'scan') { scanMode = 'add'; showScreen('screen-scan'); }
   else if (tab === 'spesa') showScreen('screen-spesa');
   else if (tab === 'statistiche') showScreen('screen-statistiche');
-  else if (tab === 'impostazioni') { showScreen('screen-impostazioni'); applyUserUI(); updatePWAInstallUI(); }
+  else if (tab === 'impostazioni') { showScreen('screen-impostazioni'); applyUserUI(); updatePWAInstallUI(); aggiornaStatoInventario(); }
   else if (tab === 'admin') { showScreen('screen-admin'); caricaAdmin(); }
 }
 
@@ -261,7 +261,7 @@ async function _eseguiUndo() {
 
 async function caricaInventario() {
   try {
-    const r = await apiFetch(`${API_BASE()}/api/prodotti`);
+    const [r] = await Promise.all([apiFetch(`${API_BASE()}/api/prodotti`), aggiornaStatoInventario()]);
     prodottiCache = await r.json();
     applicaFiltroSort();
     if (typeof aggiornaBadgeSpesa === 'function') aggiornaBadgeSpesa();
@@ -305,6 +305,9 @@ function applicaFiltroSort() {
     attivi = attivi.filter(p => (p.nome||'').toLowerCase().includes(q) || (p.marca||'').toLowerCase().includes(q) || (p.posizione||'').toLowerCase().includes(q));
     esauriti = esauriti.filter(p => (p.nome||'').toLowerCase().includes(q) || (p.marca||'').toLowerCase().includes(q));
   }
+
+  const dieta = document.getElementById('dieta-select')?.value || '';
+  if (dieta) { attivi = attivi.filter(p => adattoDieta(p) === dieta); esauriti = esauriti.filter(p => adattoDieta(p) === dieta); }
 
   if (ord === 'nome') attivi.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
   else if (ord === 'quantita') attivi.sort((a,b) => b.quantita - a.quantita);
@@ -490,7 +493,7 @@ function renderInventario(attivi, esauriti) {
         <div class="prod-info">
           <div class="prod-nome">${esc(p.nome)}</div>
           <div class="prod-meta">${p.marca ? esc(p.marca) + ' · ' : ''}${p.posizione ? esc(p.posizione) + (metaText ? ' · ' : '') : ''}${metaText}</div>
-          ${badgeHtml}
+          ${badgeHtml}${badgeDieta(p)}
         </div>
         <div class="prod-actions" onclick="event.stopPropagation()">
           <div class="quick-btn" onclick="consumaRapido(${p.id},${p.quantita})">−</div>
@@ -707,7 +710,7 @@ function apriDettaglio(id) {
     + '<tr><td style="color:var(--muted);padding:8px 0;border-bottom:0.5px solid var(--border);">Scadenza</td><td style="text-align:right;font-weight:600;border-bottom:0.5px solid var(--border);">' + scadFormatted + '</td></tr>'
     + prezzoRow
     + '<tr><td style="color:var(--muted);padding:8px 0;">EAN</td><td style="text-align:right;font-size:12px;font-family:monospace;">' + esc(eanLabel) + '</td></tr></table></div>'
-    + renderNutriments(p)
+    + renderDietaDettaglio(p) + renderNutriments(p)
     + '<div class="card card-body" style="margin-top:8px;"><div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Quantità da aggiornare</div>'
     + '<div class="qty-row" style="margin-bottom:12px;"><div class="qty-btn" onclick="cambiaQtyDet(-1)">−</div><div class="qty-val" id="det-qty-delta">1</div><div class="qty-btn" onclick="cambiaQtyDet(1)">+</div></div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><button class="btn btn-secondary" onclick="consumaProdotto(' + p.id + ',' + p.quantita + ')">− Consuma</button><button class="btn btn-secondary" onclick="aggiungiQty(' + p.id + ',' + p.quantita + ')">+ Aggiungi</button></div></div>'
@@ -883,6 +886,7 @@ function apriConferma(prodotto) {
   badge.innerHTML = prodotto.trovato
     ? `<div class="found-badge"><div class="found-badge-dot"></div><div class="found-badge-text">Trovato su Open Food Facts · ${posEtichetta(posizione)} suggerito</div></div>`
     : `<div class="found-badge" style="background:#FAEEDA"><div class="found-badge-dot" style="background:#EF9F27"></div><div class="found-badge-text" style="color:#854F0B">Prodotto non trovato — inserisci i dettagli</div></div>`;
+  renderDietaConferma(prodotto);
   showScreen('screen-conferma');
 }
 
@@ -953,21 +957,30 @@ async function salvaInDispensa() {
     nutriments: prodottoCorrente.nutriments || null,
     nutriscore: prodottoCorrente.nutriscore || '',
     prezzo: prezzoVal === '' ? null : parseFloat(prezzoVal),
+    ingredienti: (document.getElementById('conf-ingredienti')?.value || '').trim(),
+    nova: prodottoCorrente.nova ?? null,
+    off_dati: prodottoCorrente.off_dati ?? null,
   };
   try {
-    await apiFetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const resp = await apiFetch(`${API_BASE()}/api/prodotti`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (!resp.ok) throw new Error('salvataggio');
+    const esito = await resp.json();
     if (payload.ean && !payload.ean.startsWith('MANUAL-')) {
       await apiFetch(`${API_BASE()}/api/barcode-cache`, {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           ean: payload.ean, nome: payload.nome, marca: payload.marca,
           categoria: payload.categoria, immagine_url: prodottoCorrente.immagine_url || '',
-          nutriments: payload.nutriments, nutriscore: payload.nutriscore
+          nutriments: payload.nutriments, nutriscore: payload.nutriscore,
+          ingredienti: payload.ingredienti, nova: payload.nova, off_dati: payload.off_dati
         })
       });
     }
     fotoBase64 = null;
-    toast('Prodotto salvato!');
+    if (_inv && _inv.attiva) {
+      await aggiornaStatoInventario();
+      toast(`${esito.ricaricato ? 'Ricaricato' : 'Salvato'} · ${_inv.riscansionati} di ${_inv.totale}`);
+    } else toast(esito.ricaricato ? 'Ricaricato ✓' : 'Prodotto salvato!');
     dopoAggiunta();
   } catch(e) { toast('Errore salvataggio. Riprova.'); }
 }
@@ -1649,3 +1662,270 @@ async function applicaRiclassifica(soloIgnora) {
     } else toast('Fatto');
   } catch (e) { toast('Errore: riprova'); }
 }
+
+// ── Dieta, valori nutrizionali e nuovo inventario (2.5.0) ────────────────────
+let _dietaProfilo = 'vegana';     // dieta di casa: vegana, vegetariana o nessuna (scelta dall'admin)
+let _inv = null;                  // stato del nuovo inventario (GET /api/inventario)
+
+const DIETA_VEG = {
+  si:        { i: '🌱', t: 'Vegano',               c: 'dieta-si' },
+  probabile: { i: '🌱', t: 'Probabilmente vegano', c: 'dieta-prob', corto: 'Probabile' },
+  verifica:  { i: '⚠️', t: 'Da verificare',        c: 'dieta-ver' },
+  no:        { i: '🚫', t: 'Non vegano',           c: 'dieta-no' },
+  ignoto:    { i: '❔', t: 'Dieta sconosciuta',    c: 'dieta-ign', corto: 'Dieta?' },
+};
+const DIETA_VGT = {
+  si:        { i: '🥚', t: 'Vegetariano',               c: 'dieta-si' },
+  probabile: { i: '🥚', t: 'Probabilmente vegetariano', c: 'dieta-prob', corto: 'Probabile' },
+  verifica:  { i: '⚠️', t: 'Vegetariano? da verificare', c: 'dieta-ver', corto: 'Da verificare' },
+  no:        { i: '🚫', t: 'Non vegetariano',           c: 'dieta-no' },
+  ignoto:    { i: '❔', t: 'Dieta sconosciuta',          c: 'dieta-ign', corto: 'Dieta?' },
+};
+const DIETA_FONTI = {
+  'etichetta': 'etichetta «vegan» del prodotto', 'Open Food Facts': 'analisi di Open Food Facts', 'ingredienti': 'elenco degli ingredienti',
+  'categoria': 'categoria del prodotto', 'nome': 'nome del prodotto', 'manuale': 'tuo giudizio', 'contraddizione': 'dati in contraddizione',
+};
+
+function nonCibo(p) { return ['Saponi', 'Altro'].includes(p.posizione) || !!p.non_cibo; }
+
+// Giudizio da mostrare nella lista: dipende dalla dieta di casa ('nessuna' = niente badge)
+function badgeDieta(p) {
+  if (_dietaProfilo === 'nessuna' || !p.dieta || nonCibo(p)) return '';
+  const vegetariana = _dietaProfilo === 'vegetariana';
+  const d = (vegetariana ? DIETA_VGT : DIETA_VEG)[vegetariana ? p.dieta.vegetariano : p.dieta.vegano];
+  return d ? `<span class="dieta-chip ${d.c}">${d.i} ${d.corto || d.t}</span>` : '';
+}
+
+// 'ok' (adatto o probabile), 'verifica' (dubbio o sconosciuto), 'no', oppure null (non e' cibo / nessuna dieta)
+function adattoDieta(p) {
+  if (_dietaProfilo === 'nessuna' || !p.dieta || nonCibo(p)) return null;
+  const k = _dietaProfilo === 'vegetariana' ? p.dieta.vegetariano : p.dieta.vegano;
+  return (k === 'si' || k === 'probabile') ? 'ok' : (k === 'no' ? 'no' : 'verifica');
+}
+
+function chipsProfilo(pr) {
+  if (!pr || !pr.punti || !pr.punti.length) return '';
+  return '<div class="profilo-lista">' + pr.punti.map(x => `<span class="profilo-pt profilo-${x.tono}">${esc(x.testo)}</span>`).join('') + '</div>';
+}
+
+// Riquadro «Dieta» nella scheda del prodotto: giudizio, motivi, valori, giudizio manuale, ingredienti
+function renderDietaDettaglio(p) {
+  if (nonCibo(p)) return '';
+  const d = p.dieta || {};
+  const v = DIETA_VEG[d.vegano] || DIETA_VEG.ignoto, g = DIETA_VGT[d.vegetariano] || DIETA_VGT.ignoto;
+  const pr = p.profilo || {};
+  let h = '<div class="card card-body" style="margin-top:8px;"><div class="det-sez">🌱 Dieta e valori</div>';
+  h += `<div><span class="dieta-chip ${v.c}">${v.i} ${v.t}</span><span class="dieta-chip ${g.c}">${g.i} ${g.t}</span></div>`;
+  if (d.motivi && d.motivi.length) h += `<div class="dieta-nota">${esc(d.motivi.join(', '))}</div>`;
+  if (d.fonte) h += `<div class="dieta-nota">Fonte: ${esc(DIETA_FONTI[d.fonte] || d.fonte)}</div>`;
+  if (d.tracce && d.tracce.length) h += `<div class="dieta-nota">Può contenere tracce di: ${esc(d.tracce.join(', '))}</div>`;
+  h += chipsProfilo(pr);
+  if (pr.salute) h += `<div class="dieta-nota">Valutazione: <strong>${esc(pr.salute.testo)}</strong> · valori per 100 g</div>`;
+  if (!d.ha_ingredienti && d.fonte !== 'manuale') h += '<div class="dieta-nota">Senza l\'elenco degli ingredienti non posso dirlo con certezza: scrivilo qui sotto.</div>';
+  h += '<div class="dieta-azioni">';
+  if (d.fonte === 'manuale') h += `<button class="btn-sm btn-sm-green" onclick="impostaGiudizio(${p.id}, '')">↺ Torna al giudizio automatico</button>`;
+  else h += `<button class="btn-sm btn-sm-green" onclick="impostaGiudizio(${p.id}, 'si')">✓ Ho controllato: è vegano</button><button class="btn-sm btn-sm-red" onclick="impostaGiudizio(${p.id}, 'no')">✗ Non è vegano</button>`;
+  h += '</div>';
+  h += `<div class="field" style="margin:14px 0 0;"><label for="det-ingredienti">Ingredienti</label>
+    <textarea id="det-ingredienti" rows="4" placeholder="Scrivi o incolla l'elenco degli ingredienti" oninput="anteprimaIngredienti('det', ${jsArg(p.nome)})">${esc(p.ingredienti || '')}</textarea>
+    <div id="det-ingr-esito" class="dieta-nota"></div>
+    <div class="dieta-nota">Suggerimento: la tastiera del telefono può leggere il testo da una foto (icona fotocamera o «Scansiona testo»).</div>
+    <button class="btn btn-secondary" style="margin-top:8px;" onclick="salvaIngredienti(${p.id})">Salva ingredienti</button></div>`;
+  return h + '</div>';
+}
+
+async function impostaGiudizio(id, valore) {
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dieta_override: valore, _skip_log: true }) });
+    if (!r.ok) throw new Error();
+    await caricaInventario();
+    apriDettaglio(id);
+  } catch (e) { toast('Errore: riprova'); }
+}
+
+async function salvaIngredienti(id) {
+  const testo = document.getElementById('det-ingredienti').value.trim();
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/prodotti/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ingredienti: testo, _skip_log: true }) });
+    if (!r.ok) throw new Error();
+    await caricaInventario();
+    apriDettaglio(id);
+    toast('Ingredienti salvati');
+  } catch (e) { toast('Errore: riprova'); }
+}
+
+// Anteprima del giudizio mentre si scrivono gli ingredienti ('conf' = schermata di conferma, 'det' = scheda del prodotto)
+let _ingrTimer = null;
+function anteprimaIngredienti(prefisso, nome) {
+  if (_ingrTimer) clearTimeout(_ingrTimer);
+  _ingrTimer = setTimeout(async () => {
+    const campo = document.getElementById(prefisso === 'conf' ? 'conf-ingredienti' : 'det-ingredienti');
+    const out = document.getElementById(prefisso + '-ingr-esito');
+    if (!campo || !out) return;
+    const testo = campo.value.trim();
+    if (testo.length < 5) { out.innerHTML = ''; return; }
+    try {
+      const nomeProdotto = nome || (document.getElementById('conf-nome-edit') || {}).value || '';
+      const r = await apiFetch(`${API_BASE()}/api/dieta/valuta`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ingredienti: testo, nome: nomeProdotto }) });
+      const d = await r.json();
+      const v = DIETA_VEG[d.vegano] || DIETA_VEG.ignoto, g = DIETA_VGT[d.vegetariano] || DIETA_VGT.ignoto;
+      out.innerHTML = `<span class="dieta-chip ${v.c}">${v.i} ${v.t}</span><span class="dieta-chip ${g.c}">${g.i} ${g.t}</span>`
+        + (d.motivi && d.motivi.length ? `<div class="dieta-nota">${esc(d.motivi.join(', '))}</div>` : '')
+        + (d.tracce && d.tracce.length ? `<div class="dieta-nota">Può contenere tracce di: ${esc(d.tracce.join(', '))}</div>` : '');
+    } catch (e) { out.innerHTML = ''; }
+  }, 500);
+}
+
+// Schermata di conferma di un prodotto scansionato: giudizio sulla dieta di casa, subito
+function renderDietaConferma(prodotto) {
+  const box = document.getElementById('conf-dieta');
+  const campo = document.getElementById('conf-ingredienti');
+  if (campo) campo.value = prodotto.ingredienti || '';
+  const esito = document.getElementById('conf-ingr-esito');
+  if (esito) esito.innerHTML = '';
+  if (!box) return;
+  const d = prodotto.dieta;
+  if (!d || _dietaProfilo === 'nessuna') { box.innerHTML = ''; return; }
+  const vegetariana = _dietaProfilo === 'vegetariana';
+  const k = vegetariana ? d.vegetariano : d.vegano;
+  const nome = vegetariana ? 'vegetariana' : 'vegana';
+  const motivi = d.motivi && d.motivi.length ? ': ' + esc(d.motivi.join(', ')) : '';
+  let h = '';
+  if (k === 'no') h = `<div class="dieta-avviso dieta-avviso-no">🚫 <strong>Non adatto alla dieta ${nome}</strong>${motivi}</div>`;
+  else if (k === 'verifica') h = `<div class="dieta-avviso dieta-avviso-ver">⚠️ <strong>Controlla gli ingredienti</strong>${motivi}</div>`;
+  else if (k === 'ignoto') h = '<div class="dieta-avviso dieta-avviso-ver">❔ <strong>Non ho gli ingredienti</strong>: non so dire se è ' + (vegetariana ? 'vegetariano' : 'vegano') + '. Puoi scriverli qui sotto.</div>';
+  else if (k === 'probabile') h = `<div class="dieta-avviso dieta-avviso-ok">🌱 Nessun ingrediente animale nell'elenco, ma non è certificato.</div>`;
+  else h = `<div class="dieta-avviso dieta-avviso-ok">🌱 <strong>Adatto alla dieta ${nome}</strong></div>`;
+  if (d.tracce && d.tracce.length) h += `<div class="dieta-nota" style="margin:-4px 2px 8px;">Può contenere tracce di: ${esc(d.tracce.join(', '))}</div>`;
+  box.innerHTML = h + chipsProfilo(prodotto.profilo);
+}
+
+// ── Nuovo inventario: stato, banner di riscansione, azzeramento con annullo ──
+async function aggiornaStatoInventario() {
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/inventario`);
+    if (!r.ok) return;
+    _inv = await r.json();
+  } catch (e) { return; }
+  const prima = _dietaProfilo;
+  _dietaProfilo = _inv.dieta_profilo || 'vegana';
+  disegnaBannerRiscansione();
+  disegnaInventarioImpostazioni();
+  if (prima !== _dietaProfilo && prodottiCache.length) applicaFiltroSort();
+}
+
+function disegnaBannerRiscansione() {
+  const b = document.getElementById('risc-banner');
+  if (!b || !_inv) return;
+  b.classList.toggle('hidden', !_inv.attiva);
+  if (!_inv.attiva) return;
+  document.getElementById('risc-titolo').textContent = `Riscansione in corso: ${_inv.riscansionati} di ${_inv.totale}`;
+  document.getElementById('risc-sub').textContent = `${_inv.da_riscansionare} ancora da scansionare` + (_inv.nuovi ? ` · ${_inv.nuovi} nuovi` : '') + ' · avvisi sugli esauriti sospesi';
+}
+
+function disegnaInventarioImpostazioni() {
+  const st = document.getElementById('inv-stato');
+  if (!st || !_inv) return;
+  const admin = !!(getCurrentUser() || {}).is_admin;
+  const a = _inv.anteprima || { attivi: 0, pezzi: 0, esauriti: 0 };
+  let t = `In casa adesso: <strong>${a.attivi}</strong> prodotti (${a.pezzi} pezzi) · esauriti: ${a.esauriti}.`;
+  if (_inv.attiva) t += `<br>🔄 Riscansione in corso: <strong>${_inv.riscansionati}</strong> di ${_inv.totale} scansionati, ${_inv.da_riscansionare} ancora da fare.`;
+  st.innerHTML = t;
+  document.getElementById('inv-azzera-btn').style.display = admin ? '' : 'none';
+  document.getElementById('inv-azzera-nota').style.display = admin ? 'none' : '';
+  document.getElementById('inv-annulla-btn').style.display = admin && _inv.lotto && (_inv.da_riscansionare > 0 || _inv.attiva) ? '' : 'none';
+  document.getElementById('inv-termina-btn').style.display = admin && _inv.attiva ? '' : 'none';
+  const sel = document.getElementById('set-dieta');
+  if (sel) { sel.value = _dietaProfilo; sel.disabled = !admin; }
+}
+
+function apriAzzera() {
+  const a = (_inv && _inv.anteprima) || { attivi: 0, pezzi: 0 };
+  document.getElementById('azzera-testo').innerHTML = `Tutti i <strong>${a.attivi}</strong> prodotti in casa (${a.pezzi} pezzi) diventano <strong>esauriti</strong>. Le righe restano, con foto, ingredienti e posizione: scansionando un prodotto la sua riga torna in casa.`;
+  document.getElementById('azzera-conferma').value = '';
+  document.getElementById('azzera-vai').disabled = true;
+  openModal('modal-azzera');
+}
+
+function controllaAzzera() {
+  document.getElementById('azzera-vai').disabled = document.getElementById('azzera-conferma').value.trim().toUpperCase() !== 'AZZERA';
+}
+
+async function eseguiAzzera() {
+  const btn = document.getElementById('azzera-vai');
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/inventario/azzera`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conferma: 'AZZERA' }) });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Azzeramento non riuscito'); btn.disabled = false; return; }
+    closeModal('modal-azzera');
+    showScreen('screen-inventario');
+    toastUndo(`${d.azzerati} prodotti esauriti`, () => annullaLotto(d.lotto), 10000);
+  } catch (e) { toast('Errore: riprova'); btn.disabled = false; }
+}
+
+async function annullaLotto(lotto) {
+  await apiFetch(`${API_BASE()}/api/inventario/annulla`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lotto }) });
+  await caricaInventario();
+}
+
+async function annullaAzzeramento() {
+  if (!_inv || !_inv.lotto) return;
+  if (!confirm(`Rimettere le quantità di prima ai ${_inv.da_riscansionare} prodotti ancora esauriti dopo l'azzeramento? Quelli già riscansionati restano come sono.`)) return;
+  try { await annullaLotto(_inv.lotto); toast('Quantità ripristinate'); } catch (e) { toast('Errore: riprova'); }
+}
+
+async function terminaRiscansione() {
+  if (!_inv) return;
+  if (!confirm(`Terminare la riscansione? I ${_inv.da_riscansionare} prodotti non scansionati restano esauriti e tornano tra i suggeriti della spesa.`)) return;
+  try {
+    await apiFetch(`${API_BASE()}/api/inventario/riscansione`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attiva: false }) });
+    await caricaInventario();
+    toast('Riscansione terminata');
+  } catch (e) { toast('Errore: riprova'); }
+}
+
+async function salvaDietaProfilo() {
+  const v = document.getElementById('set-dieta').value;
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/settings`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dieta_profilo: v }) });
+    if (!r.ok) throw new Error();
+    _dietaProfilo = v;
+    applicaFiltroSort();
+    toast('Dieta di casa: ' + v);
+  } catch (e) { toast('Solo l\'amministratore può cambiarla'); aggiornaStatoInventario(); }
+}
+
+// Raccolta dei dati (ingredienti, valori, dieta) dei prodotti gia' in casa: parte da sola in background
+let _arrTimer = null;
+async function avviaRaccoltaDati() {
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/inventario/arricchisci`, { method: 'POST' });
+    disegnaRaccolta(await r.json());
+    seguiRaccolta();
+  } catch (e) { toast('Errore: riprova'); }
+}
+
+function disegnaRaccolta(s) {
+  const el = document.getElementById('arr-stato');
+  if (!el) return;
+  if (s.in_corso) el.textContent = `Raccolta in corso: ${s.fatti} di ${s.totale} prodotti…`;
+  else if (s.totale) el.textContent = `Fatto: ${s.trovati} aggiornati, ${s.non_trovati} non presenti online${s.errori ? ', ' + s.errori + ' da riprovare' : ''}.`;
+  else el.textContent = 'Tutti i prodotti con codice a barre hanno già i loro dati.';
+}
+
+function seguiRaccolta() {
+  if (_arrTimer) clearInterval(_arrTimer);
+  _arrTimer = setInterval(async () => {
+    try {
+      const s = await (await apiFetch(`${API_BASE()}/api/inventario/arricchimento`)).json();
+      disegnaRaccolta(s);
+      if (!s.in_corso) { clearInterval(_arrTimer); _arrTimer = null; caricaInventario(); }
+    } catch (e) { clearInterval(_arrTimer); _arrTimer = null; }
+  }, 3000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const v = document.getElementById('ver-footer');
+  if (v) v.textContent = APP_VERSION;
+});

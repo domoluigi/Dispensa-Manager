@@ -17,8 +17,9 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 📅 **Scadenza suggerita** — dal tuo storico dello stesso prodotto (mediana degli acquisti passati), altrimenti dalla categoria; se non c'e' nulla di affidabile il campo resta vuoto
 - 📭 **Aperto oggi** — un tocco accorcia la scadenza dopo l'apertura (latte 3 giorni, sughi 4, ecc.) e annota «Aperto il…»; con Annulla
 - 🔍 **OCR scadenza** — legge la data con la fotocamera da sola (Tesseract.js in locale), distingue scadenza, produzione e lotto, mostra il risultato da confermare
-- 📊 **Valori nutrizionali** — da Open Food Facts (energia, grassi, carboidrati, ecc.)
-- 🏷️ **Nutri-Score** — visualizzato nel dettaglio prodotto
+- 🌱 **Vegano / vegetariano** — per ogni prodotto, dagli ingredienti e da Open Food Facts: certo, probabile, da verificare o no, con il motivo; mai «vegano» senza dati. Dieta di casa, filtro e avviso in scansione
+- 📊 **Valori nutrizionali** — da Open Food Facts (energia, grassi, carboidrati, ecc.) con il profilo per 100 g: proteico, ricco di fibre, pochi zuccheri, poco sale; Nutri-Score e livello di lavorazione (NOVA)
+- 🧹 **Nuovo inventario** — segna tutto come esaurito (con copia del database e Annulla) e riscansiona: la scansione ricarica la riga del prodotto, senza doppioni né raffica di notifiche
 - 🗃️ **Cache locale** — i prodotti non trovati online vengono salvati per le scansioni future
 - 🔍 **Multi-database** — Open Food Facts + Open Products Facts + Open Beauty Facts
 - 🛡️ **Ban IP che scade** — dopo i tentativi di login falliti l'IP si blocca per un tempo configurabile (default 60 minuti, 0 = permanente) e si sblocca da solo; l'admin vede la scadenza e puo' sbloccare prima
@@ -409,7 +410,13 @@ La schermata Statistiche mostra:
 | GET | `/api/prodotti/by-ean/<ean>` | Cerca prodotti duplicati per EAN |
 | GET | `/api/prodotti/esauriti` | Lista solo i prodotti esauriti (`quantita <= 0`) |
 | GET | `/api/barcode/<ean>` | Cerca un prodotto per EAN; risponde anche con `suggerimento` (posizione, giorni di scadenza, fonte). `?refresh=1` ignora la cache dei non trovati |
-| POST | `/api/barcode-cache` | Salva in cache locale |
+| POST | `/api/barcode-cache` | Salva in cache locale (anche `ingredienti`, `nova`, `off_dati`) |
+| POST | `/api/dieta/valuta` | Giudizio vegano/vegetariano su un elenco ingredienti (`{"ingredienti": "...", "nome": "..."}`) |
+| GET | `/api/inventario` | Stato del nuovo inventario e dieta di casa |
+| POST | `/api/inventario/azzera` | Segna tutto come esaurito (admin, `{"conferma": "AZZERA"}`) |
+| POST | `/api/inventario/annulla` | Annulla un azzeramento (admin, `{"lotto": "..."}`) |
+| POST | `/api/inventario/riscansione` | Accende o spegne la riscansione (admin, `{"attiva": true}`) |
+| POST | `/api/inventario/arricchisci` | Raccoglie in background i dati dei prodotti già in casa; `GET /api/inventario/arricchimento` ne dà l'avanzamento |
 | DELETE | `/api/barcode-cache/<ean>` | Rimuove dalla cache |
 | GET | `/api/spesa` | Vista completa: `da_comprare` (per reparto), `carrello`, `suggeriti`, `conteggi` |
 | GET | `/api/spesa/conteggi` | Solo i numeri (badge) |
@@ -459,6 +466,8 @@ Dispensa-Manager/
 │   ├── suggerimenti.py         # Posizione e scadenza suggerite (storico + categoria)
 │   ├── posizioni.py            # Classificatore delle cinque posizioni
 │   ├── riclassifica.py         # Proposte, applicazione e annullo per i prodotti esistenti
+│   ├── dieta.py                # Vegano/vegetariano dagli ingredienti, profilo nutrizionale
+│   ├── inventario.py           # Azzeramento con annullo e modalità riscansione
 │   ├── spesa.py                # Lista della spesa: voci, suggeriti, ricerca
 │   ├── sync_todo.py            # Sincronizzazione con la lista to-do di Home Assistant (widget)
 │   ├── normalizza.py           # Nomi: quantità, singolare/plurale, confronto

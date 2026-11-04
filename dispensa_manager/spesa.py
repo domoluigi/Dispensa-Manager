@@ -10,6 +10,7 @@ Una voce e' coperta da un prodotto o ne e' il duplicato in base ai nomi normaliz
 import uuid
 from datetime import datetime, timezone
 
+from database import riscansione_attiva
 from normalizza import estrai_quantita, bella, token_chiave, copre, stessa_voce
 from reparti import reparto_di, ETICHETTA, ORDINE, REPARTI
 
@@ -161,6 +162,8 @@ def suggeriti(conn) -> list:
     una scorta (stesso EAN o stesso nome in un'altra riga), quelli gia' coperti da una voce in lista (anche nel
     carrello) e i doppioni (stesso EAN o stesso nome: se ne propone uno solo, l'ultimo inserito).
     """
+    if riscansione_attiva(conn):     # dopo un azzeramento tutto e' «finito»: finche' si riscansiona non si propone niente
+        return []
     assicura_righe(conn)
     with conn:   # un «Non serve» cade quando il prodotto torna in dispensa o sparisce
         conn.execute("DELETE FROM suggerimenti_ignorati WHERE prodotto_id NOT IN (SELECT id FROM prodotti WHERE quantita<=0)")

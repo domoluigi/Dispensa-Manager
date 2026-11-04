@@ -19,7 +19,7 @@ bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 # Chiavi gestite via UI HA addon (NON editabili da admin panel)
 HA_MANAGED_KEYS = ("telegram_token", "telegram_chat_id", "cloudflare_url")
 # Chiavi interne (non esposte mai)
-INTERNAL_KEYS = ("schema_version", "jwt_secret_key", "api_key")
+INTERNAL_KEYS = ("schema_version", "jwt_secret_key", "api_key", "riscansione_attiva", "riscansione_lotto", "dieta_profilo")
 
 
 def _altri_admin_attivi(conn, escluso_id) -> int:
@@ -152,11 +152,13 @@ def update_settings():
         "giorni_alert_scadenza", "soglia_scorte_minime",
         "max_login_attempts", "ban_window_minutes",
         "notif_telegram_acquisto", "notif_telegram_modifica", "notif_telegram_eliminazione",
-        "ban_durata_minuti", "todo_widget_entity", "todo_sync_attivo",
+        "ban_durata_minuti", "todo_widget_entity", "todo_sync_attivo", "dieta_profilo",
     }
     invalid = set(data.keys()) - ALLOWED_KEYS
     if invalid:
         return jsonify({"error": f"Chiavi non ammesse: {invalid}"}), 400
+    if "dieta_profilo" in data and str(data["dieta_profilo"]) not in ("vegana", "vegetariana", "nessuna"):
+        return jsonify({"error": "dieta_profilo: vegana, vegetariana o nessuna"}), 400
     if "todo_widget_entity" in data:
         entita = str(data["todo_widget_entity"]).strip().lower()
         if entita and not re.fullmatch(r"todo\.[a-z0-9_]+", entita):
