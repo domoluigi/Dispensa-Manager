@@ -19,7 +19,8 @@ bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 # Chiavi gestite via UI HA addon (NON editabili da admin panel)
 HA_MANAGED_KEYS = ("telegram_token", "telegram_chat_id", "cloudflare_url")
 # Chiavi interne (non esposte mai)
-INTERNAL_KEYS = ("schema_version", "jwt_secret_key", "api_key", "riscansione_attiva", "riscansione_lotto", "dieta_profilo")
+INTERNAL_KEYS = ("schema_version", "jwt_secret_key", "api_key", "riscansione_attiva", "riscansione_lotto", "dieta_profilo",
+                 "todo_alexa_entity", "todo_alexa_confermato")      # la lista Alexa si imposta solo dalla sua scheda (anteprima + conferma)
 
 
 def _altri_admin_attivi(conn, escluso_id) -> int:
@@ -220,11 +221,83 @@ def spesa_sync_ora():
         imp = sync_todo.impostazioni(conn)
     finally:
         conn.close()
-    for cid in sync_todo.CONNETTORI:
-        if not imp[cid]:
-            return jsonify({"error": "Nessuna lista indicata nelle impostazioni"}), 400
+    attivi = [cid for cid in sync_todo.CONNETTORI if sync_todo.connettore_attivo(imp, cid)]
+    if not attivi:
+        return jsonify({"error": "Nessuna lista indicata nelle impostazioni"}), 400
+    for cid in attivi:
         sync_todo.esegui(cid, imp[cid])
     return jsonify(sync_todo.stato())
+
+
+# ── Lista della spesa di Alexa: anteprima della prima unione, poi conferma ────
+
+ENTITA_TODO = re.compile(r"todo\.[a-z0-9_]+")
+
+
+def _entita_alexa():
+    """Entita' indicata nella richiesta (o quella gia' salvata), normalizzata; None se non valida."""
+    dati = request.get_json(silent=True) or {}
+    entita = str(dati.get("entity") or request.args.get("entity") or "").strip().lower()
+    if not entita:
+        conn = get_db()
+        try:
+            entita = sync_todo.impostazioni(conn)["alexa"]
+        finally:
+            conn.close()
+    return entita if ENTITA_TODO.fullmatch(entita) else None
+
+
+@bp.get("/spesa-sync/alexa/anteprima")
+@admin_required
+def alexa_anteprima():
+    """Cosa entrerebbe in Dispensa e cosa andrebbe su Alexa alla prima unione. Non scrive niente."""
+    entita = _entita_alexa()
+    if not entita:
+        return jsonify({"error": "Indica la lista Alexa: un'entita' tipo todo.nome_della_lista"}), 400
+    try:
+        return jsonify(sync_todo.anteprima(entita))
+    except sync_todo.ErroreHA as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@bp.post("/spesa-sync/alexa/attiva")
+@admin_required
+def alexa_attiva():
+    """Conferma la prima unione: da ora la lista Alexa si sincronizza da sola."""
+    dati = request.get_json(silent=True) or {}
+    if dati.get("conferma") is not True:
+        return jsonify({"error": "Serve la conferma dopo aver guardato l'anteprima"}), 400
+    entita = _entita_alexa()
+    if not entita:
+        return jsonify({"error": "Indica la lista Alexa: un'entita' tipo todo.nome_della_lista"}), 400
+    try:
+        ant = sync_todo.anteprima(entita)
+    except sync_todo.ErroreHA as e:
+        return jsonify({"error": str(e)}), 502
+    if not ant.get("disponibile"):
+        return jsonify({"error": "La lista Alexa non e' disponibile in questo momento (Amazon limita le richieste): riprova tra poco"}), 409
+    conn = get_db()
+    try:
+        with conn:
+            set_setting(conn, "todo_alexa_entity", entita)
+            set_setting(conn, sync_todo.ALEXA_CONFERMA, "1")
+    finally:
+        conn.close()
+    sync_todo.richiedi_sync()
+    return jsonify({"ok": True, "alexa": sync_todo.stato()["alexa"]})
+
+
+@bp.post("/spesa-sync/alexa/disattiva")
+@admin_required
+def alexa_disattiva():
+    """Mette in pausa la sincronizzazione con Alexa (le voci gia' collegate restano)."""
+    conn = get_db()
+    try:
+        with conn:
+            set_setting(conn, sync_todo.ALEXA_CONFERMA, "0")
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "alexa": sync_todo.stato()["alexa"]})
 
 
 @bp.get("/ip-bans")

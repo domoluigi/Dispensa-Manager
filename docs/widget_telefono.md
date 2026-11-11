@@ -33,8 +33,27 @@ Laura vede la lista con il proprio utente di Home Assistant (le liste to-do sono
 - Le voci del tipo «suggeriti» (prodotti finiti) **non** vanno nel widget finché non le aggiungi alla lista.
 - Si ferma dalle impostazioni (`todo_sync_attivo` = 0) o svuotando l'entità.
 
+## La lista della spesa di Alexa (dalla 2.6.0)
+
+Con l'integrazione **Alexa Devices** (Home Assistant 2026.11 o successivo) la lista della spesa di Alexa diventa una lista
+to-do (`todo.<account>_shopping_list`). Dispensa la sincronizza come il widget: «Alexa, aggiungi dentifricio alla lista della
+spesa» e la voce compare in Dispensa (con 🎤 «Alexa») e nel widget; aggiungere o spuntare in Dispensa vale anche su Alexa.
+
+1. In **Admin → «Lista della spesa di Alexa»** scrivi l'entità della lista e premi **Anteprima**: vedi quali voci entrano e
+   quali escono, senza che venga scritto niente.
+2. Se va bene, **Conferma e attiva**. Dalla prima unione in poi si sincronizza da sola (circa ogni 90 secondi, subito dopo una modifica in Dispensa).
+3. **Metti in pausa** la ferma senza scollegare niente.
+
+Cose da sapere:
+- Le voci già **spuntate su Alexa** sono il suo storico (al massimo 100 voci visibili): non entrano in Dispensa e il carrello di
+  Dispensa non va su Alexa.
+- Amazon limita le richieste: quando succede Home Assistant dichiara la lista «non disponibile». Dispensa salta il giro, non
+  segna errori e riprende da sola. Se capita spesso, aumenta «Secondi tra le scansioni» di **Alexa Media Player** (300 va bene):
+  anche lui interroga Amazon con lo stesso account.
+- Le voci aggiunte a voce arrivano a Dispensa entro un minuto o due.
+
 ## Prova senza Home Assistant
 
-`python tests/finto_ha.py` avvia una lista finta; poi l'add-on con
+`python tests/finto_ha.py` avvia due liste finte (widget e Alexa, quest'ultima può diventare «non disponibile»); poi l'add-on con
 `HA_URL=http://127.0.0.1:8124 SUPERVISOR_TOKEN=prova DISPENSA_SYNC_SECONDI=3 python app.py`
 (usare `127.0.0.1`: con `localhost` su Windows ogni chiamata aspetta 2 secondi).

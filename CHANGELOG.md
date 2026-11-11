@@ -5,6 +5,33 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.6.0] — 2026-11-11
+
+**La lista della spesa di Alexa.** «Alexa, aggiungi dentifricio alla lista della spesa» e la voce compare anche in Dispensa (e nel widget del telefono); aggiungere o spuntare in Dispensa vale anche su Alexa. Usa l'integrazione **Alexa Devices** di Home Assistant (2026.11 o successivo): non servono credenziali né altre integrazioni.
+
+### Come si attiva (Admin → «Lista della spesa di Alexa»)
+- Si indica la lista (`todo.<account>_shopping_list`), si preme **Anteprima** e si vede cosa succederebbe: quali voci di Alexa entrano in Dispensa, quali di Dispensa vanno su Alexa, quali ci sono già da entrambe le parti. L'anteprima non scrive niente. Solo dopo **Conferma e attiva** parte la sincronizzazione; «Metti in pausa» la ferma senza scollegare le voci.
+- La lista Alexa si imposta solo da questa scheda (non dal modulo delle impostazioni generiche): l'attivazione richiede sempre anteprima e conferma.
+
+### Un profilo per ogni lista (`sync_todo.py`)
+Il motore è lo stesso del widget, con un profilo diverso per Alexa, che ha tratti suoi:
+- **Lo storico non si importa e non si rimanda.** Alexa conserva le voci spuntate e ne mostra al massimo 100: le spuntate di Alexa restano dove sono, e il carrello di Dispensa non finisce su Alexa. Se Alexa dimentica una voce già spuntata, in Dispensa resta nel carrello (non viene cancellata).
+- **Pochi scritture, Amazon permettendo.** Al massimo 8 per giro (il widget 120) e un giro ogni 90 secondi, che subito dopo una modifica in Dispensa diventa immediato. Le letture vengono dalla memoria di Home Assistant e non toccano Amazon.
+- **Maiuscole ignorate**: «cipolle» e «Cipolle» sono la stessa voce, non si riscrive su Amazon solo per quello.
+- **Lista non disponibile ≠ errore.** Quando Amazon limita le richieste Home Assistant dichiara la lista «unavailable»: il giro si salta senza segnare errori né rallentare il widget, e si riprende da solo. Nel pannello si legge «⏳ non disponibile in questo momento: riprovo da solo». Una lista che non esiste, invece, è un errore vero.
+- Le cancellazioni su Alexa valgono come per il widget: dopo due giri consecutivi e mai in massa.
+
+### Prova
+- `tests/finto_ha.py` ora simula due liste (widget e Alexa) con le stesse chiamate REST di Home Assistant, compreso `/api/states/<entità>` e la lista «non disponibile».
+- Prova completa con il motore vero in esecuzione: 24 verifiche (anteprima che non scrive, 409 se la lista non è disponibile, prima unione senza storico e senza rinomine, spunta in entrambi i versi, giro a vuoto, lista non disponibile, ripresa, pausa).
+- `tests/test_sync_alexa.py` (27 test) e 16 nuovi controlli in `tests/test_gui.js`.
+
+### Altro
+- Il giro manuale «Sincronizza ora» considera solo le liste attive (prima si fermava se una non era indicata).
+- Nessuna migrazione del database.
+
+---
+
 ## [2.5.0] — 2026-11-04
 
 **Vegano o no, e un inventario da rifare.** Ogni prodotto dice se è vegano o vegetariano e quali valori nutrizionali ha; e si può segnare tutto come esaurito per riscansionare quello che c'è in casa, senza doppioni e senza una raffica di notifiche.

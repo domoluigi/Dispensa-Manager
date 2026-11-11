@@ -445,3 +445,7 @@ input[type="checkbox"] { accent-color: var(--green); width: 20px; height: 20px; 
 .risc-banner.hidden { display: none; }
 .risc-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .risc-banner .btn-sm { background: transparent; color: var(--text); border: 1px solid var(--green); flex-shrink: 0; }
+
+/* Lista della spesa di Alexa (2.6.0) */
+.alexa-anteprima { font-size: 13px; line-height: 1.5; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; max-height: 260px; overflow-y: auto; }
+.alexa-gruppo { margin-bottom: 8px; }

@@ -1,6 +1,6 @@
 """Sincronizzazione della lista della spesa con una lista «to-do» di Home Assistant (v2.3.0).
 
-Serve ai widget del telefono (app Companion → widget «To-do list») e, piu' avanti, alla lista di Alexa.
+Serve ai widget del telefono (app Companion → widget «To-do list») e alla lista della spesa di Alexa (v2.6.0).
 
 Principi:
 - il database di Dispensa e' la fonte di verita': se Home Assistant e' lento o spento l'app funziona lo stesso;
@@ -10,7 +10,10 @@ Principi:
 - le cancellazioni remote valgono solo se confermate in due giri consecutivi e mai in massa: una lettura
   incompleta non deve svuotare la lista;
 - la prima attivazione unisce le due liste, senza cancellare niente;
-- un giro a vuoto (nessuna differenza) non fa nessuna chiamata di scrittura.
+- un giro a vuoto (nessuna differenza) non fa nessuna chiamata di scrittura;
+- ogni connettore ha un PROFILO: la lista di Alexa tiene uno storico di voci spuntate (e ne mostra al massimo 100),
+  quindi non si importano ne' si rispediscono le spuntate, si scrive poco (Amazon limita le richieste), si
+  interroga ogni 90 secondi e si salta il giro, senza errori, quando Home Assistant la dice «non disponibile».
 
 Home Assistant si raggiunge dal Supervisor (`homeassistant_api: true`) con i servizi `todo.*`.
 """
@@ -36,7 +39,15 @@ GRACE_CICLI = 2            # giri consecutivi in cui un elemento deve mancare pr
 MAX_SCRITTURE = 120        # scritture remote per giro (il resto al giro dopo)
 
 # connettore → (chiave dell'impostazione con l'entita', origine delle voci create da quel lato)
-CONNETTORI = {"widget": ("todo_widget_entity", "widget")}
+CONNETTORI = {"widget": ("todo_widget_entity", "widget"), "alexa": ("todo_alexa_entity", "alexa")}
+
+PROFILI = {
+    "widget": dict(importa_completati=True, spingi_completati=True, max_scritture=MAX_SCRITTURE, intervallo=0,
+                   controlla_disponibilita=False, ignora_maiuscole=False, completati_mancanti_cancellano=True),
+    "alexa": dict(importa_completati=False, spingi_completati=False, max_scritture=8, intervallo=90,
+                  controlla_disponibilita=True, ignora_maiuscole=True, completati_mancanti_cancellano=False),
+}
+ALEXA_CONFERMA = "todo_alexa_confermato"    # la sincronizzazione con Alexa parte solo dopo l'anteprima confermata dall'admin
 
 _evento = threading.Event()
 _sensori = threading.Event()     # la lista e' cambiata: da riportare nei sensori di Home Assistant
@@ -67,6 +78,26 @@ def _chiama(servizio: str, dati: dict, risposta: bool = False):
         return r.json()
     except ValueError:
         return {}
+
+
+def _stato_entita(entity: str):
+    """Stato dell'entita' in Home Assistant («unavailable», un numero…), None se non esiste."""
+    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    if not token:
+        raise ErroreHA("SUPERVISOR_TOKEN assente: serve l'add-on dentro Home Assistant")
+    try:
+        r = http_requests.get(f"{os.environ.get('HA_URL', 'http://supervisor/core')}/api/states/{entity}",
+                              headers={"Authorization": f"Bearer {token}"}, timeout=TIMEOUT)
+    except http_requests.RequestException as e:
+        raise ErroreHA(f"Home Assistant non raggiungibile ({e.__class__.__name__})") from None
+    if r.status_code == 404:
+        return None
+    if r.status_code >= 400:
+        raise ErroreHA(f"Home Assistant ha risposto {r.status_code}: {r.text[:160].strip()}")
+    try:
+        return str(r.json().get("state"))
+    except (ValueError, AttributeError):
+        raise ErroreHA("risposta inattesa da Home Assistant sullo stato della lista") from None
 
 
 def leggi_remoti(entity: str) -> dict:
@@ -107,6 +138,13 @@ def riassunto(riga) -> str:
 
 def stato_di(riga) -> str:
     return "completed" if riga["completato"] else "needs_action"
+
+
+def _uguali(prof, a, b) -> bool:
+    """Due (testo, stato) uguali? Per Alexa «cipolle» e «Cipolle» sono la stessa voce: non si riscrive solo per le maiuscole."""
+    if prof["ignora_maiuscole"]:
+        return (a[0].strip().casefold(), a[1]) == (b[0].strip().casefold(), b[1])
+    return a == b
 
 
 def _leggi(testo: str):
@@ -160,13 +198,14 @@ def sincronizza(connettore: str, entity: str, conn=None) -> dict:
     if propria:
         conn = get_db()
     origine = CONNETTORI.get(connettore, (None, connettore))[1]
+    prof = PROFILI.get(connettore, PROFILI["widget"])
     st = {k: 0 for k in ("locali_aggiunte", "locali_aggiornate", "locali_rimosse",
                          "remote_aggiunte", "remote_aggiornate", "remote_rimosse", "ignorate")}
     scritture = [0]
 
     def scrivi_ok():
         scritture[0] += 1
-        return scritture[0] <= MAX_SCRITTURE
+        return scritture[0] <= prof["max_scritture"]
 
     try:
         remoti = leggi_remoti(entity)
@@ -205,15 +244,15 @@ def sincronizza(connettore: str, entity: str, conn=None) -> dict:
             snap = (m["summary_visto"], m["status_visto"])
             att_r = (r["summary"], r["status"])
             att_l = (riassunto(riga), stato_di(riga))
-            if att_r == snap and att_l == snap:
+            if _uguali(prof, att_r, snap) and _uguali(prof, att_l, snap):
                 continue
-            if att_l == snap:                               # e' cambiato solo il remoto
+            if _uguali(prof, att_l, snap):                  # e' cambiato solo il remoto
                 nome, q, tok, valido = _leggi(r["summary"])
                 if valido and any(a["id"] != riga["id"] and a["nome_norm"] == " ".join(sorted(tok)) for a in righe.values()):
                     valido = False                          # il nuovo nome coinciderebbe con un'altra voce: si tiene il locale
                 _aggiorna_locale(conn, riga["id"], nome if valido else None, q if valido else None, r["status"] == "completed")
                 st["locali_aggiornate"] += 1
-            elif att_r == snap:                             # e' cambiato solo il locale
+            elif _uguali(prof, att_r, snap):                # e' cambiato solo il locale
                 pass
             else:                                           # cambiati entrambi: stato «fatto» se lo e' da una parte, resto dal locale
                 if r["status"] == "completed" and not riga["completato"]:
@@ -222,7 +261,7 @@ def sincronizza(connettore: str, entity: str, conn=None) -> dict:
             riga = _riga(conn, riga["id"])
             righe[riga["id"]] = riga
             finale = (riassunto(riga), stato_di(riga))
-            if finale != att_r and scrivi_ok():
+            if not _uguali(prof, finale, att_r) and scrivi_ok():
                 aggiorna_remoto(entity, uid,
                                 summary=finale[0] if finale[0] != att_r[0] else None,
                                 status=finale[1] if finale[1] != att_r[1] else None)
@@ -235,6 +274,10 @@ def sincronizza(connettore: str, entity: str, conn=None) -> dict:
             if sospetto:
                 continue
             m = mappa[uid]
+            riga_m = righe.get(m["voce_id"])
+            if not prof["completati_mancanti_cancellano"] and riga_m and riga_m["completato"]:
+                _togli_mappa(conn, connettore, uid)         # lo storico di Alexa scorre: la voce spuntata resta in locale
+                continue
             if m["mancante"] + 1 >= GRACE_CICLI:
                 with conn:
                     conn.execute("DELETE FROM lista_spesa WHERE id=?", (m["voce_id"],))
@@ -259,6 +302,9 @@ def sincronizza(connettore: str, entity: str, conn=None) -> dict:
                 continue
             chiave = " ".join(sorted(tok))
             fatto = r["status"] == "completed"
+            if fatto and not prof["importa_completati"]:    # lo storico di Alexa non si importa
+                st["ignorate"] += 1
+                continue
             candidata = next((a for a in righe.values() if a["nome_norm"] == chiave), None)
             if candidata and candidata["id"] in per_voce:   # la voce e' gia' collegata a un altro elemento: questo e' un doppione
                 da_rimuovere.append(uid)
@@ -283,7 +329,7 @@ def sincronizza(connettore: str, entity: str, conn=None) -> dict:
             righe[riga["id"]] = riga
             per_voce[riga["id"]] = uid
             finale = (riassunto(riga), stato_di(riga))
-            if finale != (r["summary"], r["status"]) and scrivi_ok():
+            if not _uguali(prof, finale, (r["summary"], r["status"])) and scrivi_ok():
                 aggiorna_remoto(entity, uid,
                                 summary=finale[0] if finale[0] != r["summary"] else None,
                                 status=finale[1] if finale[1] != r["status"] else None)
@@ -291,7 +337,7 @@ def sincronizza(connettore: str, entity: str, conn=None) -> dict:
             _salva_mappa(conn, connettore, uid, riga["id"], finale[0], finale[1])
 
         # 3. voci locali non ancora in remoto
-        pendenti = [a for a in righe.values() if a["id"] not in per_voce]
+        pendenti = [a for a in righe.values() if a["id"] not in per_voce and (prof["spingi_completati"] or not a["completato"])]
         spinte = []
         for riga in pendenti:
             if not scrivi_ok():
@@ -340,6 +386,14 @@ def esegui(connettore: str, entity: str) -> dict:
         s["entity"] = entity
         t0 = time.time()
         try:
+            if PROFILI.get(connettore, PROFILI["widget"])["controlla_disponibilita"]:
+                presente = _stato_entita(entity)
+                if presente is None:
+                    raise ErroreHA(f"la lista {entity} non esiste in Home Assistant")
+                if presente in ("unavailable", "unknown"):      # Amazon limita le richieste: succede, passa da sola
+                    s.update(ok=None, errore=None, non_disponibile=True, ultimo_nd=_ora_iso())
+                    return dict(s)
+            s["non_disponibile"] = False
             st = sincronizza(connettore, entity)
             s.update(ok=True, errore=None, ultimo_ok=_ora_iso(), risultato=st, durata_ms=round((time.time() - t0) * 1000))
             if st["locali_aggiunte"] or st["locali_aggiornate"] or st["locali_rimosse"]:
@@ -364,7 +418,13 @@ def _aggiorna_sensori():
 
 def impostazioni(conn) -> dict:
     return {cid: get_setting(conn, chiave, "").strip() for cid, (chiave, _) in CONNETTORI.items()} | {
-        "_attivo": get_setting(conn, "todo_sync_attivo", "1") == "1"}
+        "_attivo": get_setting(conn, "todo_sync_attivo", "1") == "1",
+        "_alexa_confermato": get_setting(conn, ALEXA_CONFERMA, "0") == "1"}
+
+
+def connettore_attivo(imp: dict, cid: str) -> bool:
+    """Lista indicata, sincronizzazione accesa e, per Alexa, anteprima confermata."""
+    return bool(imp["_attivo"] and imp[cid] and (cid != "alexa" or imp["_alexa_confermato"]))
 
 
 def stato() -> dict:
@@ -378,9 +438,46 @@ def stato() -> dict:
     out = {}
     for cid in CONNETTORI:
         s = dict(_stato.get(cid, {}))
-        s.update(entity=imp[cid], attivo=imp["_attivo"] and bool(imp[cid]), voci_collegate=mappate.get(cid, 0))
+        s.update(entity=imp[cid], attivo=connettore_attivo(imp, cid), voci_collegate=mappate.get(cid, 0))
+        if cid == "alexa":
+            s["confermato"] = imp["_alexa_confermato"]
         out[cid] = s
     return out
+
+
+def anteprima(entity: str, conn=None) -> dict:
+    """Cosa succederebbe alla prima unione con una lista, SENZA scrivere niente: quali voci della lista remota entrano
+    in Dispensa, quali di Dispensa vanno nella lista, quali ci sono gia' da entrambe le parti."""
+    propria = conn is None
+    if propria:
+        conn = get_db()
+    try:
+        presente = _stato_entita(entity)
+        if presente is None:
+            raise ErroreHA(f"la lista {entity} non esiste in Home Assistant")
+        if presente in ("unavailable", "unknown"):
+            return {"entity": entity, "disponibile": False}
+        remoti = leggi_remoti(entity)
+        sp.assicura_righe(conn)
+        locali = [dict(r) for r in conn.execute("SELECT * FROM lista_spesa").fetchall()]
+        chiavi_locali = {a["nome_norm"] for a in locali}
+        importa, presenti, chiavi_remote, storico = [], [], set(), 0
+        for r in remoti.values():
+            if r["status"] == "completed":
+                storico += 1
+                continue
+            nome, q, tok, valido = _leggi(r["summary"])
+            if not valido:
+                continue
+            chiave = " ".join(sorted(tok))
+            chiavi_remote.add(chiave)
+            (presenti if chiave in chiavi_locali else importa).append(nome if q <= 1 else f"{nome} ×{q}")
+        invia = [riassunto(a) for a in locali if not a["completato"] and a["nome_norm"] not in chiavi_remote]
+        return {"entity": entity, "disponibile": True, "importa": sorted(importa), "presenti": sorted(presenti),
+                "invia": sorted(invia), "storico_ignorato": storico, "letti": len(remoti), "tetto_raggiunto": len(remoti) >= 100}
+    finally:
+        if propria:
+            conn.close()
 
 
 def richiedi_sync():
@@ -389,8 +486,14 @@ def richiedi_sync():
     _evento.set()
 
 
+def deve_girare(cid: str, ultimo: dict, ora: float, forzato: bool) -> bool:
+    """Un connettore con intervallo lungo (Alexa) salta i giri: tranne dopo una modifica della lista (forzato)."""
+    return forzato or ora - ultimo.get(cid, 0) >= PROFILI.get(cid, PROFILI["widget"])["intervallo"]
+
+
 def _giro_periodico():
     time.sleep(min(25, INTERVALLO))           # lascia finire l'avvio
+    ultimo, forzato = {}, True
     while True:
         errore = False
         try:
@@ -399,15 +502,17 @@ def _giro_periodico():
                 imp = impostazioni(conn)
             finally:
                 conn.close()
-            if imp["_attivo"]:
-                for cid in CONNETTORI:
-                    if imp[cid]:
-                        errore |= not esegui(cid, imp[cid]).get("ok")
+            ora = time.time()
+            for cid in CONNETTORI:
+                if connettore_attivo(imp, cid) and deve_girare(cid, ultimo, ora, forzato):
+                    ultimo[cid] = ora
+                    errore |= esegui(cid, imp[cid]).get("ok") is False      # None = lista non disponibile: non e' un errore
         except Exception:
             logger.exception("Sync: errore nel giro periodico")
             errore = True
         _evento.wait(INTERVALLO_ERRORE if errore else INTERVALLO)
-        if _evento.is_set():
+        forzato = _evento.is_set()
+        if forzato:
             time.sleep(1.5)      # raggruppa piu' modifiche ravvicinate in un solo giro
         _evento.clear()
         if _sensori.is_set():

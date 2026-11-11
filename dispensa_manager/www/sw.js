@@ -1,4 +1,4 @@
-const CACHE = 'dispensa-v16';
+const CACHE = 'dispensa-v17';
 
 // Librerie leggere in locale: pronte subito. Quelle pesanti dell'OCR (worker, core WASM, dati lingua)
 // si mettono in cache alla prima lettura.
