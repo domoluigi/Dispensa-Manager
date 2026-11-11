@@ -94,7 +94,18 @@ verifica('azzeramento: serve scrivere AZZERA', js.includes("toUpperCase() !== 'A
 verifica('azzeramento: c\'e\' l\'annulla', /toastUndo\([^\n]*annullaLotto\(d\.lotto\)/.test(js));
 verifica('i prodotti che non sono cibo non hanno badge di dieta', /function nonCibo[^\n]*Saponi[^\n]*Altro/.test(js) && /function badgeDieta[^\n]*\n[^\n]*nonCibo/.test(js));
 verifica('la dieta non si legge mai dal nome per dire «vegano» senza dati: nessun valore «si» di default', !/dieta:\s*\{[^}]*vegano:\s*'si'/.test(js));
-verifica('service worker con cache nuova', /dispensa-v16/.test(sw));
+verifica('service worker con cache nuova', /dispensa-v1[7-9]/.test(sw));
+// Lista della spesa di Alexa (2.6.0)
+for (const id of ['alexa-sync-stato', 'alexa-entity', 'alexa-anteprima', 'alexa-btn-anteprima', 'alexa-btn-attiva', 'alexa-btn-pausa']) {
+  verifica('elemento #' + id + ' presente', html.includes('id="' + id + '"'));
+}
+verifica('conferma disabilitata finche non si guarda l\'anteprima', /id="alexa-btn-attiva"[^>]*disabled/.test(html));
+for (const f of ['_descriviAlexa', 'disegnaAlexa', 'alexaAnteprima', 'alexaAttiva', 'alexaDisattiva', 'alexaCambiata']) {
+  verifica('funzione ' + f + ' definita', new RegExp('function ' + f + '\\(').test(spesaJs));
+}
+verifica('l\'attivazione richiede l\'anteprima guardata', spesaJs.includes('if (!_alexaAnteprimaOk)') && spesaJs.includes('conferma: true'));
+verifica('cambiando lista l\'anteprima non vale piu', /function alexaCambiata[^}]*_alexaAnteprimaOk = false/.test(spesaJs));
+verifica('lo stato dell\'admin disegna anche Alexa', spesaJs.includes('disegnaAlexa(d.alexa)'));
 
 console.log(ok + '/' + tot);
 process.exit(ok === tot ? 0 : 1);

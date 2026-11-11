@@ -328,7 +328,9 @@ async function caricaSpesaSync() {
   try {
     const r = await apiFetch(`${API_BASE()}/api/admin/spesa-sync`);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    el.innerHTML = _descriviSync((await r.json()).widget);
+    const d = await r.json();
+    el.innerHTML = _descriviSync(d.widget);
+    disegnaAlexa(d.alexa);
   } catch (e) { el.textContent = 'Stato non disponibile.'; }
 }
 
@@ -340,6 +342,7 @@ async function sincronizzaOra() {
     const d = await r.json();
     if (!r.ok) { if (el) el.textContent = '⚠️ ' + (d.error || 'Errore'); return; }
     if (el) el.innerHTML = _descriviSync(d.widget);
+    disegnaAlexa(d.alexa);
   } catch (e) { if (el) el.textContent = 'Errore di rete.'; }
 }
 
@@ -348,3 +351,89 @@ document.addEventListener('keydown', (e) => {
   const c = e.target && e.target.closest ? e.target.closest('.spesa-check') : null;
   if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); c.click(); }
 });
+
+// ── Pannello Admin: lista della spesa di Alexa (anteprima, conferma, pausa) ──
+let _alexaAnteprimaOk = false;      // l'anteprima di QUESTA lista e' stata guardata: solo allora si puo' confermare
+
+function _descriviAlexa(a) {
+  if (!a || !a.entity) return '⚪ Non collegata: indica la lista di Alexa qui sotto e guarda l\'anteprima.';
+  if (!a.confermato) return '⏸️ In pausa. Lista: <b>' + esc(a.entity) + '</b> · ' + esc(a.voci_collegate) + ' voci collegate';
+  if (a.non_disponibile) {
+    return '⏳ La lista di Alexa non è disponibile in questo momento (Amazon limita le richieste): riprovo da solo, non perdi niente.'
+      + '<br><span style="color:var(--muted);">Lista: ' + esc(a.entity) + ' · ' + esc(a.voci_collegate) + ' voci collegate</span>';
+  }
+  const quando = a.ultimo_ok ? new Date(a.ultimo_ok).toLocaleTimeString('it-IT') : null;
+  if (a.ok === false) return '⚠️ ' + esc(a.errore || 'errore') + (quando ? '<br><span style="color:var(--muted);">Ultimo scambio riuscito: ' + esc(quando) + '</span>' : '');
+  if (a.ok === true) {
+    const r = a.risultato || {};
+    const mosse = (r.locali_aggiunte || 0) + (r.locali_aggiornate || 0) + (r.locali_rimosse || 0) + (r.remote_aggiunte || 0) + (r.remote_aggiornate || 0) + (r.remote_rimosse || 0);
+    return '✅ Collegata a <b>' + esc(a.entity) + '</b> · ' + esc(a.voci_collegate) + ' voci collegate<br><span style="color:var(--muted);">Ultimo scambio ' + esc(quando) + (mosse ? ' (' + mosse + ' modifiche)' : ' (nessuna differenza)') + '</span>';
+  }
+  return '⏳ In attesa del primo scambio (parte entro un paio di minuti).<br><span style="color:var(--muted);">Lista: ' + esc(a.entity) + '</span>';
+}
+
+function disegnaAlexa(a) {
+  const el = document.getElementById('alexa-sync-stato');
+  if (!el) return;
+  el.innerHTML = _descriviAlexa(a);
+  const inp = document.getElementById('alexa-entity');
+  if (inp && a && a.entity && !inp.value && document.activeElement !== inp) inp.value = a.entity;
+  document.getElementById('alexa-btn-pausa').style.display = a && a.confermato ? '' : 'none';
+  const attiva = document.getElementById('alexa-btn-attiva');
+  attiva.disabled = !_alexaAnteprimaOk;
+  attiva.textContent = a && a.entity && !a.confermato ? '▶️ Riprendi' : '✅ Conferma e attiva';
+}
+
+// Cambiando la lista l'anteprima guardata non vale piu'
+function alexaCambiata() {
+  _alexaAnteprimaOk = false;
+  document.getElementById('alexa-btn-attiva').disabled = true;
+  document.getElementById('alexa-anteprima').style.display = 'none';
+}
+
+async function alexaAnteprima() {
+  const entity = document.getElementById('alexa-entity').value.trim();
+  const box = document.getElementById('alexa-anteprima');
+  box.style.display = '';
+  box.textContent = 'Leggo la lista…';
+  _alexaAnteprimaOk = false;
+  document.getElementById('alexa-btn-attiva').disabled = true;
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/spesa-sync/alexa/anteprima?entity=${encodeURIComponent(entity)}`);
+    const d = await r.json();
+    if (!r.ok) { box.textContent = '⚠️ ' + (d.error || 'Errore'); return; }
+    if (!d.disponibile) { box.innerHTML = '⏳ La lista non è disponibile adesso (Amazon limita le richieste). Riprova tra qualche minuto.'; return; }
+    const gruppo = (titolo, v) => v.length ? '<div class="alexa-gruppo"><b>' + titolo + ' (' + v.length + ')</b><br>' + v.map(esc).join(' · ') + '</div>' : '';
+    let h = gruppo('Da Alexa a Dispensa', d.importa) + gruppo('Da Dispensa ad Alexa', d.invia) + gruppo('Già su entrambe', d.presenti);
+    if (!h) h = '<div class="alexa-gruppo">Niente da unire: le due liste sono vuote.</div>';
+    if (d.storico_ignorato) h += '<div class="alexa-gruppo" style="color:var(--muted);">' + d.storico_ignorato + ' voci già spuntate su Alexa: non vengono toccate.</div>';
+    if (d.tetto_raggiunto) h += '<div class="alexa-gruppo" style="color:var(--muted);">Alexa mostra al massimo 100 voci: le più vecchie tra le spuntate non si vedono.</div>';
+    box.innerHTML = h;
+    _alexaAnteprimaOk = true;
+    document.getElementById('alexa-btn-attiva').disabled = false;
+  } catch (e) { box.textContent = 'Errore di rete.'; }
+}
+
+async function alexaAttiva() {
+  if (!_alexaAnteprimaOk) { toast('Guarda prima l\'anteprima'); return; }
+  const entity = document.getElementById('alexa-entity').value.trim();
+  try {
+    const r = await apiFetch(`${API_BASE()}/api/admin/spesa-sync/alexa/attiva`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity, conferma: true }),
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Errore'); return; }
+    _alexaAnteprimaOk = false;
+    document.getElementById('alexa-anteprima').style.display = 'none';
+    toast('🎤 Lista Alexa collegata: parte entro un paio di minuti');
+    caricaSpesaSync();
+  } catch (e) { toast('Errore di rete'); }
+}
+
+async function alexaDisattiva() {
+  try {
+    await apiFetch(`${API_BASE()}/api/admin/spesa-sync/alexa/disattiva`, { method: 'POST' });
+    toast('Sincronizzazione con Alexa in pausa');
+    caricaSpesaSync();
+  } catch (e) { toast('Errore di rete'); }
+}

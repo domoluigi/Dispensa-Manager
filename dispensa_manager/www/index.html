@@ -440,6 +440,19 @@
     </div>
 
     <div class="card card-body admin-section">
+      <div class="admin-section-title">🎤 Lista della spesa di Alexa</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5;">«Alexa, aggiungi dentifricio alla lista della spesa» e la voce compare anche qui, e viceversa; spuntare da una parte spunta dall'altra. Prima si guarda l'anteprima, poi si conferma. Le voci già spuntate su Alexa (il suo storico) non si toccano.</div>
+      <div id="alexa-sync-stato" style="font-size:13px;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:10px;line-height:1.5;">Caricamento stato…</div>
+      <input type="text" class="setting-input" id="alexa-entity" placeholder="todo.nome_della_lista_alexa" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lista di Alexa in Home Assistant" oninput="alexaCambiata()">
+      <div id="alexa-anteprima" class="alexa-anteprima" style="display:none;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="btn-sm btn-sm-green" style="padding:10px;" id="alexa-btn-anteprima" onclick="alexaAnteprima()">👀 Anteprima</button>
+        <button class="btn-sm btn-sm-green" style="padding:10px;" id="alexa-btn-attiva" onclick="alexaAttiva()" disabled>✅ Conferma e attiva</button>
+      </div>
+      <button class="btn-sm btn-sm-red" style="width:100%;padding:10px;margin-top:8px;display:none;" id="alexa-btn-pausa" onclick="alexaDisattiva()">⏸️ Metti in pausa</button>
+    </div>
+
+    <div class="card card-body admin-section">
       <div class="admin-section-title">🔑 API Key per automazioni HA</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5;">Usa <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">x-api-key</code> nei tuoi rest_command. Stabile tra riavvii.</div>
       <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:10px;">

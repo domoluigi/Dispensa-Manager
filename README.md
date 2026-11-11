@@ -19,6 +19,7 @@ Un add-on per **Home Assistant OS** che trasforma il tuo smartphone in uno scann
 - 🔍 **OCR scadenza** — legge la data con la fotocamera da sola (Tesseract.js in locale), distingue scadenza, produzione e lotto, mostra il risultato da confermare
 - 🌱 **Vegano / vegetariano** — per ogni prodotto, dagli ingredienti e da Open Food Facts: certo, probabile, da verificare o no, con il motivo; mai «vegano» senza dati. Dieta di casa, filtro e avviso in scansione
 - 📊 **Valori nutrizionali** — da Open Food Facts (energia, grassi, carboidrati, ecc.) con il profilo per 100 g: proteico, ricco di fibre, pochi zuccheri, poco sale; Nutri-Score e livello di lavorazione (NOVA)
+- 🎤 **Lista della spesa di Alexa** — «Alexa, aggiungi dentifricio» e la voce compare in Dispensa e nel widget del telefono, e viceversa; con Alexa Devices di Home Assistant, con anteprima prima dell'attivazione, senza importare lo storico di Alexa e tollerando i momenti in cui Amazon limita le richieste
 - 🧹 **Nuovo inventario** — segna tutto come esaurito (con copia del database e Annulla) e riscansiona: la scansione ricarica la riga del prodotto, senza doppioni né raffica di notifiche
 - 🗃️ **Cache locale** — i prodotti non trovati online vengono salvati per le scansioni future
 - 🔍 **Multi-database** — Open Food Facts + Open Products Facts + Open Beauty Facts
@@ -416,6 +417,7 @@ La schermata Statistiche mostra:
 | POST | `/api/inventario/azzera` | Segna tutto come esaurito (admin, `{"conferma": "AZZERA"}`) |
 | POST | `/api/inventario/annulla` | Annulla un azzeramento (admin, `{"lotto": "..."}`) |
 | POST | `/api/inventario/riscansione` | Accende o spegne la riscansione (admin, `{"attiva": true}`) |
+| GET | `/api/admin/spesa-sync/alexa/anteprima` | Cosa entrerebbe e uscirebbe alla prima unione con la lista Alexa (admin, non scrive); `POST …/alexa/attiva` (`{"entity": "todo.…", "conferma": true}`) e `POST …/alexa/disattiva` la accendono e la mettono in pausa |
 | POST | `/api/inventario/arricchisci` | Raccoglie in background i dati dei prodotti già in casa; `GET /api/inventario/arricchimento` ne dà l'avanzamento |
 | DELETE | `/api/barcode-cache/<ean>` | Rimuove dalla cache |
 | GET | `/api/spesa` | Vista completa: `da_comprare` (per reparto), `carrello`, `suggeriti`, `conteggi` |
