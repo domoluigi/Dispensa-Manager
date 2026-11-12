@@ -13,6 +13,7 @@
   --safe-top: env(safe-area-inset-top, 20px);
   --safe-bot: env(safe-area-inset-bottom, 20px);
 }
+html, body { overscroll-behavior-y: contain; }   /* niente refresh nativo di Chrome risalendo la pagina (2.6.1) */
 body {
   font-family: -apple-system, sans-serif; background: var(--bg);
   color: var(--text); min-height: 100dvh; overflow-x: hidden;
@@ -34,7 +35,7 @@ input[type="checkbox"] { accent-color: var(--green); width: 20px; height: 20px; 
 .topbar-back { font-size: 15px; color: var(--green); cursor: pointer; padding: 8px 4px; touch-action: manipulation; }
 .topbar-action { font-size: 15px; color: var(--green); cursor: pointer; padding: 8px 4px; font-weight: 500; touch-action: manipulation; }
 
-.content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px; padding-bottom: calc(var(--safe-bot) + 80px); }
+.content { flex: 1; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; padding: 16px; padding-bottom: calc(var(--safe-bot) + 80px); }
 
 .tab-bar {
   position: fixed; bottom: 0; left: 0; right: 0;

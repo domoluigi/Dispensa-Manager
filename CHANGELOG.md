@@ -5,6 +5,14 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [2.6.1] — 2026-11-12
+
+### Corretto
+- **Il backup automatico di Home Assistant falliva** con «Error adding /data/homeassistant/dispensa.db-wal to tarfile: No such file or directory». Il database era in modalità WAL: il file `dispensa.db-wal` compare e sparisce a ogni connessione e il backup, che archivia `/config` file per file, lo trovava già sparito. Ora il database usa il journal `DELETE` (file temporaneo solo per i millisecondi di una scrittura); un database ancora in WAL viene convertito al primo avvio.
+- **Refresh indesiderato sul telefono** risalendo la pagina: `overscroll-behavior-y: contain` ora anche su `html` e sul contenitore che scorre, e la soglia del nostro «tira per aggiornare» sale da 70 a 110 px.
+
+---
+
 ## [2.6.0] — 2026-11-11
 
 **La lista della spesa di Alexa.** «Alexa, aggiungi dentifricio alla lista della spesa» e la voce compare anche in Dispensa (e nel widget del telefono); aggiungere o spuntare in Dispensa vale anche su Alexa. Usa l'integrazione **Alexa Devices** di Home Assistant (2026.11 o successivo): non servono credenziali né altre integrazioni.
