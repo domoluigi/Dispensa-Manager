@@ -19,14 +19,17 @@ OPTIONS_PATH = "/data/options.json"
 IMAGES_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "images")
 BACKUPS_DIR = os.path.join(os.path.dirname(DB_PATH), "dispensa", "backups")
 
-APP_VERSION = "2.6.0"
+APP_VERSION = "2.6.1"
 SCHEMA_VERSION = 11
 
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    # DELETE e non WAL: in WAL il file dispensa.db-wal compare e sparisce a ogni connessione e il backup di Home Assistant,
+    # che archivia /config file per file, falliva quando lo trovava gia' sparito (2.6.1). Con DELETE il file
+    # temporaneo (-journal) esiste solo per i millisecondi di una scrittura. Un DB ancora in WAL viene convertito qui.
+    conn.execute("PRAGMA journal_mode=DELETE")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn

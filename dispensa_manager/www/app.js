@@ -1165,11 +1165,12 @@ let _ptrStartY = 0;
 let _ptrCurrent = 0;
 let _ptrActive = false;
 let _ptrIndicator = null;
-const PTR_THRESHOLD = 70;
+const PTR_THRESHOLD = 110;
 const PTR_MAX = 100;
 const PTR_SCREENS = ['screen-inventario', 'screen-spesa', 'screen-statistiche'];
 
 function initPullToRefresh() {
+  document.documentElement.style.overscrollBehaviorY = 'contain';
   document.body.style.overscrollBehaviorY = 'contain';
   _ptrIndicator = document.createElement('div');
   _ptrIndicator.id = 'ptr-indicator';
